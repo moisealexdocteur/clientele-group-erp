@@ -41,6 +41,18 @@ L'autorisation se vérifie à quatre niveaux :
 
 Le backend applique cette vérification et PostgreSQL applique de nouveau l'isolation de société. Une interface cachée ne constitue jamais une permission.
 
+### 3.1 Clientèle Group : accès minimal entre sociétés
+
+Une identité client peut être commune au groupe, mais les données ne le sont pas.
+
+- L'accès entre sociétés est refusé par défaut, y compris pour la recherche, une URL directe, un export ou une API.
+- Le personnel opérationnel ne voit que le profil client de sa société active et les données nécessaires à sa tâche.
+- Un service de confidentialité séparé peut rechercher une identité maître uniquement pour dédoublonner ou appliquer un consentement. Il ne fournit pas automatiquement l'historique d'autres sociétés.
+- Les coordonnées et préférences d'une autre société exigent un consentement valide, une finalité autorisée et une société destinataire précise.
+- Les données sensibles — passeport, inspection, contrat, photos, solde, limite de crédit, dépôt, paiement et document joint — ne sont jamais partagées par ce mécanisme.
+- Le propriétaire global ou l'administrateur global ne reçoit pas une vue opérationnelle transversale automatique : il choisit une société et exerce une permission précise, ou passe par le processus de confidentialité.
+- Chaque recherche de rapprochement, affichage partagé, création de lien, export, refus et révocation est journalisé.
+
 ## 4. Actions sensibles
 
 Les actions suivantes exigent une permission explicite, et selon la politique une nouvelle 2FA ou une approbation :
@@ -56,6 +68,8 @@ Les actions suivantes exigent une permission explicite, et selon la politique un
 | Accorder crédit entreprise | Superviseur ou propriétaire, limite et preuve |
 | Libérer ou retenir dépôt | Rôle autorisé, inspection ou motif |
 | Voir un passeport ou document sensible | Rôle restreint, accès journalisé |
+| Rapprocher une identité Clientèle Group | Responsable confidentialité, finalité et audit |
+| Partager une coordonnée entre sociétés | Consentement valide, portée précise et audit |
 | Exporter données ou rapports | Permission export distincte |
 | Réimprimer un reçu | Permission caisse, motif et audit |
 
@@ -112,3 +126,5 @@ En cas de suspicion d'accès non autorisé :
 - test de restauration de sauvegarde ;
 - test de révocation d'un écran client et d'un appareil kiosque ;
 - test des exports avec masquage et permissions.
+- test de profil client commun sans fuite de données entre sociétés ;
+- test de consentement, expiration et révocation du partage de coordonnées.
