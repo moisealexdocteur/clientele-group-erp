@@ -60,3 +60,7 @@ La première version est en français et ne montre pas de sélecteur de langue. 
 6. vente scanner et stock Market ;
 7. folio et check-out Hotel ;
 8. identité maître client et consentement, réservée au rôle de confidentialité.
+
+## 8. Maquette de validation
+
+La maquette interactive de référence est versionnée dans design/wireframes_mobile_v1.html. Elle montre les six contextes requis à l'écran, les actions formulées explicitement et l'absence d'adresse inventée. Elle sert de base de validation avant la réalisation des écrans Vue.

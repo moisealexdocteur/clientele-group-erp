@@ -2,6 +2,12 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.1.4 - 2026-10-07
+
+### Ajouté
+
+- Maquette interactive mobile-first versionnée dans design/wireframes_mobile_v1.html, avec écrans explicites pour Car Rental, Auto Parts, Guest House, Market, Hotel et confidentialité client.
+
 ## 0.1.3 - 2026-10-07
 
 ### Ajouté
