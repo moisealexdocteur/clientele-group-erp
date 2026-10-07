@@ -49,7 +49,7 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 
 ## État du projet
 
-Version : 0.1.0
+Version : 0.1.1
 
 Cette version contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau et le modèle de déploiement. Aucun module métier n'est encore déclaré prêt pour la production.
 
