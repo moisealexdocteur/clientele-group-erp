@@ -6,11 +6,29 @@ Les données opérationnelles appartiennent toujours à une société. Les sites
 
 Les identifiants techniques UUID sont utilisés à l'intérieur du système. Les numéros visibles de vente, contrat, certificat ou reçu suivent leur propre règle métier et ne servent pas de clé primaire.
 
-## 2. Entités du noyau
+## 2. Identité client commune et profils de société
+
+Le modèle évite les doublons tout en refusant un « dossier client global » visible par tous.
+
+| Couche | Contenu | Qui peut y accéder |
+| --- | --- | --- |
+| Identité maître Clientèle Group | Référence de groupe, données d'identification chiffrées et clés de rapprochement protégées | Service de confidentialité explicitement autorisé |
+| Profil client de société | Coordonnées locales, relation commerciale, préférences, solde local et informations métier | Uniquement les rôles autorisés dans la société active |
+| Consentement de partage | Finalité, catégories autorisées, société destinataire, preuve, date, expiration et révocation | Service de confidentialité et fonctions qui doivent contrôler le partage |
+| Données opérationnelles | Vente, réservation, location, folio, inspection, dépôt, crédit, passeport, photo et document | Uniquement la société propriétaire et les permissions métier minimales |
+
+Le rapprochement d'une personne se fait sous contrôle : le système propose une correspondance, un rôle autorisé confirme le lien et l'action est auditée. Il ne fusionne jamais automatiquement deux personnes parce que le nom, le téléphone ou le courriel se ressemblent.
+
+Un consentement peut autoriser le partage de coordonnées ou de préférences nécessaires à une nouvelle prestation au sein du groupe. Il ne donne jamais accès aux transactions, soldes, contrats, inspections, passeports, photos ou documents de l'autre société. Sans consentement valide, le personnel d'une société ne peut pas rechercher ni révéler qu'un client est connu ailleurs dans le groupe.
+
+## 3. Entités du noyau
 
 | Entité | Objet |
 | --- | --- |
 | Company | Société isolée, devise de base, profil fiscal et identité de reçu |
+| Group customer identity | Identité maître chiffrée de Clientèle Group, sans historique opérationnel |
+| Company customer profile | Fiche client locale reliée facultativement à une identité maître |
+| Customer sharing consent | Consentement par catégorie de données et société destinataire, révocable |
 | Site | Lieu opérationnel lié à une société |
 | Cash register | Point de caisse, imprimante, écran client et session de caisse |
 | Cash session | Ouverture, fond de caisse, opérations, fermeture et écarts |
@@ -24,9 +42,9 @@ Les identifiants techniques UUID sont utilisés à l'intérieur du système. Les
 
 Les modules métiers ajoutent leurs propres entités, sans contourner les règles ci-dessus.
 
-## 3. Numéro de reçu
+## 4. Numéro de reçu
 
-### 3.1 Format
+### 4.1 Format
 
 Le système conserve la forme brute à huit chiffres et affiche la forme espacé :
 
@@ -38,11 +56,11 @@ Le système conserve la forme brute à huit chiffres et affiche la forme espacé
 
 La séquence appartient à la société et ne repart pas à zéro chaque jour. Cela réduit fortement le risque de collision et simplifie la vérification d'un reçu.
 
-### 3.2 Attribution en ligne
+### 4.2 Attribution en ligne
 
 La vente confirmée appelle une fonction transactionnelle PostgreSQL qui réserve le prochain numéro. La séquence ne peut pas produire deux fois le même numéro même si deux caisses valident au même moment.
 
-### 3.3 Attribution hors ligne
+### 4.3 Attribution hors ligne
 
 Avant une perte de réseau, le serveur peut attribuer à une caisse un bloc strict de numéros. Exemple : 0123 4001 à 0123 4500. Le poste ne peut utiliser que son bloc, dans l'ordre, pendant la durée de validité définie.
 
@@ -56,7 +74,7 @@ Lorsque le poste se reconnecte :
 
 Une opération ne doit jamais être recréée par l'opérateur parce que la connexion a semblé échouer.
 
-## 4. QR de vérification
+## 5. QR de vérification
 
 Le QR ne contient pas une copie de facture ni une information personnelle. Il pointe vers une URL publique de vérification avec :
 
@@ -69,9 +87,9 @@ La page publique affiche uniquement la validité, la société, la date, le num�
 
 Une signature invalide, un reçu annulé ou un jeton révoqué affiche un état explicite sans dévoiler de données.
 
-## 5. Audit immuable
+## 6. Audit immuable
 
-### 5.1 Événements à inscrire
+### 6.1 Événements à inscrire
 
 | Catégorie | Exemples |
 | --- | --- |
@@ -81,10 +99,11 @@ Une signature invalide, un reçu annulé ou un jeton révoqué affiche un état 
 | Finance | taux, paiement, dépôt, remboursement, dépense, crédit, rapprochement |
 | Stock | réception, transfert, ajustement, perte, péremption, retour |
 | Documents | contrat, inspection, certificat, envoi de reçu, export PDF ou XLSX |
+| Confidentialité | rapprochement client, lien de profil, consentement, consultation partagée, révocation et export refusé |
 | Administration | configuration SMTP, modèle de courriel, écran client, appareil, sauvegarde |
 | Système | tâche planifiée, synchronisation, erreur, reprise, migration et alerte |
 
-### 5.2 Contenu minimal
+### 6.2 Contenu minimal
 
 Chaque événement contient :
 
@@ -100,7 +119,7 @@ Chaque événement contient :
 - horodatage UTC et fuseau d'affichage ;
 - résultat : réussi, refusé, différé ou échoué.
 
-### 5.3 Immutabilité
+### 6.3 Immutabilité
 
 La table d'audit accepte les insertions mais refuse les mises à jour et suppressions à l'aide d'un déclencheur PostgreSQL. Le rôle applicatif n'obtient aucun droit de suppression.
 
@@ -112,13 +131,15 @@ Le journal ne conserve jamais en clair :
 - contenu complet de documents d'identité ;
 - adresse courriel ou téléphone intégral lorsque seul le statut d'envoi est utile.
 
-## 6. Rétention et confidentialité
+## 7. Rétention et confidentialité
 
 La durée de conservation sera fixée par société avec le comptable et les conseils juridiques. Par défaut, le produit n'automatise aucune purge d'opérations financières ou d'audit. Les règles de purge à venir doivent être exécutées par une tâche journalisée, sur données expirées, après validation du propriétaire.
 
 Les images de passeport, pièces justificatives, signatures et photos de dommages sont chiffrées dans le stockage et accessibles uniquement aux rôles qui en ont besoin.
 
-## 7. Échanges et corrections
+Les données de rapprochement client sont chiffrées et leurs index de recherche utilisent une empreinte HMAC protégée, pas un courriel ou un téléphone en clair. Les journaux conservent la décision et la référence interne, jamais la valeur complète d'un document sensible.
+
+## 8. Échanges et corrections
 
 Une donnée financière confirmée ne se modifie pas directement.
 
@@ -132,7 +153,7 @@ Une donnée financière confirmée ne se modifie pas directement.
 | Dépôt de garantie utilisé | Écriture de consommation du dépôt, jamais modification du reçu d'origine |
 | Réimpression | Nouveau tirage marqué Réimpression et motif |
 
-## 8. Qualité de données
+## 9. Qualité de données
 
 - Montants en décimal fixe, jamais en nombre flottant.
 - Toutes les devises sont codées ISO : HTG ou USD pour le périmètre initial.
@@ -141,7 +162,7 @@ Une donnée financière confirmée ne se modifie pas directement.
 - Les dates métier sont validées avec le fuseau America/Port-au-Prince.
 - Les suppressions physiques de données métier sont interdites depuis l'interface ; on archive ou on annule.
 
-## 9. Sauvegarde et restauration
+## 10. Sauvegarde et restauration
 
 La sauvegarde inclut PostgreSQL, fichiers chiffrés, configuration de déploiement non secrète et journal des travaux. Elle est chiffrée avant sortie du VPS.
 
