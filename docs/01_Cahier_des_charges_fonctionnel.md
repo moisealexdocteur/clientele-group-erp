@@ -2,7 +2,7 @@
 
 ## 1. But du produit
 
-Clientèle Group ERP est un progiciel web sur mesure qui permet à plusieurs sociétés d'exploiter leurs activités avec les mêmes règles de contrôle, sans mélanger les clients, les stocks, les caisses, les employés ou les rapports.
+Clientèle Group ERP est un progiciel web sur mesure qui permet à plusieurs sociétés d'exploiter leurs activités avec les mêmes règles de contrôle, sans mélanger les relations clients, les stocks, les caisses, les employés ou les rapports.
 
 Le système doit être utilisable au comptoir sur écran tactile, sur tablette, sur mobile et au bureau. Il doit continuer à enregistrer les opérations critiques lors d'une coupure Internet contrôlée, puis les synchroniser sans doublon.
 
@@ -76,12 +76,24 @@ Le journal est en ajout seulement. Une correction y ajoute un nouvel événement
 - Les opérations de dépôt de garantie, avances clients, crédits entreprises, taxes, ventes et dépenses sont séparées comptablement.
 - Rapports imprimables et exportables : PDF et XLSX. Aucun tableau ne doit seulement exister à l'écran.
 
+### 3.7 Clientèle Group : client commun, données séparées
+
+Dans la pratique, une même personne ou institution peut utiliser plusieurs services de Clientèle Group. Le système doit donc éviter de recréer inutilement cette personne tout en protégeant chaque relation commerciale.
+
+- Une identité maître de groupe reçoit une référence interne Clientèle Group. Elle sert à rapprocher les doublons sous contrôle ; elle ne donne pas accès aux opérations des sociétés.
+- Chaque société possède son propre profil client, relié à cette identité seulement lorsque le rapprochement est confirmé. Réservations, locations, factures, folios, créances, dépôts, inspections, passeports, photos, documents, historique et préférences restent dans le profil de la société.
+- Par défaut, aucun employé d'une société ne peut rechercher, consulter, exporter ou déduire les informations détenues par une autre société.
+- Les coordonnées ou préférences communes ne peuvent être partagées qu'après un consentement clair, avec finalité, catégories de données, société destinataire, date, échéance éventuelle et révocation. Le consentement ne partage jamais les transactions ni les documents sensibles.
+- Le rapprochement, la création d'un lien, toute consultation de données partagées et toute révocation sont journalisés. Aucun rapprochement automatique irréversible n'est permis.
+- Les identifiants, passeports, contrats, inspections, solde, crédit et documents de paiement sont considérés sensibles : ils ne sont jamais visibles dans une autre société, même si le client est connu du groupe.
+
 ## 4. Comptes, rôles et droits
 
 | Rôle | Portée | Accès principal |
 | --- | --- | --- |
-| Propriétaire du système | Groupe | Tous les paramètres, toutes les sociétés, dérogations de sécurité et approbations sensibles |
-| Administrateur global | Groupe | Configuration globale, sociétés, utilisateurs, modèles de courriels, taux et supervision |
+| Propriétaire du système | Groupe | Tous les paramètres, accès aux sociétés par sélection explicite, dérogations de sécurité et approbations sensibles |
+| Administrateur global | Groupe | Configuration globale, sociétés, utilisateurs, modèles de courriels, taux et supervision, sans vue opérationnelle transversale implicite |
+| Responsable confidentialité groupe | Groupe | Rapprochement d'identité, consentements et traitement des demandes, sans accès implicite aux opérations des sociétés |
 | Propriétaire de société | Société | Paramètres et rapports de sa société, approbations définies |
 | Administrateur de société | Société | Utilisateurs locaux, sites, catalogue, opérations et rapports autorisés |
 | Superviseur | Site | Approbations limitées, clôtures, crédits, retours et rapports du site |
@@ -107,7 +119,7 @@ L'espace Paramètres globaux est limité au propriétaire et aux administrateurs
 - intégrations de paiement, WhatsApp, stockage de fichiers et sauvegardes ;
 - écrans clients, promotions, liens secrets et durée de validité ;
 - modèles de documents, contrats, certificats numérotés et reçus ;
-- paramètres d'isolation par société, rétention et archivage.
+- paramètres d'isolation par société, identité maître client, consentements, rétention et archivage.
 
 ## 6. Noyau de vente et de caisse
 
@@ -135,7 +147,9 @@ Un règlement peut combiner plusieurs modes. Les montants saisis dans une devise
 
 ### 6.3 Client individuel et institutionnel
 
-- Fiche client avec consentement de communication, coordonnées et historique.
+- Fiche client locale avec consentement de communication, coordonnées et historique de la société active.
+- Proposition contrôlée de rattachement à une identité maître Clientèle Group ; elle n'affiche pas l'historique, les soldes ni les documents des autres sociétés.
+- Consentement distinct pour tout partage de coordonnées ou de préférences entre sociétés ; un refus ou une révocation n'empêche pas la prestation de service locale.
 - Compte institutionnel avec limite de crédit, approbateurs, pièces requises, échéance et solde.
 - Toute vente à crédit exige un client institutionnel approuvé ou une autorisation tracée.
 
