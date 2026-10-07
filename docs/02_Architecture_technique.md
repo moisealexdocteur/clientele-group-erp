@@ -16,6 +16,7 @@ Le noyau est commun. Les modules Hotel, Guest House, Car Rental, Gaz Station, Ma
 | Cache et files | Redis | Sessions, verrouillage de caisse, travaux de courriel, synchronisation et export |
 | Serveur web | Nginx | Sert les fichiers PWA et délègue PHP au backend |
 | Proxy HTTPS | Traefik existant | Certificats, routes, redirections HTTPS et séparation des services |
+| Système hôte | Ubuntu 26.04 LTS | Base de serveur maintenue pour le VPS dédié |
 | Fichiers | Volume chiffré au départ, stockage S3 compatible ensuite | Photos d'inspection, justificatifs, contrats et exports |
 | Supervision | Healthcheck, journaux structurés et sauvegardes chiffrées | Détection et reprise sans exposer les données |
 
@@ -53,6 +54,8 @@ Un module ne lit pas les tables d'un autre module sans passer par le noyau et sa
 ## 5. Multi-sociétés et isolation
 
 Chaque table opérationnelle contient au minimum company_id. Les requêtes applicatives s'exécutent dans une transaction qui fixe la société active. PostgreSQL applique une politique Row Level Security, ce qui rend impossible une lecture ou une écriture accidentelle dans une autre société.
+
+L'identité maître Clientèle Group est volontairement séparée des tables opérationnelles. Elle est accessible uniquement par un service de confidentialité dédié, après vérification du consentement et de la finalité. Un profil client de société, une réservation, une location, un solde, un document d'identité ou une inspection n'est jamais rendu lisible par le seul fait que la personne possède une identité maître.
 
 La logique est la suivante :
 
@@ -118,13 +121,25 @@ Les fichiers .env ne sont jamais commités. Toute rotation de secret est documen
 
 ## 10. Disponibilité et performances
 
-Le KVM1 peut servir à une démonstration ou une préproduction très légère, mais il n'offre pas de marge suffisante pour le pilote complet. Le KVM2 est le minimum recommandé : deux vCPU, 8 Go RAM et 100 Go NVMe selon l'offre Hostinger vérifiée le 07 octobre 2026. Avant la production, une mesure doit confirmer :
+Le KVM1 est retenu pour démarrer selon le budget, avec Ubuntu 26.04 LTS. Son profil de référence est limité : 1 vCPU, 4 Go RAM et 50 Go NVMe. Il convient à un premier pilote léger si le VPS est réservé au progiciel et au Traefik nécessaire. Il ne doit pas aussi héberger des environnements de développement, des builds d'images, des sauvegardes longues conservées localement ni des services sans lien avec l'ERP.
 
-- mémoire disponible après Traefik et services existants ;
-- stockage pour base, photos, pièces justificatives et sauvegardes ;
-- nombre de caisses simultanées ;
-- taille du catalogue, volumes de reçus et photos ;
-- charge de génération des PDF et exports.
+Sur KVM1 :
+
+- une seule file worker est active ;
+- la validation d'une vente demeure courte et synchrone ;
+- PDF, XLSX, courriels, WhatsApp, imports et rapports lourds passent par la file ;
+- les photos, pièces et archives sortent progressivement vers un stockage objet ou des sauvegardes chiffrées hors VPS ;
+- la préproduction se fait localement ou sur un environnement temporaire séparé ;
+- aucune des neuf caisses prévues ne sera activée sans une recette de charge et d'impression sur matériel réel.
+
+Le passage au KVM2 est déclenché avant l'activation complète des neuf caisses, ou plus tôt si l'une des conditions suivantes apparaît en production ou en recette :
+
+- CPU supérieur à 80 % pendant dix minutes à charge normale ;
+- mémoire supérieure à 85 % pendant quinze minutes ou usage continu de swap ;
+- moins de 15 Go libres sur le disque ;
+- validation en ligne d'une vente au 95e percentile supérieure à 1,5 seconde, hors temps d'impression ;
+- file de travaux critique en attente plus de dix minutes ou échecs répétés de synchronisation ;
+- sauvegarde ou restauration qui ne tient plus dans la fenêtre d'exploitation.
 
 Les tâches lourdes vont dans le worker : PDF, XLSX, courriels, WhatsApp, import, rapports volumineux, compressions et sauvegardes. Le POS confirme la vente rapidement, puis les tâches secondaires sont traitées de façon visible et reprise en cas d'erreur.
 
