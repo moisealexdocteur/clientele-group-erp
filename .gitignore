@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+vendor/
+node_modules/
+storage/
+bootstrap/cache/
+public/build/
+dist/
+coverage/
+*.log
+*.sqlite
+*.pem
+*.key
+*.p12
+*.pfx
+.DS_Store
