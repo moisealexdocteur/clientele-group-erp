@@ -367,7 +367,7 @@ button {
   font-size: 0.82rem;
 }
 
-.session-strip .text-button {
+.change-company {
   margin-left: auto;
 }
 
@@ -656,6 +656,323 @@ h3 {
   font-size: 0.73rem;
 }
 
+.reservation-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.28fr) minmax(250px, 0.72fr);
+  gap: 16px;
+  margin-top: 26px;
+}
+
+.reservation-form-card,
+.reservation-summary {
+  border: 1px solid #e6e7ed;
+  border-radius: 16px;
+}
+
+.reservation-form-card {
+  background: #fff;
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.section-intro > p:not(.eyebrow) {
+  max-width: 670px;
+  margin-bottom: 0;
+  color: #5b5c68;
+  font-size: 0.9rem;
+  line-height: 1.52;
+}
+
+.reservation-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.reservation-form fieldset {
+  min-width: 0;
+  border: 1px solid #e4e6ec;
+  border-radius: 14px;
+  margin: 0;
+  padding: 16px;
+}
+
+.reservation-form legend {
+  color: #252630;
+  padding: 0 5px;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.reservation-form label {
+  display: grid;
+  gap: 7px;
+  color: #30313a;
+  font-size: 0.79rem;
+  font-weight: 780;
+}
+
+.reservation-form input,
+.reservation-form select {
+  width: 100%;
+  min-height: 47px;
+  border: 1px solid #d8dbe5;
+  border-radius: 10px;
+  background: #fff;
+  color: #0e0e10;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.reservation-form select {
+  cursor: pointer;
+}
+
+.reservation-form input:focus,
+.reservation-form select:focus {
+  border-color: #2222e6;
+  box-shadow: 0 0 0 3px rgba(34, 34, 230, 0.12);
+}
+
+.reservation-form input:disabled,
+.reservation-form select:disabled {
+  background: #f5f5f7;
+  color: #777985;
+  cursor: not-allowed;
+}
+
+.site-context {
+  margin: 10px 0 0;
+  border-left: 3px solid #f70707;
+  background: #fff5f5;
+  color: #42434c;
+  padding: 9px 11px;
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.two-columns,
+.three-columns {
+  display: grid;
+  gap: 11px;
+  margin-top: 12px;
+}
+
+.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.three-columns {
+  grid-template-columns: 0.72fr 1fr 1fr;
+}
+
+.category-choice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.category-choice button,
+.vehicle-choice {
+  border: 1px solid #d8dbe5;
+  background: #fff;
+  color: #363741;
+  cursor: pointer;
+}
+
+.category-choice button {
+  min-height: 44px;
+  border-radius: 10px;
+  padding: 0 9px;
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
+.category-choice button.selected,
+.vehicle-choice.selected {
+  border-color: #2222e6;
+  background: #eef0ff;
+  color: #17188f;
+  box-shadow: 0 0 0 2px rgba(34, 34, 230, 0.1);
+}
+
+.category-choice button:disabled,
+.vehicle-choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.availability-button {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 12px;
+  border: 1px solid #0e0e10;
+  border-radius: 10px;
+  background: #0e0e10;
+  color: #fff;
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.availability-button:not(:disabled):hover,
+.availability-button:not(:disabled):focus-visible {
+  border-color: #2222e6;
+  background: #2222e6;
+}
+
+.availability-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.vehicle-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.vehicle-choice {
+  display: grid;
+  min-height: 105px;
+  gap: 5px;
+  border-radius: 12px;
+  padding: 13px;
+  text-align: left;
+}
+
+.vehicle-choice span {
+  color: #2222e6;
+  font-size: 0.73rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.vehicle-choice strong {
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.vehicle-choice small,
+.field-help {
+  color: #696b75;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.field-help {
+  margin: 11px 0 0;
+}
+
+.rental-message {
+  margin: 0;
+  border-left: 3px solid #168449;
+  background: #edf9f1;
+  color: #1a5f39;
+  padding: 10px 12px;
+  font-size: 0.83rem;
+  line-height: 1.42;
+}
+
+.rental-message.error {
+  border-left-color: #f70707;
+  background: #fff1f1;
+  color: #7b0909;
+}
+
+.create-reservation {
+  width: 100%;
+}
+
+.reservation-summary {
+  align-self: start;
+  background: #f8f8fa;
+  padding: 22px;
+}
+
+.reservation-summary h3 {
+  margin-bottom: 15px;
+}
+
+.reservation-summary ul {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reservation-summary li {
+  display: flex;
+  gap: 9px;
+  color: #43444e;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.reservation-summary li span {
+  color: #168449;
+  font-weight: 900;
+}
+
+.summary-note {
+  margin: 21px 0 0;
+  border-top: 1px solid #dfe1e8;
+  color: #656773;
+  padding-top: 15px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.reservation-created {
+  display: grid;
+  gap: 6px;
+  margin-top: 19px;
+  border-radius: 13px;
+  background: #0e0e10;
+  color: #fff;
+  padding: 16px;
+}
+
+.reservation-created .eyebrow {
+  color: #ffc4c4;
+  margin-bottom: 2px;
+}
+
+.reservation-created strong {
+  color: #fff;
+  font-size: 1.85rem;
+  letter-spacing: -0.055em;
+}
+
+.reservation-created span,
+.reservation-created small {
+  color: #e0e0e5;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 880px) {
+  .reservation-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .reservation-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 18px;
+  }
+
+  .reservation-summary .summary-note,
+  .reservation-summary .reservation-created {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 680px) {
   .topbar,
   .context-card,
@@ -704,7 +1021,8 @@ h3 {
     flex-wrap: wrap;
   }
 
-  .session-strip .text-button {
+  .session-strip .text-button,
+  .change-company {
     width: 100%;
     margin-left: 39px;
   }
@@ -714,7 +1032,10 @@ h3 {
   }
 
   .metric-grid,
-  .checklist-card {
+  .checklist-card,
+  .two-columns,
+  .three-columns,
+  .reservation-summary {
     grid-template-columns: 1fr;
   }
 

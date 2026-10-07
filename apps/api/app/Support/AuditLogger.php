@@ -22,6 +22,11 @@ final class AuditLogger
         'otp',
         'email',
         'phone',
+        'bank',
+        'passport',
+        'proof',
+        'address',
+        'location',
         'card_number',
         'cvv',
     ];

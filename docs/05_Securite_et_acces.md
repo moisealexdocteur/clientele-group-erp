@@ -4,11 +4,13 @@
 
 Le produit manipule de l'argent, des reçus, des informations de clients, des documents d'identité, des photos d'inspection, des contrats et des données de paie. La sécurité fait partie du produit, pas d'une option à ajouter après les ventes.
 
-## État de la préversion 0.2.0-alpha.3
+## État de la préversion 0.2.0-alpha.4
 
 Le socle implémente déjà le mot de passe Argon2id, le code courriel à six chiffres, la réinitialisation personnelle, les sessions opaques révocables, le contexte de société et le journal d’audit. Les codes et jetons sont stockés sous hash ; aucun code ne peut être inscrit dans les journaux de l’application.
 
 La préproduction utilise encore volontairement le transport de courriel `log`. L’application refuse donc d’y émettre un code de sécurité tant qu’un SMTP transactionnel réel n’est pas configuré. Aucun compte humain ne doit être provisionné avant ce réglage.
+
+Le pilote Car Rental ajoute des profils clients strictement locaux par société. Les coordonnées, détails de lieu personnalisés, références de virement, notes et légendes d’inspection sont chiffrés au repos. L’identité maître Clientèle Group ne contient aucune coordonnée et ne peut pas servir à consulter des données d’une autre société.
 
 ## 2. Authentification
 

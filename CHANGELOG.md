@@ -2,6 +2,29 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.4 - 2026-10-07
+
+### Ajouté
+
+- Premier périmètre API Car Rental : véhicules SUV, Mid SUV et Pick-up, disponibilité par adresse, réservation concurrente protégée et numéro à huit chiffres affiché au format `0000 0001`.
+- Premier écran PWA de réservation : choix obligatoire de la société et de l’adresse autorisée, période, catégorie, véhicule disponible, client, trajet, devise et kilométrage.
+- Calendrier métier basé sur les réservations actives : un véhicule réservé ou en circulation ne peut pas être alloué sur une période qui se chevauche.
+- Prise en charge et drop-off au site, à l’Aéroport International du Cap-Haïtien ou à une adresse personnalisée.
+- Profils clients locaux chiffrés par société ; l’identité maître ne conserve aucune coordonnée et ne donne aucun accès inter-sociétés.
+- API de soumission de paiement Car Rental en espèces ou virement Sogebank, avec preuve hashée obligatoire pour un virement et approbation distincte.
+- Schéma versionné des dépôts de garantie, inspections pré/post-location, croquis, photos hashées, signatures hashées et kilométrage.
+- Tests de réservation, chevauchement, périmètre de site, virement Sogebank et absence de coordonnées bancaires dans l’audit.
+
+### Sécurité
+
+- Les détails de lieu personnalisés, coordonnées client, référence bancaire, notes et légendes d’inspection sont chiffrés au repos par Laravel.
+- Toutes les nouvelles données de société Car Rental sont protégées par Row Level Security PostgreSQL et par permission d’API explicite.
+
+### Limites connues
+
+- Le contrat PDF, la capture réelle des signatures et photos, le check-out, l’inspection post-location, le calcul final de kilométrage, le workflow de retenue/libération du dépôt et l’impression sont les prochaines itérations du pilote.
+- Aucune donnée client, passeport ou preuve de paiement réelle ne doit être importée avant la recette préproduction et l’activation du stockage chiffré des fichiers.
+
 ## 0.2.0-alpha.3 - 2026-10-07
 
 ### Ajouté

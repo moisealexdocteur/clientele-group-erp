@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BootstrapController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CarRentalController;
 use App\Http\Controllers\CompanyContextController;
 use App\Http\Controllers\HealthController;
 use Illuminate\Support\Facades\Route;
@@ -29,5 +30,23 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware(['api.token', 'company.context'])->group(function (): void {
         Route::get('/context', CompanyContextController::class)->name('api.v1.context');
+
+        Route::prefix('car-rental')->group(function (): void {
+            Route::get('/availability', [CarRentalController::class, 'availability'])
+                ->middleware('company.permission:rental.availability.read')
+                ->name('api.v1.car-rental.availability');
+            Route::post('/reservations', [CarRentalController::class, 'store'])
+                ->middleware('company.permission:rental.reservations.create')
+                ->name('api.v1.car-rental.reservations.store');
+            Route::get('/reservations/{reservation}', [CarRentalController::class, 'show'])
+                ->middleware('company.permission:rental.reservations.read')
+                ->name('api.v1.car-rental.reservations.show');
+            Route::post('/reservations/{reservation}/payments', [CarRentalController::class, 'submitPayment'])
+                ->middleware('company.permission:rental.payments.submit')
+                ->name('api.v1.car-rental.payments.store');
+            Route::post('/reservations/{reservation}/payments/{payment}/approve', [CarRentalController::class, 'approvePayment'])
+                ->middleware('company.permission:rental.payments.approve')
+                ->name('api.v1.car-rental.payments.approve');
+        });
     });
 });
