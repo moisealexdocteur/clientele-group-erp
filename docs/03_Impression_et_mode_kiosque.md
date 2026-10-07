@@ -17,6 +17,21 @@ Le produit déclenche une demande d'impression après confirmation d'une transac
 
 Microsoft documente la politique Edge SilentPrintingEnabled : lorsqu'elle est activée, Edge ferme l'aperçu et imprime vers l'imprimante par défaut. Elle sera validée sur la version exacte de chaque poste avant mise en service.
 
+### 2.1 Matériel cible et limite actuelle
+
+La cible est une imprimante thermique Epson de la famille indiquée « TMIII », largeur 80 mm, pour chaque caisse. Les imprimantes ne sont pas encore disponibles physiquement ; aucune compatibilité finale, pilote ni procédure d'ouverture de tiroir-caisse ne sera déclarée validée avant la recette matérielle.
+
+À la réception, la fiche de chaque imprimante doit préciser :
+
+- la référence exacte Epson ;
+- le type de connexion : USB, Ethernet ou série ;
+- le système du poste de caisse ;
+- le pilote installé et sa version ;
+- le nom de l'imprimante configurée par défaut ;
+- le résultat des reçus client, Administration et rapport journalier.
+
+L'application produit du HTML/CSS 80 mm standard. Elle ne dépend pas d'un pilote Epson sur le VPS : le pilote reste installé sur chaque poste local.
+
 ## 3. Profil d'un poste de caisse
 
 Chaque poste possède une fiche de configuration avec :
@@ -80,7 +95,7 @@ La copie Administration ajoute :
 
 ### 5.1 Edge sur Windows
 
-Le poste est préparé par l'administrateur :
+Une fois l'imprimante reçue, le poste est préparé par l'administrateur :
 
 1. Installer le pilote de l'imprimante thermique et définir le papier 80 mm.
 2. Choisir l'imprimante thermique comme imprimante par défaut du compte kiosque.
