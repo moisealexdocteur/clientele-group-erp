@@ -1,17 +1,17 @@
 # Clientèle Group ERP
 
-Progiciel web sur mesure, multi-sociétés et orienté opérations, conçu pour Clientèle Group en Haïti.
+Progiciel web sur mesure, multi-sociétés conçu pour Clientèle Group en Haïti.
 
-Le produit regroupe un noyau commun sécurisé, puis des modules métiers indépendants :
+Le produit regroupe un noyau commun sécurisé, puis des modules métiers indépendants pour chaque société :
 
-- Hotel, bar et restaurant
+- Clientèle Hotel, bar et restaurant
 - Guest house et appartements
-- Location de véhicules
+- Clientèle Rent a car pour Location de véhicules
 - Station-service
 - Market
 - Auto parts et motocyclettes
 
-La première version de ce dépôt est une fondation de produit. Elle fixe les règles qui ne doivent pas être improvisées plus tard : isolation des sociétés, audit, devises HTG/USD, impression de reçus, mode hors ligne, contrôle d'accès et déploiement Docker.
+La première version de ce dépôt est une fondation de produit. Elle fixe les règles comme : isolation des sociétés, audit, devises HTG/USD, impression de reçus, mode hors ligne, contrôle d'accès et déploiement Docker.
 
 ## Principes non négociables
 
@@ -75,4 +75,4 @@ Chaque changement fonctionnel ou technique met à jour CHANGELOG.md et, lorsque 
 
 ## Licence
 
-Code propriétaire de Clientèle Group. Toute reproduction, diffusion ou utilisation sans autorisation écrite est interdite.
+Code propriétaire de Clientèle Group par Moise Alex Docteur. Toute reproduction, diffusion ou utilisation sans autorisation écrite est interdite.
