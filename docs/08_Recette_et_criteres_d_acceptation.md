@@ -12,6 +12,10 @@ La recette est réalisée en préproduction avec des données de test représent
 - [ ] Le propriétaire global doit sélectionner explicitement une société avant une opération métier.
 - [ ] Une société inactive ne peut plus ouvrir de nouvelle opération.
 - [ ] Les sites et caisses ne sont disponibles que dans leur société.
+- [ ] Une même personne peut être liée à deux profils locaux sans que l'utilisateur de Société A voie les ventes, réservations, locations, soldes ou documents de Société B.
+- [ ] Un rapprochement d'identité exige le rôle de confidentialité, une finalité et crée un audit.
+- [ ] Sans consentement valide, une société ne peut ni rechercher ni révéler qu'un client possède un profil dans une autre société.
+- [ ] Un consentement de coordonnées est limité à sa société destinataire, expire ou se révoque correctement et ne partage jamais les données opérationnelles.
 
 ## 3. Connexion et sécurité
 
@@ -58,6 +62,7 @@ La recette est réalisée en préproduction avec des données de test représent
 - [ ] La réimpression est possible après remise en ligne de l'imprimante.
 - [ ] Si deux imprimantes sont requises, le mécanisme local les choisit sans intervention non autorisée.
 - [ ] Le modèle d'imprimante, pilote, OS et version de navigateur sont inscrits dans la fiche de recette.
+- [ ] À réception, chaque Epson TMIII 80 mm est testée physiquement sur le poste auquel elle est affectée ; le modèle exact et l'interface sont consignés.
 
 ## 7. Écran client
 
@@ -118,6 +123,7 @@ Chaque module reçoit sa fiche de recette propre avant activation. Les cas minim
 - [ ] PostgreSQL et Redis ne sont pas exposés sur Internet.
 - [ ] Le certificat HTTPS est valide.
 - [ ] Les alertes de santé et sauvegarde sont testées.
+- [ ] Sur KVM1, le test de charge du lot actif reste sous les seuils CPU, mémoire, disque, synchronisation et temps de validation définis.
 
 ## 13. Approbation
 
