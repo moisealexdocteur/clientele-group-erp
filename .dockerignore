@@ -1,0 +1,16 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+apps/api/vendor
+apps/api/storage/logs
+apps/api/bootstrap/cache/*.php
+apps/web/node_modules
+apps/web/dist
+infra/traefik/letsencrypt
+*.log
+*.pem
+*.key
+*.p12
+*.pfx

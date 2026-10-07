@@ -23,6 +23,10 @@ Le pilote est fixé dans l'ordre suivant : Clientèle Car Rental, Clientèle Aut
 
 Les numéros sont fonctionnels, pas des promesses de date. Une version est livrée seulement lorsque ses critères d'acceptation sont réussis.
 
+### État réel au 7 octobre 2026
+
+La préversion `0.2.0-alpha.1` rend le socle exécutable : Laravel 13, une PWA Vue, des images Docker, PostgreSQL, Redis, un endpoint de santé et la première migration de sociétés, sites, postes et audit. Elle ne valide pas encore le lot 0.2 : authentification, 2FA, rôles, taux de change, appareils et configuration métier restent à construire. Elle ne doit donc pas recevoir de données réelles ni être déclarée prête à la production.
+
 ## 3. Lot 0.2 - Noyau plateforme
 
 ### Obligatoire

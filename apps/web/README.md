@@ -1,6 +1,8 @@
 # Interface Web et PWA
 
-L'interface sera réalisée avec Vue et TypeScript.
+L'interface est une PWA Vue 3 et TypeScript. Le premier écran est volontairement limité au pilote Clientèle Rent a Car : état de connexion, format Cap-Haïtien, contexte de société explicite et modules à venir. Il ne contient aucune réservation, véhicule, adresse ou donnée client inventée.
+
+La PWA vérifie `/api/health` et `/api/v1/bootstrap`. Son service worker cache le shell applicatif uniquement ; il ne met jamais en cache les réponses `/api`, les données métier ou les opérations de caisse.
 
 Contraintes de développement :
 

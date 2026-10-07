@@ -52,9 +52,9 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 
 ## État du projet
 
-Version : 0.1.6
+Version : 0.2.0-alpha.1
 
-Cette version contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau, le modèle de déploiement et l'amorce Traefik HTTPS pour les domaines réels. Le pilote est ordonné : Car Rental, Auto Parts et motocyclettes, Guest House, Market, puis Hotel, Bar et Restaurant. Aucun module métier n'est encore déclaré prêt pour la production.
+Cette préversion contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau, l'amorce Traefik HTTPS et le premier socle exécutable Laravel 13 + Vue PWA. Le pilote est ordonné : Car Rental, Auto Parts et motocyclettes, Guest House, Market, puis Hotel, Bar et Restaurant. Aucun module métier n'est encore déclaré prêt pour la production et aucune donnée réelle ne doit être chargée.
 
 ## Règles de version
 
@@ -68,11 +68,11 @@ Chaque changement fonctionnel ou technique met à jour CHANGELOG.md et, lorsque 
 
 ## Démarrage de l'implémentation
 
-1. Valider le premier module pilote dans docs/06_Feuille_de_route.md.
-2. Créer les migrations du noyau à partir de apps/api/database/001_noyau.sql.
-3. Construire l'authentification, les sociétés, les rôles, l'audit et la configuration globale.
-4. Construire le POS et l'impression 80 mm avant d'ouvrir les modules métiers.
-5. Déployer d'abord un environnement de préproduction distinct.
+1. Terminer l'authentification, les sociétés, les rôles, l'audit et la configuration globale du lot 0.2.
+2. Ajouter les migrations financières : devises, taux BRH, sessions de caisse et reçus.
+3. Construire le POS et l'impression 80 mm avant d'ouvrir les modules métiers.
+4. Déployer d'abord le socle sur `preprod.erp.clientelegroup.tech` avec des données de test.
+5. Construire Car Rental en premier, puis suivre l'ordre validé des modules.
 
 ## Licence
 

@@ -1,0 +1,17 @@
+{
+  "name": "Clientèle Group ERP",
+  "short_name": "Clientèle ERP",
+  "lang": "fr-HT",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f8",
+  "theme_color": "#f70707",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

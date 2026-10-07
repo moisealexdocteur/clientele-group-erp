@@ -20,3 +20,62 @@ jobs:
           test -f docs/03_Impression_et_mode_kiosque.md
           test -f docs/05_Securite_et_acces.md
           test -f apps/api/database/001_noyau.sql
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite
+          coverage: none
+      - name: Valider Composer
+        run: composer validate --no-check-publish --no-check-lock
+      - name: Installer les dépendances API
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Tester l'API
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: php artisan test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Installer les dépendances PWA
+        run: npm ci
+      - name: Vérifier TypeScript
+        run: npm run typecheck
+      - name: Compiler la PWA
+        run: npm run build
+
+  images:
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Vérifier l'image API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+      - name: Vérifier l'image web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false

@@ -2,6 +2,21 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.1 - 2026-10-07
+
+### Ajouté
+
+- Socle Laravel 13 versionné dans `apps/api`, avec API de santé, vérification PostgreSQL/Redis et premier contrat de démarrage sans données de production.
+- Première migration Laravel pour les sociétés, sites, postes de vente, accès locaux et événements d'audit UUID.
+- Isolation RLS PostgreSQL pour les sites, postes et événements d'audit, plus déclencheur empêchant la modification ou suppression du journal d'audit.
+- PWA Vue 3 et TypeScript dans `apps/web`, en français, avec l’écran initial Clientèle Rent a Car, le fuseau Cap-Haïtien et une détection de connexion.
+- Images Docker applicatives, Nginx/PHP-FPM, compose de build local séparé et workflow GitHub de publication GHCR.
+
+### Limites connues
+
+- Cette préversion ne contient ni authentification, ni 2FA, ni rôles métier, ni taux BRH, ni caisse, ni reçu, ni donnée réelle.
+- Elle est réservée à la recette technique de préproduction.
+
 ## 0.1.6 - 2026-10-07
 
 ### Ajouté

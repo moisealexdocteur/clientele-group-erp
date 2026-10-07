@@ -121,7 +121,7 @@ Chaque événement contient :
 
 ### 6.3 Immutabilité
 
-La table d'audit accepte les insertions mais refuse les mises à jour et suppressions à l'aide d'un déclencheur PostgreSQL. Le rôle applicatif n'obtient aucun droit de suppression.
+La première migration Laravel crée `audit_events`, active une politique RLS par société et refuse les mises à jour et suppressions à l'aide d'un déclencheur PostgreSQL. Les routes applicatives n'exposent aucune modification ou suppression d'audit. Les droits PostgreSQL de production seront réduits davantage lors de la création du rôle de migration séparé.
 
 Le journal ne conserve jamais en clair :
 
