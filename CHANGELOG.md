@@ -2,6 +2,12 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.1.1 - 2026-10-07
+
+### Modifié
+
+- Recommandation d'hébergement : KVM2 est le minimum retenu pour la préproduction active et le pilote. KVM1 est limité à une démonstration ou une préproduction très légère.
+
 ## 0.1.0 - 2026-10-07
 
 ### Ajouté
