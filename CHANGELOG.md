@@ -20,6 +20,7 @@ Toutes les modifications notables de ce projet sont documentées ici.
 ### Corrigé
 
 - L'image PHP conserve désormais les dépendances de compilation jusqu'à l'installation de l'extension Redis, puis retire les outils de build inutiles de l'image finale.
+- L'image crée explicitement les répertoires Laravel requis au démarrage ; aucun dossier vide de stockage ne dépend désormais de Git.
 
 ## 0.1.6 - 2026-10-07
 

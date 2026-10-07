@@ -31,6 +31,16 @@ COPY apps/api/docker/php-production.ini /usr/local/etc/php/conf.d/99-clientele-p
 COPY apps/api/docker/entrypoint.sh /usr/local/bin/clientele-entrypoint
 
 RUN chmod 0755 /usr/local/bin/clientele-entrypoint \
+    && mkdir -p \
+        storage/app/private \
+        storage/app/public \
+        storage/framework/cache/data \
+        storage/framework/cache/locks \
+        storage/framework/sessions \
+        storage/framework/testing \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
 
 USER www-data
