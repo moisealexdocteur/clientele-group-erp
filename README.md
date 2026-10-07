@@ -16,6 +16,7 @@ La première version de ce dépôt est une fondation de produit. Elle fixe les r
 ## Principes non négociables
 
 - Données séparées par société, site et caisse.
+- Une même personne peut avoir une identité maître Clientèle Group, mais chaque société conserve son profil, son historique et ses documents isolés. Tout partage de coordonnées est consenti, limité, révocable et audité.
 - Toutes les opérations importantes sont journalisées avec date, heure, utilisateur ou système et appareil.
 - Les montants, taux de change et écritures déjà confirmés ne sont jamais modifiés silencieusement : une correction crée une annulation ou un ajustement traçable.
 - Le serveur conserve toutes les dates en UTC et l'interface les affiche dans le fuseau America/Port-au-Prince, au format 07 octobre 2026 08:54 AM.
@@ -29,7 +30,7 @@ La première version de ce dépôt est une fondation de produit. Elle fixe les r
 - Interface : Vue et TypeScript, PWA tactile, utilisable sur téléphone, tablette et poste de caisse.
 - Données : PostgreSQL avec politiques d'isolation par société.
 - File de travaux et cache : Redis.
-- Déploiement : Docker Compose derrière le Traefik déjà présent sur le VPS Hostinger.
+- Déploiement : Docker Compose derrière le Traefik déjà présent sur un Hostinger KVM1 dédié, sous Ubuntu 26.04 LTS, avec un passage planifié au KVM2 selon la charge.
 - Impression : navigateur Edge ou Chrome en kiosque et imprimante thermique 80 mm locale.
 
 Les versions exactes des dépendances sont gelées au démarrage de l'implémentation et mises à jour par correctifs contrôlés, jamais à l'aveugle en production.
@@ -46,12 +47,13 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 | docs/06_Feuille_de_route.md | Lots de livraison et critères de priorisation |
 | docs/07_Exploitation_et_deploiement.md | VPS, Docker, Traefik, sauvegardes et supervision |
 | docs/08_Recette_et_criteres_d_acceptation.md | Tests de réception avant production |
+| docs/10_Profil_KVM1_et_sites.md | Profil KVM1, inventaire des caisses et seuils d'évolution |
 
 ## État du projet
 
-Version : 0.1.1
+Version : 0.1.2
 
-Cette version contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau et le modèle de déploiement. Aucun module métier n'est encore déclaré prêt pour la production.
+Cette version contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau et le modèle de déploiement. Le pilote est ordonné : Car Rental, Auto Parts et motocyclettes, Guest House, Market, puis Hotel, Bar et Restaurant. Aucun module métier n'est encore déclaré prêt pour la production.
 
 ## Règles de version
 
