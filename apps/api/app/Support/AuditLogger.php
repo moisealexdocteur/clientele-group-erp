@@ -17,6 +17,11 @@ final class AuditLogger
         'token',
         'secret',
         'authorization',
+        'cookie',
+        'code',
+        'otp',
+        'email',
+        'phone',
         'card_number',
         'cvv',
     ];
@@ -33,6 +38,8 @@ final class AuditLogger
         ?string $subjectId = null,
         array $metadata = [],
     ): AuditEvent {
+        $request = request();
+
         return AuditEvent::query()->create([
             'company_id' => $companyId,
             'actor_id' => $actorId,
@@ -40,9 +47,9 @@ final class AuditLogger
             'event_type' => $eventType,
             'subject_type' => $subjectType,
             'subject_id' => $subjectId,
-            'request_id' => request()?->header('X-Request-Id') ?? (string) Str::uuid(),
-            'ip_address' => request()?->ip(),
-            'user_agent' => Str::limit((string) request()?->userAgent(), 512, ''),
+            'request_id' => $request?->attributes->get('clientele.request_id') ?? (string) Str::uuid(),
+            'ip_address' => $request?->ip(),
+            'user_agent' => Str::limit((string) $request?->userAgent(), 512, ''),
             'metadata' => $this->scrub($metadata),
             'occurred_at' => now()->utc(),
         ]);
@@ -57,7 +64,7 @@ final class AuditLogger
         $scrubbed = [];
 
         foreach ($metadata as $key => $value) {
-            if (in_array(Str::lower((string) $key), self::SENSITIVE_KEYS, true)) {
+            if ($this->isSensitiveKey((string) $key)) {
                 continue;
             }
 
@@ -69,5 +76,18 @@ final class AuditLogger
         }
 
         return $scrubbed;
+    }
+
+    private function isSensitiveKey(string $key): bool
+    {
+        $normalized = Str::lower($key);
+
+        foreach (self::SENSITIVE_KEYS as $sensitiveKey) {
+            if (Str::contains($normalized, $sensitiveKey)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

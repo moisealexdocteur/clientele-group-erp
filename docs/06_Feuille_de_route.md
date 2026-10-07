@@ -25,7 +25,7 @@ Les numéros sont fonctionnels, pas des promesses de date. Une version est livr�
 
 ### État réel au 7 octobre 2026
 
-La préversion `0.2.0-alpha.1` rend le socle exécutable : Laravel 13, une PWA Vue, des images Docker, PostgreSQL, Redis, un endpoint de santé et la première migration de sociétés, sites, postes et audit. Elle ne valide pas encore le lot 0.2 : authentification, 2FA, rôles, taux de change, appareils et configuration métier restent à construire. Elle ne doit donc pas recevoir de données réelles ni être déclarée prête à la production.
+La préversion `0.2.0-alpha.3` rend le socle exécutable et ajoute la connexion par mot de passe + code courriel, la réinitialisation personnelle, les sessions révocables, les rôles locaux et le contexte obligatoire de société. Une vérification automatisée confirme qu’un utilisateur de Société A ne reçoit pas les sites de Société B. La préproduction ne peut pas encore envoyer de code réel tant que son SMTP transactionnel n’est pas configuré : elle reste réservée aux tests techniques sans compte humain. Taux de change, appareils, caisses, reçus et modules métiers restent à construire ; cette version ne doit pas recevoir de données réelles ni être déclarée prête à la production.
 
 ## 3. Lot 0.2 - Noyau plateforme
 

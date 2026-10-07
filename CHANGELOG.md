@@ -2,6 +2,38 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.3 - 2026-10-07
+
+### Ajouté
+
+- Connexion API par mot de passe puis code à six chiffres envoyé au courriel personnel, valable dix minutes, à usage unique et stocké sous hash.
+- Réinitialisation personnelle du mot de passe par code courriel, avec révocation de toutes les sessions existantes après succès.
+- Jetons de session opaques, conservés uniquement sous empreinte SHA-256, avec durée absolue et délai d’inactivité configurables.
+- Modèle d’accès par société avec rôle local, permissions explicites et périmètre de sites ; aucun rôle système ne contourne l’autorisation de société.
+- Middleware de société active, corrélation de requête, refus de permission et route de contexte qui ne renvoie que les sites autorisés.
+- PWA : écran de connexion, vérification en deux étapes, récupération de mot de passe, choix explicite de société et fermeture de session.
+- Commande `php artisan identity:provision-owner` pour créer le premier propriétaire sans jamais mettre son mot de passe dans Git ou une commande.
+- Tests de flux 2FA, révocation après réinitialisation, nettoyage des données sensibles dans l’audit et isolement entre sociétés.
+
+### Sécurité
+
+- Argon2id est le hachage par défaut des mots de passe.
+- Le serveur refuse de délivrer un code de sécurité lorsque le transport de courriel est `log`, `array` ou un repli non sûr hors tests, afin que le code ne soit jamais écrit dans les journaux.
+- Les métadonnées d’audit éliminent récursivement mots de passe, codes, jetons, courriels, téléphones, cookies et données de carte.
+
+### Limites connues
+
+- La préproduction reste sur `MAIL_MAILER=log` : aucun compte humain ne doit donc y être créé avant la configuration d’un SMTP transactionnel réel.
+- Taux BRH, caisses, reçus, impression, appareil kiosque, réservations et données Car Rental ne sont pas encore construits.
+
+## 0.2.0-alpha.2 - 2026-10-07
+
+### Corrigé
+
+- Les labels Traefik dynamiques utilisent maintenant la syntaxe liste `clé=valeur` : les noms de routeur et de service sont donc bien interpolés par Docker Compose.
+- Le routeur temporaire de préproduction est une vraie solution de repli à priorité faible ; le routeur ERP de préproduction prend explicitement le dessus.
+- La validation de déploiement exige désormais la réponse JSON de l'API ERP et non un simple code HTTP 200 provenant d'un service temporaire.
+
 ## 0.2.0-alpha.1 - 2026-10-07
 
 ### Ajouté

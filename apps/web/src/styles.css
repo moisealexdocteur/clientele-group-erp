@@ -114,6 +114,275 @@ button {
   font-weight: 650;
 }
 
+.access-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  gap: 20px;
+  min-height: 570px;
+}
+
+.access-intro {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #0e0e10;
+  color: #fefefe;
+  padding: clamp(28px, 5vw, 56px);
+}
+
+.access-intro::after {
+  position: absolute;
+  right: -125px;
+  bottom: -130px;
+  width: 330px;
+  height: 330px;
+  border: 52px solid #f70707;
+  border-radius: 50%;
+  content: "";
+}
+
+.access-intro > * {
+  position: relative;
+  z-index: 1;
+}
+
+.access-intro .eyebrow {
+  color: #ffc4c4;
+}
+
+.access-intro h1,
+.company-choice h1 {
+  max-width: 680px;
+  font-size: clamp(2.5rem, 7vw, 5.7rem);
+}
+
+.access-intro > p:not(.eyebrow) {
+  max-width: 580px;
+  margin-bottom: 0;
+  color: #dedee2;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.access-points {
+  display: grid;
+  gap: 14px;
+  margin: 46px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.access-points li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #f5f5f6;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.access-points span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: #2222e6;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.access-card,
+.company-choice {
+  border: 1px solid #e0e2e8;
+  border-radius: 24px;
+  background: #fefefe;
+  padding: clamp(24px, 4vw, 42px);
+}
+
+.access-card {
+  align-self: center;
+}
+
+.access-card h2 {
+  margin-bottom: 11px;
+}
+
+.access-description,
+.company-choice > p:not(.eyebrow) {
+  margin-bottom: 26px;
+  color: #626470;
+  font-size: 0.92rem;
+  line-height: 1.52;
+}
+
+.access-form {
+  display: grid;
+  gap: 16px;
+}
+
+.access-form label {
+  display: grid;
+  gap: 8px;
+  color: #30313a;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.access-form input {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid #d8dbe5;
+  border-radius: 11px;
+  background: #fff;
+  color: #0e0e10;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 1rem;
+  outline: none;
+}
+
+.access-form input:focus {
+  border-color: #2222e6;
+  box-shadow: 0 0 0 3px rgba(34, 34, 230, 0.12);
+}
+
+.code-input {
+  letter-spacing: 0.26em;
+  text-align: center;
+  font-size: 1.35rem !important;
+  font-weight: 850;
+}
+
+.form-message {
+  margin: 0;
+  border-left: 3px solid #2222e6;
+  background: #eef0ff;
+  color: #32337c;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.42;
+}
+
+.primary-button {
+  min-height: 52px;
+  border: 1px solid #2222e6;
+  border-radius: 11px;
+  background: #2222e6;
+  color: #fff;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 0.89rem;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.primary-button:disabled,
+.text-button:disabled,
+.company-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.primary-button:not(:disabled):hover,
+.primary-button:not(:disabled):focus-visible {
+  background: #0e0e10;
+  border-color: #0e0e10;
+}
+
+.text-button {
+  width: fit-content;
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  color: #2222e6;
+  padding: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 760;
+  cursor: pointer;
+  text-align: left;
+}
+
+.text-button:not(:disabled):hover,
+.text-button:not(:disabled):focus-visible {
+  color: #f70707;
+  text-decoration: underline;
+}
+
+.company-choice {
+  min-height: 430px;
+}
+
+.company-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 28px 0 22px;
+}
+
+.company-button {
+  display: grid;
+  gap: 8px;
+  min-height: 150px;
+  border: 1px solid #e0e2e8;
+  border-radius: 16px;
+  background: #fff;
+  padding: 18px;
+  color: #0e0e10;
+  text-align: left;
+  cursor: pointer;
+}
+
+.company-button:not(:disabled):hover,
+.company-button:not(:disabled):focus-visible {
+  border-color: #2222e6;
+  box-shadow: 0 0 0 3px rgba(34, 34, 230, 0.1);
+}
+
+.company-button span {
+  color: #2222e6;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+}
+
+.company-button strong {
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+}
+
+.company-button small {
+  color: #626470;
+  font-size: 0.75rem;
+}
+
+.session-strip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+  color: #4a4b55;
+  font-size: 0.82rem;
+}
+
+.session-strip .text-button {
+  margin-left: auto;
+}
+
+.avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #0e0e10;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
 .context-card {
   position: relative;
   overflow: hidden;
@@ -408,6 +677,36 @@ h3 {
   .context-card {
     flex-direction: column;
     padding: 24px;
+  }
+
+  .access-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .access-intro,
+  .access-card,
+  .company-choice {
+    border-radius: 18px;
+  }
+
+  .access-intro h1,
+  .company-choice h1 {
+    font-size: clamp(2.2rem, 11vw, 3.5rem);
+  }
+
+  .access-points {
+    margin-top: 30px;
+  }
+
+  .session-strip {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .session-strip .text-button {
+    width: 100%;
+    margin-left: 39px;
   }
 
   .foundation-badge {
