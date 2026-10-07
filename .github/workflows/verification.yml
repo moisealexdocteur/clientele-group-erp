@@ -1,0 +1,22 @@
+name: Verification
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verifier les documents obligatoires
+        run: |
+          test -f VERSION
+          test -f CHANGELOG.md
+          test -f docs/01_Cahier_des_charges_fonctionnel.md
+          test -f docs/02_Architecture_technique.md
+          test -f docs/03_Impression_et_mode_kiosque.md
+          test -f docs/05_Securite_et_acces.md
+          test -f apps/api/database/001_noyau.sql
