@@ -13,9 +13,10 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: traefik-public
-      traefik.http.routers.clientele-erp.rule: 'Host("${APP_DOMAIN}")'
+      traefik.http.routers.clientele-erp.rule: "Host(`${APP_DOMAIN}`)"
       traefik.http.routers.clientele-erp.entrypoints: websecure
       traefik.http.routers.clientele-erp.tls: "true"
+      traefik.http.routers.clientele-erp.tls.certresolver: letsencrypt
       traefik.http.routers.clientele-erp.middlewares: clientele-security@file
       traefik.http.services.clientele-erp.loadbalancer.server.port: "8080"
     healthcheck:

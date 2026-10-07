@@ -1,0 +1,66 @@
+name: clientele-traefik
+
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: clientele-traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --api.dashboard=false
+      - --api.insecure=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=traefik-public
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --accesslog=true
+      - --accesslog.format=json
+      - --log.level=INFO
+      - --log.format=json
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - traefik-public
+
+  bootstrap:
+    image: traefik/whoami:v1.12.0
+    restart: unless-stopped
+    networks:
+      - traefik-public
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.clientele-bootstrap-erp.rule: "Host(`${ERP_DOMAIN}`)"
+      traefik.http.routers.clientele-bootstrap-erp.entrypoints: websecure
+      traefik.http.routers.clientele-bootstrap-erp.tls: "true"
+      traefik.http.routers.clientele-bootstrap-erp.tls.certresolver: letsencrypt
+      traefik.http.routers.clientele-bootstrap-erp.middlewares: clientele-security@file
+      traefik.http.routers.clientele-bootstrap-erp.service: clientele-bootstrap
+      traefik.http.routers.clientele-bootstrap-preprod.rule: "Host(`${PREPROD_DOMAIN}`)"
+      traefik.http.routers.clientele-bootstrap-preprod.entrypoints: websecure
+      traefik.http.routers.clientele-bootstrap-preprod.tls: "true"
+      traefik.http.routers.clientele-bootstrap-preprod.tls.certresolver: letsencrypt
+      traefik.http.routers.clientele-bootstrap-preprod.middlewares: clientele-security@file
+      traefik.http.routers.clientele-bootstrap-preprod.service: clientele-bootstrap
+      traefik.http.services.clientele-bootstrap.loadbalancer.server.port: "80"
+
+networks:
+  traefik-public:
+    external: true

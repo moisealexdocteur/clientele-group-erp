@@ -52,9 +52,9 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 
 ## État du projet
 
-Version : 0.1.5
+Version : 0.1.6
 
-Cette version contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau et le modèle de déploiement. Le pilote est ordonné : Car Rental, Auto Parts et motocyclettes, Guest House, Market, puis Hotel, Bar et Restaurant. Aucun module métier n'est encore déclaré prêt pour la production.
+Cette version contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau, le modèle de déploiement et l'amorce Traefik HTTPS pour les domaines réels. Le pilote est ordonné : Car Rental, Auto Parts et motocyclettes, Guest House, Market, puis Hotel, Bar et Restaurant. Aucun module métier n'est encore déclaré prêt pour la production.
 
 ## Règles de version
 

@@ -2,6 +2,19 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.1.6 - 2026-10-07
+
+### Ajouté
+
+- Déploiement Traefik versionné dans `infra/traefik`, avec HTTPS Let's Encrypt, redirection HTTP vers HTTPS, journal d'accès et tableau de bord non exposé.
+- Service de vérification temporaire pour obtenir et contrôler les certificats de `erp.clientelegroup.tech` et `preprod.erp.clientelegroup.tech` avant l'arrivée de l'application.
+- Script de démarrage reproductible de Traefik pour le VPS dédié.
+
+### Modifié
+
+- Le routeur applicatif de production requiert désormais explicitement le résolveur de certificats Let's Encrypt.
+- La documentation de déploiement référence les deux sous-domaines réels et les seules règles pare-feu nécessaires : 22, 80 et 443.
+
 ## 0.1.5 - 2026-10-07
 
 ### Modifié
