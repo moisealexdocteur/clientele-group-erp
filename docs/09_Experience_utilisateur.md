@@ -8,7 +8,7 @@ Le produit privilégie :
 
 - design épuré et minimaliste ;
 - typographie grande et expressive ;
-- expérience tactile mobile-first et tablet-first ;
+- expérience réellement mobile-first : les flux commencent à 360 px, puis s'étendent à la tablette et au kiosque ;
 - informations critiques visibles sans défilement inutile ;
 - état hors ligne et synchronisation toujours apparents ;
 - retours immédiats après chaque action ;
@@ -18,7 +18,7 @@ Le produit privilégie :
 
 | Écran | Largeur cible | Priorité |
 | --- | --- | --- |
-| Caisse kiosque | 1024 x 768 et plus | Gros boutons, panier et paiement en un regard |
+| Point de vente kiosque | 1024 x 768 et plus | Société, site, adresse, panier et paiement en un regard |
 | Tablette réception | 768 px et plus | Calendrier, folio et check-in |
 | Téléphone superviseur | 360 px et plus | Alertes, approbations et rapports synthèses |
 | Écran client | 16:9 ou portrait selon matériel | Articles, total et promotion |
@@ -39,18 +39,21 @@ Le produit privilégie :
 
 Les écrans opérationnels affichent en permanence :
 
-- société et site actifs ;
+- société active nommée au complet ;
+- site actif et adresse complète configurée ;
 - utilisateur connecté ;
-- caisse ou poste ;
+- point de vente, de réception ou de service ;
 - état Internet : En ligne, Hors ligne, Synchronisation en cours ou Attention ;
-- heure Port-au-Prince ;
+- heure Cap-Haïtien, Haïti ;
 - accès rapide au verrouillage de session.
 
 Une erreur d'impression, une vente à synchroniser ou un taux bloqué ne doit jamais être caché dans une notification qui disparaît.
 
+Un écran ne peut jamais afficher seulement « Caisse 02 ». Il doit afficher par exemple : « Clientèle Auto Parts · Site Auto Parts 01 · Adresse configurée · Point de vente 02 ». Tant que l'adresse n'est pas saisie, le produit affiche « Adresse à compléter avant activation » et bloque l'ouverture de session.
+
 ## 5. POS
 
-Le POS est organisé en quatre zones sur tablette ou kiosque :
+Le point de vente est organisé en quatre zones sur tablette ou kiosque :
 
 1. catégories et recherche ;
 2. catalogue avec image facultative, prix et disponibilité ;
@@ -58,6 +61,8 @@ Le POS est organisé en quatre zones sur tablette ou kiosque :
 4. paiement avec HTG, USD, carte, virement ou paiement différé autorisé.
 
 Après confirmation, l'écran affiche clairement : reçu 1234 5678, impression en cours ou en erreur, option courriel ou WhatsApp, et bouton de nouvelle vente.
+
+Sur téléphone, ces zones deviennent des étapes verticales explicites : contexte du site, recherche ou scan, panier, paiement et confirmation. Les boutons emploient une action complète, par exemple « Encaisser 2 100 HTG », jamais seulement « OK » ou « Continuer ».
 
 ## 6. Off-line first
 
@@ -93,7 +98,9 @@ L'écran client reprend les couleurs de la société, mais reste volontairement 
 
 ## 9. Branding
 
-Clientèle Group possède le design système commun. Chaque société peut configurer sans casser l'interface :
+Clientèle Group possède le design système commun. La référence de départ est le logo Clientèle Group et sa palette rouge #F70707, bleu #2222E6, noir #0E0E10 et blanc #FEFEFE. Le rouge porte l'action principale, le bleu la navigation et l'information, le noir la structure.
+
+Chaque société peut configurer sans casser l'interface :
 
 - logo ;
 - couleur principale et secondaire ;
@@ -103,3 +110,5 @@ Clientèle Group possède le design système commun. Chaque société peut confi
 - nom affiché dans les courriels et documents.
 
 Les changements de branding sont prévisualisés, versionnés et audités.
+
+La première version ne présente aucun sélecteur de langue : tout le produit travaille en français. Le guide complet se trouve dans docs/11_Identite_visuelle_et_experience_mobile.md.

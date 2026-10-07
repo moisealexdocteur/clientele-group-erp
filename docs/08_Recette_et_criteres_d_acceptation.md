@@ -6,12 +6,14 @@ La recette est réalisée en préproduction avec des données de test représent
 
 ## 2. Noyau et sociétés
 
-- [ ] L'interface est en français par défaut.
-- [ ] Une date affichée correspond au fuseau America/Port-au-Prince et au format jour mois année heure AM ou PM.
+- [ ] L'interface est entièrement en français et n'affiche aucun sélecteur de langue.
+- [ ] Une date affichée porte le libellé Cap-Haïtien, Haïti et le format jour mois année heure AM ou PM ; le moteur utilise America/Port-au-Prince.
 - [ ] Un utilisateur de Société A ne voit aucune donnée de Société B, même avec recherche, URL directe, export ou appel API.
 - [ ] Le propriétaire global doit sélectionner explicitement une société avant une opération métier.
 - [ ] Une société inactive ne peut plus ouvrir de nouvelle opération.
 - [ ] Les sites et caisses ne sont disponibles que dans leur société.
+- [ ] Chaque écran opérationnel affiche la société, le site, l'adresse configurée et le point de vente ou de service actifs.
+- [ ] Un point de vente ne peut pas être activé lorsqu'une adresse de site manque.
 - [ ] Une même personne peut être liée à deux profils locaux sans que l'utilisateur de Société A voie les ventes, réservations, locations, soldes ou documents de Société B.
 - [ ] Un rapprochement d'identité exige le rôle de confidentialité, une finalité et crée un audit.
 - [ ] Sans consentement valide, une société ne peut ni rechercher ni révéler qu'un client possède un profil dans une autre société.

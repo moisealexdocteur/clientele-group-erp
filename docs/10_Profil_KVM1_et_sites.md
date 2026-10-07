@@ -19,7 +19,7 @@ Le profil KVM1 de référence — 1 vCPU, 4 Go RAM et 50 Go NVMe — doit être 
 | Clientèle Hotel, Bar et Restaurant | 2 | Phase finale du pilote |
 | **Total** | **9** | Toute activation additionnelle impose une mise à jour de cette fiche |
 
-Chaque caisse est un poste logique distinct : société, site, appareil, utilisateur ou compte de poste, imprimante, écran client éventuel, bloc de numéros hors ligne et règles d'ouverture de session. Une caisse ne partage jamais son contexte avec une autre société.
+Chaque caisse est un poste logique distinct : société, site, adresse complète du site, appareil, utilisateur ou compte de poste, imprimante, écran client éventuel, bloc de numéros hors ligne et règles d'ouverture de session. Une caisse ne partage jamais son contexte avec une autre société. L'adresse réelle de chaque site doit être saisie et validée avant l'activation de son poste.
 
 ## 3. Garde-fous KVM1
 

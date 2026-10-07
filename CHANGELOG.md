@@ -2,6 +2,19 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.1.3 - 2026-10-07
+
+### Ajouté
+
+- Référence d'identité visuelle Clientèle Group fondée sur le logo et les couleurs fournis : rouge #F70707, bleu #2222E6, noir #0E0E10 et blanc #FEFEFE.
+- Actif de logo initial dans apps/web/public/brand/clientele-group-logo.webp et guide d'expérience mobile dans docs/11_Identite_visuelle_et_experience_mobile.md.
+
+### Modifié
+
+- Tous les écrans doivent afficher explicitement la société, le site, l'adresse configurée du site et le point de vente ou de service ; le libellé générique « caisse » seul est interdit.
+- L'interface de la première version travaille uniquement en français et n'affiche aucun sélecteur de langue.
+- La ville affichée dans l'interface est désormais Cap-Haïtien, Haïti. L'identifiant technique IANA reste America/Port-au-Prince, qui couvre Haïti.
+
 ## 0.1.2 - 2026-10-07
 
 ### Modifié

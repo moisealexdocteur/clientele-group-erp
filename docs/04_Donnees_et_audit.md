@@ -159,7 +159,7 @@ Une donnée financière confirmée ne se modifie pas directement.
 - Toutes les devises sont codées ISO : HTG ou USD pour le périmètre initial.
 - Les photos et pièces portent un hash, une taille, un type et un propriétaire de société.
 - Les imports affichent un aperçu, détectent les doublons et produisent un rapport d'erreur.
-- Les dates métier sont validées avec le fuseau America/Port-au-Prince.
+- Les dates métier sont validées avec l'identifiant IANA America/Port-au-Prince ; l'interface affiche le libellé Cap-Haïtien, Haïti.
 - Les suppressions physiques de données métier sont interdites depuis l'interface ; on archive ou on annule.
 
 ## 10. Sauvegarde et restauration

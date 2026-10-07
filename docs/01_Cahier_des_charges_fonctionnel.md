@@ -12,20 +12,20 @@ Le système doit être utilisable au comptoir sur écran tactile, sur tablette, 
 | --- | --- |
 | Groupe | Clientèle Group, propriétaire de la plateforme et des configurations globales |
 | Société | Entité juridique ou opérationnelle isolée : Hotel, Guest House, Car Rental, Gaz Station, Market ou Auto Parts |
-| Site | Établissement ou emplacement : hôtel, bar, restaurant, magasin, entrepôt, station, garage ou bureau |
+| Site | Établissement ou emplacement avec adresse complète : hôtel, bar, restaurant, magasin, entrepôt, station, garage ou bureau |
 | Point de service | Caisse, réception, terminal de vente, poste de pompiste ou poste de réservation |
 | Utilisateur | Personne ou compte technique ayant un rôle, des permissions et une trace d'activité |
 
-Une même société peut posséder plusieurs sites. Un utilisateur n'accède qu'aux sociétés, sites et actions explicitement autorisés.
+Une même société peut posséder plusieurs sites, chacun avec son adresse propre. Un utilisateur n'accède qu'aux sociétés, sites et actions explicitement autorisés. Un point de vente ou une réception ne peut être activé que si son site possède une adresse confirmée.
 
 ## 3. Règles transversales
 
 ### 3.1 Langue, date et fuseau horaire
 
-- Langue par défaut : français.
-- Langues préparées pour l'avenir : créole haïtien et anglais.
+- L'interface de la première version est entièrement en français, sans sélecteur de langue affiché.
+- Les traductions créole haïtien et anglais restent possibles plus tard, sans exposer de réglage de langue au personnel pour l'instant.
 - Le serveur enregistre toutes les dates en UTC.
-- L'interface affiche par défaut America/Port-au-Prince : jour mois année heure AM ou PM. Exemple : 07 octobre 2026 08:54 AM.
+- La configuration technique utilise l'identifiant IANA America/Port-au-Prince, qui couvre Haïti. L'interface affiche exclusivement la ville Cap-Haïtien, Haïti : jour mois année heure AM ou PM. Exemple : 07 octobre 2026 08:54 AM.
 - Une date de caisse, une date comptable et une date système sont distinguées lorsque cela est nécessaire.
 
 ### 3.2 Devises et taux de change
@@ -132,6 +132,8 @@ L'espace Paramètres globaux est limité au propriétaire et aux administrateurs
 5. L'utilisateur clôture le quart. Le système compare le théorique aux montants déclarés par devise et demande une explication pour tout écart.
 6. Le superviseur approuve les écarts hors tolérance.
 7. Le rapport journalier est imprimable en 80 mm ou A4 selon le poste et toujours exportable.
+
+Chaque écran d'opération montre sans ambiguïté : société, site, adresse configurée, point de vente ou de service, appareil et session active. Un libellé « caisse » seul ne suffit jamais à identifier le lieu d'une transaction.
 
 ### 6.2 Modes de paiement
 
