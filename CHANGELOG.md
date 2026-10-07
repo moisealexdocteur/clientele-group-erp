@@ -2,6 +2,12 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.1.5 - 2026-10-07
+
+### Modifié
+
+- La maquette mobile affiche le format complet de date et heure : « 07 octobre 2026 · 10:38 AM », sous le libellé Cap-Haïtien, Haïti.
+
 ## 0.1.4 - 2026-10-07
 
 ### Ajouté
