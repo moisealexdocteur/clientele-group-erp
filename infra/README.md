@@ -15,6 +15,6 @@ Prérequis :
 
 Le compose ne publie pas PostgreSQL ni Redis. Seul le service web est routé par Traefik.
 
-Le service `bootstrap` de `infra/traefik/compose.yaml` est uniquement utilisé pour la première émission des certificats. Il doit être arrêté et supprimé avant l'exposition de l'application réelle sur les mêmes domaines.
+Le service `bootstrap` de `infra/traefik/compose.yaml` émet les premiers certificats et maintient la page temporaire. Pour la préproduction, il reste actif afin de conserver la page `erp.clientelegroup.tech` tant que la production n'existe pas. Le routeur applicatif de préproduction utilise un nom distinct et une priorité explicite ; il prend donc le relais uniquement sur `preprod.erp.clientelegroup.tech`. Le bootstrap sera retiré lors de la publication de la vraie production, après vérification du routeur de production.
 
-Le premier lancement de `app` applique les migrations Laravel avec `APP_RUN_MIGRATIONS=true`. Les services `worker` et `scheduler` attendent ensuite son état de santé. PostgreSQL et Redis ne publient aucun port.
+Le premier lancement de `app` applique les migrations Laravel avec `APP_RUN_MIGRATIONS=true`. Les services `worker` et `scheduler` sont dans le profil Compose `background` et ne sont pas lancés sur le KVM1 tant que le pilote n'en a pas besoin. PostgreSQL et Redis ne publient aucun port.

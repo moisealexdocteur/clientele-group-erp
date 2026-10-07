@@ -1,4 +1,4 @@
-name: clientele-group-erp
+name: ${COMPOSE_PROJECT_NAME:-clientele-erp}
 
 services:
   web:
@@ -13,12 +13,14 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: traefik-public
-      traefik.http.routers.clientele-erp.rule: "Host(`${APP_DOMAIN}`)"
-      traefik.http.routers.clientele-erp.entrypoints: websecure
-      traefik.http.routers.clientele-erp.tls: "true"
-      traefik.http.routers.clientele-erp.tls.certresolver: letsencrypt
-      traefik.http.routers.clientele-erp.middlewares: clientele-security@file
-      traefik.http.services.clientele-erp.loadbalancer.server.port: "8080"
+      "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.rule": "Host(`${APP_DOMAIN}`)"
+      "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.entrypoints": websecure
+      "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.tls": "true"
+      "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.tls.certresolver": letsencrypt
+      "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.middlewares": clientele-security@file
+      "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.priority": "${TRAEFIK_ROUTER_PRIORITY:-100}"
+      "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.service": "${TRAEFIK_ROUTER_NAME:-clientele-erp}"
+      "traefik.http.services.${TRAEFIK_ROUTER_NAME:-clientele-erp}.loadbalancer.server.port": "8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s
@@ -51,7 +53,7 @@ services:
       CACHE_STORE: redis
       SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
-      MAIL_MAILER: smtp
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
       MAIL_SCHEME: ${SMTP_SCHEME:-smtp}
       MAIL_HOST: ${SMTP_HOST}
       MAIL_PORT: ${SMTP_PORT:-587}
@@ -76,6 +78,7 @@ services:
   worker:
     image: ghcr.io/moisealexdocteur/clientele-group-erp-app:${APP_IMAGE_TAG:-edge}
     restart: unless-stopped
+    profiles: ["background"]
     command: php artisan queue:work --sleep=1 --tries=3 --timeout=120
     environment:
       APP_ENV: ${APP_ENV:-production}
@@ -99,7 +102,7 @@ services:
       CACHE_STORE: redis
       SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
-      MAIL_MAILER: smtp
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
       MAIL_SCHEME: ${SMTP_SCHEME:-smtp}
       MAIL_HOST: ${SMTP_HOST}
       MAIL_PORT: ${SMTP_PORT:-587}
@@ -117,6 +120,7 @@ services:
   scheduler:
     image: ghcr.io/moisealexdocteur/clientele-group-erp-app:${APP_IMAGE_TAG:-edge}
     restart: unless-stopped
+    profiles: ["background"]
     command: php artisan schedule:work
     environment:
       APP_ENV: ${APP_ENV:-production}
@@ -140,7 +144,7 @@ services:
       CACHE_STORE: redis
       SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
-      MAIL_MAILER: smtp
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
       MAIL_SCHEME: ${SMTP_SCHEME:-smtp}
       MAIL_HOST: ${SMTP_HOST}
       MAIL_PORT: ${SMTP_PORT:-587}

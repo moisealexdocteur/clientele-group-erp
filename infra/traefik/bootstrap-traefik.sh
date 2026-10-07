@@ -45,4 +45,4 @@ echo "=== Vérification HTTPS (peut prendre une minute) ==="
 curl --silent --show-error --head --max-time 30 "https://${ERP_DOMAIN}" | sed -n '1,8p'
 curl --silent --show-error --head --max-time 30 "https://${PREPROD_DOMAIN}" | sed -n '1,8p'
 echo
-echo "Traefik est en place. Le service bootstrap devra être retiré avant le déploiement de l'application réelle."
+echo "Traefik est en place. Gardez bootstrap pour la préproduction ; retirez-le seulement après validation du routeur de production."

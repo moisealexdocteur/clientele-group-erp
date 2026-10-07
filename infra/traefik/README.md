@@ -25,12 +25,12 @@ Le pare-feu Hostinger doit déjà accepter TCP 80 et TCP 443 et les deux noms DN
 
 ## Passage à l'application
 
-Juste avant de publier l'application ERP sur ces mêmes domaines, retirer le service de test, sans arrêter Traefik :
+La préproduction garde le service `bootstrap` actif : il continue de répondre sur `erp.clientelegroup.tech`, tandis que le compose applicatif déclare un routeur `clientele-erp-preprod` prioritaire pour `preprod.erp.clientelegroup.tech`. Cela évite une interruption de la page temporaire de production.
+
+Lors de la vraie publication de production, créer et vérifier d'abord le routeur de production, puis retirer `bootstrap` sans arrêter Traefik :
 
 ```bash
 cd /opt/clientele/traefik
 docker compose --env-file .env stop bootstrap
 docker compose --env-file .env rm -f bootstrap
 ```
-
-Ensuite, le service `web` du compose applicatif se connecte au réseau `traefik-public` et utilise le résolveur `letsencrypt` déjà présent.
