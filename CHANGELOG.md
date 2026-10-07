@@ -2,6 +2,40 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.1 - 2026-10-07
+
+### Ajouté
+
+- Socle Laravel 13 versionné dans `apps/api`, avec API de santé, vérification PostgreSQL/Redis et premier contrat de démarrage sans données de production.
+- Première migration Laravel pour les sociétés, sites, postes de vente, accès locaux et événements d'audit UUID.
+- Isolation RLS PostgreSQL pour les sites, postes et événements d'audit, plus déclencheur empêchant la modification ou suppression du journal d'audit.
+- PWA Vue 3 et TypeScript dans `apps/web`, en français, avec l’écran initial Clientèle Rent a Car, le fuseau Cap-Haïtien et une détection de connexion.
+- Images Docker applicatives, Nginx/PHP-FPM, compose de build local séparé et workflow GitHub de publication GHCR.
+
+### Limites connues
+
+- Cette préversion ne contient ni authentification, ni 2FA, ni rôles métier, ni taux BRH, ni caisse, ni reçu, ni donnée réelle.
+- Elle est réservée à la recette technique de préproduction.
+
+### Corrigé
+
+- L'image PHP conserve désormais les dépendances de compilation jusqu'à l'installation de l'extension Redis, puis retire les outils de build inutiles de l'image finale.
+- L'image crée explicitement les répertoires Laravel requis au démarrage ; aucun dossier vide de stockage ne dépend désormais de Git.
+
+## 0.1.6 - 2026-10-07
+
+### Ajouté
+
+- Déploiement Traefik versionné dans `infra/traefik`, avec HTTPS Let's Encrypt, redirection HTTP vers HTTPS, journal d'accès et tableau de bord non exposé.
+- Service de vérification temporaire pour obtenir et contrôler les certificats de `erp.clientelegroup.tech` et `preprod.erp.clientelegroup.tech` avant l'arrivée de l'application.
+- Script de démarrage reproductible de Traefik pour le VPS dédié.
+- La caméra reste disponible sur autorisation du navigateur pour les inspections, photos et futures lectures mobiles ; elle n'est pas bloquée par la politique HTTP globale.
+
+### Modifié
+
+- Le routeur applicatif de production requiert désormais explicitement le résolveur de certificats Let's Encrypt.
+- La documentation de déploiement référence les deux sous-domaines réels et les seules règles pare-feu nécessaires : 22, 80 et 443.
+
 ## 0.1.5 - 2026-10-07
 
 ### Modifié

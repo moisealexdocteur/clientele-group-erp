@@ -84,15 +84,16 @@ Les services de production sont limités à ceux nécessaires au fonctionnement.
 
 Traefik, déjà hébergé sur le VPS, reste le seul point d'entrée HTTPS. La base de données ne publie aucun port sur Internet.
 
-## 7. Noms de domaines suggérés
+## 7. Domaines retenus
 
 | Sous-domaine | Usage |
 | --- | --- |
-| erp.domaine-clientele.tld | Application opérationnelle |
-| verify.domaine-clientele.tld | Vérification publique de reçu avec jeton signé |
-| status.domaine-clientele.tld | État technique sans données métier, facultatif |
+| erp.clientelegroup.tech | Application opérationnelle de production |
+| preprod.erp.clientelegroup.tech | Recette temporaire, formation et validation avant mise en production |
 
-Le domaine réel est à fournir avant le premier environnement. Les URLs de vérification de reçus n'incluent ni nom de client, ni téléphone, ni montant en clair.
+Ces deux noms pointent vers le VPS dédié `2.24.75.17`. La préproduction ne devient pas un second environnement permanent sur le KVM1 : elle est isolée sur un autre serveur dès qu'elle devient active.
+
+Un sous-domaine public de vérification de reçus ne sera créé qu'au moment où cette fonction est développée. Ses URLs n'incluront ni nom de client, ni téléphone, ni montant en clair.
 
 ## 8. Environnements
 

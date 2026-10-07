@@ -6,7 +6,7 @@ http:
         browserXssFilter: true
         frameDeny: true
         referrerPolicy: strict-origin-when-cross-origin
-        permissionsPolicy: geolocation=(), microphone=(), camera=()
+        permissionsPolicy: geolocation=(), microphone=()
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
