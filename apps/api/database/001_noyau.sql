@@ -16,6 +16,8 @@ CREATE TYPE core_cash_session_status AS ENUM ('OPEN', 'CLOSED', 'RECONCILED');
 CREATE TYPE core_sync_status AS ENUM ('QUEUED', 'ACCEPTED', 'REJECTED', 'CONFLICT');
 CREATE TYPE core_actor_type AS ENUM ('USER', 'DEVICE', 'SYSTEM');
 CREATE TYPE core_rate_source AS ENUM ('BRH_REFERENCE', 'MANUAL', 'APPROVED_IMPORT');
+CREATE TYPE core_customer_consent_status AS ENUM ('GRANTED', 'REVOKED', 'EXPIRED');
+CREATE TYPE core_customer_data_scope AS ENUM ('IDENTITY_CONTACT', 'PREFERENCES', 'MARKETING');
 
 CREATE TABLE companies (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -126,6 +128,76 @@ BEGIN
 END;
 $function$;
 
+-- L'identité maître ne contient aucun historique opérationnel. Les colonnes
+-- chiffrées et les empreintes HMAC sont réservées au service de confidentialité
+-- de groupe : elles ne sont jamais interrogées directement par un poste de caisse.
+CREATE TABLE group_customer_identities (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_reference varchar(32) NOT NULL UNIQUE,
+  identity_data_encrypted bytea NOT NULL,
+  email_lookup_hmac char(64),
+  phone_lookup_hmac char(64),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX group_customer_identities_email_lookup_idx
+  ON group_customer_identities (email_lookup_hmac)
+  WHERE email_lookup_hmac IS NOT NULL;
+CREATE INDEX group_customer_identities_phone_lookup_idx
+  ON group_customer_identities (phone_lookup_hmac)
+  WHERE phone_lookup_hmac IS NOT NULL;
+
+CREATE TABLE company_customers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL REFERENCES companies(id),
+  group_customer_id uuid REFERENCES group_customer_identities(id),
+  local_reference varchar(32) NOT NULL,
+  local_profile_encrypted bytea NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  linked_at timestamptz,
+  linked_by_uuid uuid,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (company_id, local_reference),
+  UNIQUE (company_id, group_customer_id),
+  UNIQUE (id, company_id)
+);
+
+-- Le consentement est spécifique à une société destinataire et à une catégorie
+-- de données. Il ne donne jamais accès aux ventes, documents ou soldes.
+CREATE TABLE customer_sharing_consents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_customer_id uuid NOT NULL REFERENCES group_customer_identities(id),
+  recipient_company_id uuid NOT NULL REFERENCES companies(id),
+  data_scope core_customer_data_scope NOT NULL,
+  status core_customer_consent_status NOT NULL DEFAULT 'GRANTED',
+  purpose text NOT NULL,
+  granted_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  supersedes_consent_id uuid REFERENCES customer_sharing_consents(id),
+  evidence_encrypted bytea NOT NULL,
+  captured_by_uuid uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (expires_at IS NULL OR expires_at > granted_at),
+  CHECK (
+    (status = 'GRANTED' AND revoked_at IS NULL)
+    OR (status = 'REVOKED' AND revoked_at IS NOT NULL)
+    OR status = 'EXPIRED'
+  )
+);
+
+COMMENT ON TABLE group_customer_identities IS
+  'Identités maître Clientèle Group : accès réservé au service de confidentialité, jamais à un tenant applicatif.';
+COMMENT ON TABLE company_customers IS
+  'Profils clients locaux protégés par la société active.';
+COMMENT ON TABLE customer_sharing_consents IS
+  'Consentements de partage de données non opérationnelles entre groupe et société.';
+
+REVOKE ALL ON group_customer_identities, customer_sharing_consents FROM PUBLIC;
+
 CREATE TABLE cash_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid NOT NULL REFERENCES companies(id),
@@ -219,7 +291,8 @@ CREATE TABLE receipts (
   UNIQUE (id, company_id),
   FOREIGN KEY (site_id, company_id) REFERENCES sites(id, company_id),
   FOREIGN KEY (cash_register_id, company_id) REFERENCES cash_registers(id, company_id),
-  FOREIGN KEY (cash_session_id, company_id) REFERENCES cash_sessions(id, company_id)
+  FOREIGN KEY (cash_session_id, company_id) REFERENCES cash_sessions(id, company_id),
+  FOREIGN KEY (customer_id, company_id) REFERENCES company_customers(id, company_id)
 );
 
 CREATE TABLE receipt_lines (
@@ -298,6 +371,31 @@ CREATE TABLE audit_events (
   FOREIGN KEY (site_id, company_id) REFERENCES sites(id, company_id)
 );
 
+-- Journal distinct pour les actions de rapprochement et de consentement du groupe.
+-- Il référence les sociétés impliquées sans exposer les données de profil.
+CREATE TABLE group_privacy_audit_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_type core_actor_type NOT NULL,
+  actor_uuid uuid,
+  request_id uuid,
+  correlation_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  event_type text NOT NULL,
+  group_customer_id uuid REFERENCES group_customer_identities(id),
+  source_company_id uuid REFERENCES companies(id),
+  recipient_company_id uuid REFERENCES companies(id),
+  consent_id uuid REFERENCES customer_sharing_consents(id),
+  outcome text NOT NULL,
+  reason text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ip_address inet,
+  user_agent text,
+  occurred_at timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE group_privacy_audit_events IS
+  'Journal append-only de rapprochement et de partage client ; aucune donnée personnelle en clair.';
+REVOKE ALL ON group_privacy_audit_events FROM PUBLIC;
+
 CREATE OR REPLACE FUNCTION reject_audit_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -309,6 +407,10 @@ $function$;
 
 CREATE TRIGGER audit_events_are_append_only
 BEFORE UPDATE OR DELETE ON audit_events
+FOR EACH ROW EXECUTE FUNCTION reject_audit_mutation();
+
+CREATE TRIGGER group_privacy_audit_events_are_append_only
+BEFORE UPDATE OR DELETE ON group_privacy_audit_events
 FOR EACH ROW EXECUTE FUNCTION reject_audit_mutation();
 
 CREATE OR REPLACE FUNCTION app_current_company_id()
@@ -355,6 +457,12 @@ CREATE POLICY company_isolation ON cash_sessions
   USING (company_id = app_current_company_id())
   WITH CHECK (company_id = app_current_company_id());
 
+ALTER TABLE company_customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE company_customers FORCE ROW LEVEL SECURITY;
+CREATE POLICY company_isolation ON company_customers
+  USING (company_id = app_current_company_id())
+  WITH CHECK (company_id = app_current_company_id());
+
 ALTER TABLE customer_displays ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_displays FORCE ROW LEVEL SECURITY;
 CREATE POLICY company_isolation ON customer_displays
@@ -397,4 +505,4 @@ CREATE POLICY company_isolation ON audit_events
   USING (company_id = app_current_company_id())
   WITH CHECK (company_id = app_current_company_id());
 
-REVOKE UPDATE, DELETE ON audit_events FROM PUBLIC;
+REVOKE UPDATE, DELETE ON audit_events, group_privacy_audit_events FROM PUBLIC;
