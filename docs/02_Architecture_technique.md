@@ -118,7 +118,7 @@ Les fichiers .env ne sont jamais commités. Toute rotation de secret est documen
 
 ## 10. Disponibilité et performances
 
-Le KVM1 est un point de départ, pas une garantie de capacité. Avant la production, une mesure doit confirmer :
+Le KVM1 peut servir à une démonstration ou une préproduction très légère, mais il n'offre pas de marge suffisante pour le pilote complet. Le KVM2 est le minimum recommandé : deux vCPU, 8 Go RAM et 100 Go NVMe selon l'offre Hostinger vérifiée le 07 octobre 2026. Avant la production, une mesure doit confirmer :
 
 - mémoire disponible après Traefik et services existants ;
 - stockage pour base, photos, pièces justificatives et sauvegardes ;
