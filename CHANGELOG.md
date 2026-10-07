@@ -17,6 +17,10 @@ Toutes les modifications notables de ce projet sont documentées ici.
 - Cette préversion ne contient ni authentification, ni 2FA, ni rôles métier, ni taux BRH, ni caisse, ni reçu, ni donnée réelle.
 - Elle est réservée à la recette technique de préproduction.
 
+### Corrigé
+
+- L'image PHP conserve désormais les dépendances de compilation jusqu'à l'installation de l'extension Redis, puis retire les outils de build inutiles de l'image finale.
+
 ## 0.1.6 - 2026-10-07
 
 ### Ajouté
