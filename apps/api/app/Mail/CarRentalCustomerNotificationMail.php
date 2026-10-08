@@ -28,6 +28,8 @@ final class CarRentalCustomerNotificationMail extends Mailable
         public readonly string $intro,
         public readonly string $reservationNumber,
         public readonly array $details,
+        public readonly ?string $vehicleImageUrl = null,
+        public readonly ?string $vehicleImageAlt = null,
         array $pdfAttachments = [],
     ) {
         $this->pdfAttachments = $pdfAttachments;

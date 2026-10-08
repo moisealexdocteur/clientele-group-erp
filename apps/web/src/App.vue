@@ -60,6 +60,12 @@ interface CompanyContext {
     code: string
     name: string
     address: string
+    cash_registers: Array<{
+      id: string
+      code: string
+      name: string
+      is_active: boolean
+    }>
   }>
 }
 
@@ -72,6 +78,8 @@ type VehicleDocumentType = 'registration' | 'oavct_insurance' | 'tint_permit'
 type VehicleDocumentStatus = 'not_recorded' | 'not_applicable' | 'expired' | 'expiring_soon' | 'current'
 type ReservationState = 'draft' | 'reserved' | 'checked_out' | 'completed' | 'cancelled'
 type ReservationCancellationReason = 'customer_request' | 'vehicle_unavailable' | 'business_decision' | 'other'
+type ReservationWorkspaceView = 'overview' | 'new' | 'search'
+type ReservationDetailTask = 'summary' | 'edit' | 'checkout' | 'extend' | 'return' | 'cancel'
 
 interface RentalSite {
   id: string
@@ -99,6 +107,8 @@ interface RentalVehicle {
     label: string
     source_url: string
   } | null
+  daily_rate_usd: string | null
+  minimum_security_deposit_usd: string | null
   document_statuses?: Array<{
     type: VehicleDocumentType
     status: VehicleDocumentStatus
@@ -141,15 +151,51 @@ interface CarRentalReservation {
   airport_fees_total_usd: string
   currency: 'HTG' | 'USD'
   daily_rate: string
+  minimum_security_deposit_usd: string | null
   kilometer_plan: KilometerPlan
   included_km: number | null
   additional_km_rate: string | null
+  driver_full_name: string | null
+  driver_license_expires_at: string | null
+  driver_license_verified: boolean
   vehicle: RentalVehicle | null
   customer: {
     id: string
     display_name: string
     customer_type: 'individual' | 'institution'
   } | null
+  payments: CarRentalPayment[] | null
+  security_deposits: CarRentalSecurityDeposit[] | null
+  checkout_requirements: {
+    driver_license_verified: boolean
+    approved_rental_payment: boolean
+    minimum_security_deposit_configured: boolean
+    minimum_security_deposit_usd: string
+    held_security_deposit_usd: string
+    security_deposit_satisfied: boolean
+  }
+}
+
+interface CarRentalPayment {
+  id: string
+  kind: 'rental' | 'security_deposit'
+  method: 'cash' | 'bank_transfer'
+  status: 'submitted' | 'approved' | 'rejected' | 'reversed'
+  currency: 'HTG' | 'USD'
+  amount: string
+  submitted_at: string | null
+  approved_at: string | null
+}
+
+interface CarRentalSecurityDeposit {
+  id: string
+  payment_id: string | null
+  method: 'cash' | 'bank_transfer' | 'passport_hold'
+  status: 'required' | 'held' | 'partially_applied' | 'released' | 'forfeited'
+  currency: 'HTG' | 'USD' | null
+  amount: string | null
+  held_at: string | null
+  released_at: string | null
 }
 
 interface CarRentalReservationListEntry {
@@ -290,11 +336,14 @@ const sessionToken = ref(sessionStorage.getItem('clientele.erp.session') ?? '')
 const user = ref<SessionUser | null>(null)
 const companies = ref<CompanyChoice[]>([])
 const activeContext = ref<CompanyContext | null>(null)
+const activeOfficeSiteId = ref('')
 const rentalBusy = ref(false)
 const rentalMessage = ref('')
 const rentalError = ref(false)
 const availableVehicles = ref<RentalVehicle[]>([])
 const reservationCreated = ref<CarRentalReservation | null>(null)
+const reservationWorkspaceView = ref<ReservationWorkspaceView>('overview')
+const reservationDetailTask = ref<ReservationDetailTask>('summary')
 const vehicleBusy = ref(false)
 const vehicleMessage = ref('')
 const vehicleError = ref(false)
@@ -376,6 +425,13 @@ const vehicleForm = reactive({
   reference_photo_key: '',
   vin: '',
   latest_odometer_km: '',
+  daily_rate_usd: '',
+  minimum_security_deposit_usd: '',
+})
+
+const vehicleCommercialTermsForm = reactive({
+  daily_rate_usd: '',
+  minimum_security_deposit_usd: '',
 })
 
 const vehicleRegistrationForm = reactive({
@@ -416,6 +472,24 @@ const reservationManagementForm = reactive({
   due_at: '',
   extension_due_at: '',
   cancellation_reason: 'customer_request' as ReservationCancellationReason,
+})
+
+const reservationPaymentForm = reactive({
+  payment_kind: 'rental' as 'rental' | 'security_deposit',
+  method: 'cash' as 'cash' | 'bank_transfer',
+  currency: 'USD' as 'HTG' | 'USD',
+  amount: '',
+  cash_register_id: '',
+  bank_reference: '',
+  proof_storage_key: '',
+  proof_sha256: '',
+})
+
+const reservationCheckoutForm = reactive({
+  driver_full_name: '',
+  driver_license_number: '',
+  driver_license_expires_at: '',
+  driver_license_verified: false,
 })
 
 const companyConfigurationForm = reactive({
@@ -574,6 +648,22 @@ const visibleSections = computed(() => sections.filter((section) => {
 
 const activeSite = computed(() => (
   activeContext.value?.sites.find((site) => site.id === reservationForm.site_id) ?? null
+))
+
+const activeOfficeSite = computed(() => (
+  activeContext.value?.sites.find((site) => site.id === activeOfficeSiteId.value) ?? null
+))
+
+const selectedReservationSite = computed(() => (
+  activeContext.value?.sites.find((site) => site.id === selectedReservation.value?.site_id) ?? null
+))
+
+const selectedReservationCashRegisters = computed(() => (
+  selectedReservationSite.value?.cash_registers ?? []
+))
+
+const selectedAvailableVehicle = computed(() => (
+  availableVehicles.value.find((vehicle) => vehicle.id === reservationForm.vehicle_id) ?? null
 ))
 
 const airportFeesTotalUsd = computed(() => (
@@ -779,8 +869,10 @@ async function selectCompany(companyId: string): Promise<void> {
     activeContext.value = context
     showSystemConfiguration.value = false
     activeSection.value = 'Accueil'
-    resetRentalForm(context.sites[0]?.id ?? '')
-    resetVehicleWorkspace(context.sites[0]?.id ?? '')
+    const officeSiteId = defaultOfficeSiteId(context)
+    activeOfficeSiteId.value = officeSiteId
+    resetRentalForm(officeSiteId)
+    resetVehicleWorkspace(officeSiteId)
   } catch (error) {
     authMessage.value = messageFrom(error)
   } finally {
@@ -794,6 +886,7 @@ async function openSystemConfiguration(): Promise<void> {
   }
 
   activeContext.value = null
+  activeOfficeSiteId.value = ''
   showSystemConfiguration.value = true
   configurationMessage.value = ''
   configurationError.value = false
@@ -1506,7 +1599,53 @@ function vehicleDisplayName(vehicle: RentalVehicle): string {
   return [vehicle.make, vehicle.model].filter((value): value is string => Boolean(value)).join(' ') || 'Modèle non renseigné'
 }
 
-function resetRentalForm(siteId = ''): void {
+function reservationVehicleName(vehicle: RentalVehicle | null): string {
+  return vehicle === null ? 'Véhicule non renseigné' : vehicleDisplayName(vehicle)
+}
+
+function officeStorageKey(companyId: string): string {
+  return `clientele.erp.car-rental.office.${companyId}`
+}
+
+function defaultOfficeSiteId(context: CompanyContext): string {
+  try {
+    const savedSiteId = localStorage.getItem(officeStorageKey(context.company.id))
+    if (savedSiteId && context.sites.some((site) => site.id === savedSiteId)) {
+      return savedSiteId
+    }
+  } catch {
+    // L'application reste utilisable si le navigateur bloque le stockage local.
+  }
+
+  return context.sites[0]?.id ?? ''
+}
+
+function setActiveOfficeSite(siteId: string): void {
+  if (!siteId || !activeContext.value?.sites.some((site) => site.id === siteId)) {
+    return
+  }
+
+  activeOfficeSiteId.value = siteId
+
+  try {
+    localStorage.setItem(officeStorageKey(activeContext.value.company.id), siteId)
+  } catch {
+    // Le choix courant reste actif pendant la session.
+  }
+}
+
+function reservationDefaultSchedule(): { pickup_at: string; due_at: string } {
+  const pickup = new Date()
+  const due = new Date(pickup.getTime() + 24 * 60 * 60 * 1000)
+
+  return {
+    pickup_at: formatCapHaitienDateTimeInput(pickup.toISOString()),
+    due_at: formatCapHaitienDateTimeInput(due.toISOString()),
+  }
+}
+
+function resetRentalForm(siteId = activeOfficeSiteId.value): void {
+  const schedule = reservationDefaultSchedule()
   Object.assign(reservationForm, {
     site_id: siteId,
     vehicle_id: '',
@@ -1515,8 +1654,8 @@ function resetRentalForm(siteId = ''): void {
     customer_name: '',
     customer_email: '',
     customer_phone: '',
-    pickup_at: '',
-    due_at: '',
+    pickup_at: schedule.pickup_at,
+    due_at: schedule.due_at,
     pickup_location_type: 'site',
     pickup_location_detail: '',
     dropoff_location_type: 'cap_haitien_airport',
@@ -1537,6 +1676,8 @@ function resetRentalForm(siteId = ''): void {
 }
 
 function resetReservationWorkspace(): void {
+  reservationWorkspaceView.value = 'overview'
+  reservationDetailTask.value = 'summary'
   Object.assign(reservationListFilters, {
     state: '',
     query: '',
@@ -1556,6 +1697,22 @@ function resetReservationWorkspace(): void {
   reservationListError.value = false
   reservationManagementMessage.value = ''
   reservationManagementError.value = false
+  Object.assign(reservationPaymentForm, {
+    payment_kind: 'rental',
+    method: 'cash',
+    currency: 'USD',
+    amount: '',
+    cash_register_id: '',
+    bank_reference: '',
+    proof_storage_key: '',
+    proof_sha256: '',
+  })
+  Object.assign(reservationCheckoutForm, {
+    driver_full_name: '',
+    driver_license_number: '',
+    driver_license_expires_at: '',
+    driver_license_verified: false,
+  })
 }
 
 function resetVehicleWorkspace(siteId = ''): void {
@@ -1571,6 +1728,8 @@ function resetVehicleWorkspace(siteId = ''): void {
     reference_photo_key: '',
     vin: '',
     latest_odometer_km: '',
+    daily_rate_usd: '',
+    minimum_security_deposit_usd: '',
   })
   fleetCatalogMessage.value = ''
   selectedVehicle.value = null
@@ -1580,6 +1739,10 @@ function resetVehicleWorkspace(siteId = ''): void {
   Object.assign(vehicleRegistrationForm, {
     registration_number: '',
     registration_status: 'normal',
+  })
+  Object.assign(vehicleCommercialTermsForm, {
+    daily_rate_usd: '',
+    minimum_security_deposit_usd: '',
   })
   Object.assign(vehicleDocumentsForm, {
     registration_document_number: '',
@@ -1607,6 +1770,7 @@ function resetVehicleWorkspace(siteId = ''): void {
 }
 
 function onReservationSiteChanged(): void {
+  setActiveOfficeSite(reservationForm.site_id)
   reservationForm.vehicle_id = ''
   availableVehicles.value = []
   reservationCreated.value = null
@@ -1614,9 +1778,72 @@ function onReservationSiteChanged(): void {
   rentalError.value = false
 }
 
+function onActiveOfficeSiteChanged(): void {
+  if (!activeOfficeSiteId.value) return
+
+  setActiveOfficeSite(activeOfficeSiteId.value)
+  reservationForm.site_id = activeOfficeSiteId.value
+  onReservationSiteChanged()
+
+  if (reservationWorkspaceView.value !== 'new') {
+    void loadReservationList()
+  }
+}
+
 function selectRentalCategory(category: RentalCategory): void {
   reservationForm.category = category
   onReservationSiteChanged()
+}
+
+function openNewReservation(): void {
+  resetRentalForm(activeOfficeSiteId.value)
+  reservationWorkspaceView.value = 'new'
+}
+
+function openReservationOverview(): void {
+  reservationCreated.value = null
+  selectedReservation.value = null
+  reservationWorkspaceView.value = 'overview'
+  void loadReservationList()
+}
+
+function openReservationSearch(): void {
+  reservationCreated.value = null
+  reservationWorkspaceView.value = 'search'
+  void loadReservationList()
+}
+
+async function openCreatedReservation(): Promise<void> {
+  const reservation = reservationCreated.value
+  if (!reservation) return
+
+  reservationCreated.value = null
+  reservationWorkspaceView.value = 'search'
+  await selectReservation({
+    id: reservation.id,
+    number: reservation.number,
+    state: reservation.state,
+    pickup_at: reservation.pickup_at,
+    due_at: reservation.due_at,
+    site: reservation.site,
+    vehicle: reservation.vehicle,
+    customer: reservation.customer,
+  })
+}
+
+function selectAvailableVehicle(vehicle: RentalVehicle): void {
+  reservationForm.vehicle_id = vehicle.id
+  reservationForm.currency = 'USD'
+  reservationForm.daily_rate = vehicle.daily_rate_usd ?? ''
+
+  if (vehicle.daily_rate_usd === null || vehicle.minimum_security_deposit_usd === null) {
+    rentalError.value = true
+    rentalMessage.value = 'Ce véhicule doit recevoir un tarif quotidien et un dépôt minimum avant de pouvoir être réservé.'
+    return
+  }
+
+  rentalError.value = false
+  rentalMessage.value = `Véhicule sélectionné. Tarif proposé : USD ${vehicle.daily_rate_usd} par jour. Dépôt minimum : USD ${vehicle.minimum_security_deposit_usd}.`
 }
 
 async function loadAvailability(): Promise<void> {
@@ -1646,6 +1873,9 @@ async function loadAvailability(): Promise<void> {
     reservationForm.vehicle_id = result.data.some((vehicle) => vehicle.id === reservationForm.vehicle_id)
       ? reservationForm.vehicle_id
       : ''
+    if (!reservationForm.vehicle_id) {
+      reservationForm.daily_rate = ''
+    }
     rentalMessage.value = result.data.length === 0
       ? 'Aucun véhicule de cette catégorie n’est disponible sur cette période pour cette adresse.'
       : `${result.data.length} véhicule${result.data.length > 1 ? 's' : ''} disponible${result.data.length > 1 ? 's' : ''} pour cette adresse.`
@@ -1668,9 +1898,9 @@ async function createReservation(): Promise<void> {
     return
   }
 
-  if (!reservationForm.vehicle_id && !reservationForm.category) {
+  if (!reservationForm.vehicle_id) {
     rentalError.value = true
-    rentalMessage.value = 'Choisissez une catégorie ou un véhicule disponible.'
+    rentalMessage.value = 'Sélectionnez un véhicule disponible avant d’enregistrer la réservation.'
     return
   }
 
@@ -1723,7 +1953,6 @@ async function createReservation(): Promise<void> {
       : `Réservation ${result.data.number} créée et journalisée.`
     rentalError.value = false
     availableVehicles.value = availableVehicles.value.filter((vehicle) => vehicle.id !== result.data.vehicle?.id)
-    reservationForm.vehicle_id = ''
   } catch (error) {
     rentalError.value = true
     rentalMessage.value = messageFrom(error)
@@ -1761,6 +1990,23 @@ function applyManagedReservation(reservation: CarRentalReservation): void {
     extension_due_at: formatCapHaitienDateTimeInput(reservation.due_at),
     cancellation_reason: 'customer_request',
   })
+  Object.assign(reservationCheckoutForm, {
+    driver_full_name: reservation.driver_full_name ?? reservation.customer?.display_name ?? '',
+    driver_license_number: '',
+    driver_license_expires_at: reservation.driver_license_expires_at ?? '',
+    driver_license_verified: reservation.driver_license_verified,
+  })
+  Object.assign(reservationPaymentForm, {
+    payment_kind: 'rental',
+    method: 'cash',
+    currency: 'USD',
+    amount: '',
+    cash_register_id: activeContext.value?.sites
+      .find((site) => site.id === reservation.site_id)?.cash_registers[0]?.id ?? '',
+    bank_reference: '',
+    proof_storage_key: '',
+    proof_sha256: '',
+  })
 
   const entry: CarRentalReservationListEntry = {
     id: reservation.id,
@@ -1795,6 +2041,7 @@ async function loadReservationList(): Promise<void> {
       from: reservationListFilters.from,
       to: reservationListFilters.to,
     })
+    if (activeOfficeSiteId.value) parameters.set('site_id', activeOfficeSiteId.value)
     if (reservationListFilters.query.trim()) parameters.set('query', reservationListFilters.query.trim())
     if (reservationListFilters.state) parameters.set('state', reservationListFilters.state)
 
@@ -1842,12 +2089,35 @@ async function selectReservation(entry: CarRentalReservationListEntry): Promise<
     })
     applyManagedReservation(result.data)
     await loadReservationManagementVehicles(result.data.site_id)
+    reservationDetailTask.value = 'summary'
   } catch (error) {
     reservationManagementError.value = true
     reservationManagementMessage.value = messageFrom(error)
   } finally {
     reservationDetailsBusy.value = false
   }
+}
+
+async function refreshSelectedReservation(): Promise<void> {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  const result = await requestApi<{ data: CarRentalReservation }>(`/api/v1/car-rental/reservations/${reservation.id}`, {
+    headers: contextHeaders(),
+  })
+  applyManagedReservation(result.data)
+  await loadReservationManagementVehicles(result.data.site_id)
+}
+
+function closeReservationDetails(): void {
+  selectedReservation.value = null
+  reservationDetailTask.value = 'summary'
+}
+
+function openReservationDetailTask(task: ReservationDetailTask): void {
+  reservationManagementMessage.value = ''
+  reservationManagementError.value = false
+  reservationDetailTask.value = task
 }
 
 async function saveReservationSchedule(): Promise<void> {
@@ -1889,6 +2159,12 @@ async function executeReservationCheckOut(): Promise<void> {
   const reservation = selectedReservation.value
   if (!reservation) return
 
+  if (!reservationCheckoutForm.driver_full_name.trim() || !reservationCheckoutForm.driver_license_number.trim() || !reservationCheckoutForm.driver_license_expires_at || !reservationCheckoutForm.driver_license_verified) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = 'Saisissez le nom du conducteur, le numéro et la date d’expiration du permis, puis confirmez la vérification de l’original.'
+    return
+  }
+
   reservationDetailsBusy.value = true
   reservationManagementError.value = false
 
@@ -1896,12 +2172,19 @@ async function executeReservationCheckOut(): Promise<void> {
     const result = await requestApi<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(`/api/v1/car-rental/reservations/${reservation.id}/check-out`, {
       method: 'POST',
       headers: contextHeaders(),
-      body: JSON.stringify({ expected_lock_version: reservation.lock_version }),
+      body: JSON.stringify({
+        expected_lock_version: reservation.lock_version,
+        driver_full_name: reservationCheckoutForm.driver_full_name.trim(),
+        driver_license_number: reservationCheckoutForm.driver_license_number.trim(),
+        driver_license_expires_at: reservationCheckoutForm.driver_license_expires_at,
+        driver_license_verified: reservationCheckoutForm.driver_license_verified,
+      }),
     })
     applyManagedReservation(result.data)
     reservationManagementMessage.value = result.customer_notification_sent
       ? 'Location mise en circulation. Le courriel client a été envoyé.'
       : 'Location mise en circulation.'
+    reservationDetailTask.value = 'summary'
     void loadCalendar()
   } catch (error) {
     reservationManagementError.value = true
@@ -1912,15 +2195,95 @@ async function executeReservationCheckOut(): Promise<void> {
 }
 
 function requestReservationCheckOut(): void {
+  openReservationDetailTask('checkout')
+}
+
+async function submitReservationPayment(): Promise<void> {
   const reservation = selectedReservation.value
   if (!reservation) return
 
-  requestConfirmation({
-    title: 'Mettre le véhicule en circulation',
-    message: `La réservation ${reservation.number} passera au statut « En circulation ».`,
-    confirm_label: 'Mettre en circulation',
-    action: executeReservationCheckOut,
-  })
+  if (!reservationPaymentForm.amount || Number(reservationPaymentForm.amount) <= 0) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = 'Saisissez un montant supérieur à zéro.'
+    return
+  }
+
+  if (reservationPaymentForm.method === 'cash' && !reservationPaymentForm.cash_register_id) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = 'Sélectionnez la caisse qui reçoit le paiement.'
+    return
+  }
+
+  if (reservationPaymentForm.payment_kind === 'security_deposit' && reservationPaymentForm.currency !== 'USD') {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = 'Le dépôt minimum de cette version est contrôlé en USD. Enregistrez le dépôt de garantie en USD.'
+    return
+  }
+
+  if (reservationPaymentForm.method === 'bank_transfer' && (!reservationPaymentForm.bank_reference.trim() || !reservationPaymentForm.proof_storage_key.trim() || !reservationPaymentForm.proof_sha256.trim())) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = 'Pour un virement Sogebank, saisissez la référence et les identifiants de la pièce justificative.'
+    return
+  }
+
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+  reservationManagementMessage.value = ''
+
+  try {
+    await requestApi<{ data: CarRentalPayment }>(`/api/v1/car-rental/reservations/${reservation.id}/payments`, {
+      method: 'POST',
+      headers: contextHeaders(),
+      body: JSON.stringify({
+        payment_kind: reservationPaymentForm.payment_kind,
+        method: reservationPaymentForm.method,
+        currency: reservationPaymentForm.currency,
+        amount: reservationPaymentForm.amount,
+        cash_register_id: reservationPaymentForm.method === 'cash' ? reservationPaymentForm.cash_register_id : undefined,
+        bank_name: reservationPaymentForm.method === 'bank_transfer' ? 'Sogebank' : undefined,
+        bank_reference: reservationPaymentForm.method === 'bank_transfer' ? reservationPaymentForm.bank_reference.trim() : undefined,
+        proof_storage_key: reservationPaymentForm.method === 'bank_transfer' ? reservationPaymentForm.proof_storage_key.trim() : undefined,
+        proof_sha256: reservationPaymentForm.method === 'bank_transfer' ? reservationPaymentForm.proof_sha256.trim() : undefined,
+      }),
+    })
+    reservationPaymentForm.amount = ''
+    reservationManagementMessage.value = 'Paiement enregistré. Une approbation est requise avant la mise en circulation.'
+    await refreshSelectedReservation()
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
+}
+
+function onReservationPaymentKindChanged(): void {
+  if (reservationPaymentForm.payment_kind === 'security_deposit') {
+    reservationPaymentForm.currency = 'USD'
+  }
+}
+
+async function approveReservationPayment(payment: CarRentalPayment): Promise<void> {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+  reservationManagementMessage.value = ''
+
+  try {
+    await requestApi<{ data: CarRentalPayment }>(`/api/v1/car-rental/reservations/${reservation.id}/payments/${payment.id}/approve`, {
+      method: 'POST',
+      headers: contextHeaders(),
+    })
+    reservationManagementMessage.value = 'Paiement approuvé.'
+    await refreshSelectedReservation()
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
 }
 
 async function extendReservation(): Promise<void> {
@@ -1948,6 +2311,7 @@ async function extendReservation(): Promise<void> {
     reservationManagementMessage.value = result.customer_notification_sent
       ? 'Date de retour mise à jour. Le courriel client a été envoyé.'
       : 'Date de retour mise à jour. Toute facturation complémentaire est enregistrée séparément.'
+    reservationDetailTask.value = 'summary'
     void loadCalendar()
   } catch (error) {
     reservationManagementError.value = true
@@ -1974,6 +2338,7 @@ async function executeReservationReturn(): Promise<void> {
     reservationManagementMessage.value = result.customer_notification_sent
       ? 'Retour enregistré. Le courriel client a été envoyé.'
       : 'Retour enregistré. Le montant prévu au contrat n’a pas été recalculé.'
+    reservationDetailTask.value = 'summary'
     void loadCalendar()
   } catch (error) {
     reservationManagementError.value = true
@@ -1984,15 +2349,7 @@ async function executeReservationReturn(): Promise<void> {
 }
 
 function requestReservationReturn(): void {
-  const reservation = selectedReservation.value
-  if (!reservation) return
-
-  requestConfirmation({
-    title: 'Enregistrer le retour',
-    message: 'Le véhicule passera en préparation. Le tarif et les paiements existants ne seront pas modifiés.',
-    confirm_label: 'Enregistrer le retour',
-    action: executeReservationReturn,
-  })
+  openReservationDetailTask('return')
 }
 
 async function executeReservationCancellation(): Promise<void> {
@@ -2013,6 +2370,7 @@ async function executeReservationCancellation(): Promise<void> {
     })
     applyManagedReservation(result.data)
     reservationManagementMessage.value = 'Réservation annulée. Aucun remboursement n’a été créé automatiquement.'
+    reservationDetailTask.value = 'summary'
     void loadCalendar()
   } catch (error) {
     reservationManagementError.value = true
@@ -2023,16 +2381,7 @@ async function executeReservationCancellation(): Promise<void> {
 }
 
 function requestReservationCancellation(): void {
-  const reservation = selectedReservation.value
-  if (!reservation) return
-
-  requestConfirmation({
-    title: 'Annuler la réservation',
-    message: `La réservation ${reservation.number} sera annulée. Cette action ne crée pas de remboursement automatique.`,
-    confirm_label: 'Annuler la réservation',
-    danger: true,
-    action: executeReservationCancellation,
-  })
+  openReservationDetailTask('cancel')
 }
 
 async function loadVehicles(): Promise<void> {
@@ -2082,9 +2431,9 @@ async function createVehicle(): Promise<void> {
     return
   }
 
-  if (!vehicleForm.site_id || !vehicleForm.registration_number.trim() || vehicleForm.latest_odometer_km === '') {
+  if (!vehicleForm.site_id || !vehicleForm.registration_number.trim() || vehicleForm.latest_odometer_km === '' || !vehicleForm.daily_rate_usd || vehicleForm.minimum_security_deposit_usd === '') {
     vehicleError.value = true
-    vehicleMessage.value = 'Renseignez l’adresse, la plaque en cours et le kilométrage actuel.'
+    vehicleMessage.value = 'Renseignez l’adresse, la plaque, le kilométrage, le tarif quotidien et le dépôt minimum.'
     return
   }
 
@@ -2106,6 +2455,8 @@ async function createVehicle(): Promise<void> {
         reference_photo_key: vehicleForm.reference_photo_key || undefined,
         vin: vehicleForm.vin.trim() || undefined,
         latest_odometer_km: Number(vehicleForm.latest_odometer_km),
+        daily_rate_usd: Number(vehicleForm.daily_rate_usd),
+        minimum_security_deposit_usd: Number(vehicleForm.minimum_security_deposit_usd),
       }),
     })
 
@@ -2121,6 +2472,8 @@ async function createVehicle(): Promise<void> {
       reference_photo_key: '',
       vin: '',
       latest_odometer_km: '',
+      daily_rate_usd: '',
+      minimum_security_deposit_usd: '',
       site_id: siteId,
     })
     fleetCatalogMessage.value = ''
@@ -2141,7 +2494,6 @@ async function createVehicle(): Promise<void> {
   }
 }
 
-
 function prefillVehicleFromCatalog(candidate: FleetCatalogVehicle): void {
   const normalizedFleetAddress = normalizeFleetSiteText(CLIENTELE_CAR_RENTAL_FLEET_ADDRESS)
   const defaultFleetSite = activeContext.value?.sites.find((site) => (
@@ -2160,11 +2512,13 @@ function prefillVehicleFromCatalog(candidate: FleetCatalogVehicle): void {
     reference_photo_key: candidate.referencePhoto?.key ?? '',
     vin: '',
     latest_odometer_km: '',
+    daily_rate_usd: candidate.dailyRateUsd === undefined ? '' : String(candidate.dailyRateUsd),
+    minimum_security_deposit_usd: '',
   })
 
   const siteMessage = defaultFleetSite === undefined
-    ? `Créez ou sélectionnez l’adresse « ${CLIENTELE_CAR_RENTAL_FLEET_ADDRESS} », puis saisissez le kilométrage actuel.`
-    : `L’adresse « ${CLIENTELE_CAR_RENTAL_FLEET_ADDRESS} » a été sélectionnée. Saisissez le kilométrage actuel.`
+    ? `Créez ou sélectionnez l’adresse « ${CLIENTELE_CAR_RENTAL_FLEET_ADDRESS} », puis saisissez le kilométrage, le dépôt minimum et confirmez le tarif.`
+    : `L’adresse « ${CLIENTELE_CAR_RENTAL_FLEET_ADDRESS} » a été sélectionnée. Saisissez le kilométrage et le dépôt minimum.`
 
   fleetCatalogMessage.value = candidate.requiresReview
     ? `Informations préremplies. Vérifiez la plaque et le modèle avant l’enregistrement. ${siteMessage}`
@@ -2227,6 +2581,39 @@ async function updateVehicleStatus(vehicle: RentalVehicle, status: VehicleOperat
   }
 }
 
+async function updateVehicleCommercialTerms(): Promise<void> {
+  const vehicle = selectedVehicle.value
+  if (!vehicle) return
+
+  if (!vehicleCommercialTermsForm.daily_rate_usd || vehicleCommercialTermsForm.minimum_security_deposit_usd === '') {
+    vehicleDocumentsError.value = true
+    vehicleDocumentsMessage.value = 'Saisissez le tarif quotidien et le dépôt minimum en USD.'
+    return
+  }
+
+  vehicleDocumentsBusy.value = true
+  vehicleDocumentsError.value = false
+  vehicleDocumentsMessage.value = ''
+
+  try {
+    const result = await requestApi<{ data: RentalVehicle }>(`/api/v1/car-rental/vehicles/${vehicle.id}/commercial-terms`, {
+      method: 'PATCH',
+      headers: contextHeaders(),
+      body: JSON.stringify({
+        daily_rate_usd: Number(vehicleCommercialTermsForm.daily_rate_usd),
+        minimum_security_deposit_usd: Number(vehicleCommercialTermsForm.minimum_security_deposit_usd),
+      }),
+    })
+    applyVehicleUpdate(result.data)
+    vehicleDocumentsMessage.value = 'Tarif quotidien et dépôt minimum enregistrés.'
+  } catch (error) {
+    vehicleDocumentsError.value = true
+    vehicleDocumentsMessage.value = messageFrom(error)
+  } finally {
+    vehicleDocumentsBusy.value = false
+  }
+}
+
 function applyVehicleUpdate(vehicle: RentalVehicle): void {
   managedVehicles.value = managedVehicles.value.map((item) => item.id === vehicle.id ? vehicle : item)
   if (selectedVehicle.value?.id === vehicle.id) {
@@ -2282,6 +2669,8 @@ async function selectVehicle(vehicle: RentalVehicle): Promise<void> {
   selectedVehicle.value = vehicle
   vehicleRegistrationForm.registration_number = vehicle.registration_number ?? vehicle.code
   vehicleRegistrationForm.registration_status = vehicle.registration_status ?? 'normal'
+  vehicleCommercialTermsForm.daily_rate_usd = vehicle.daily_rate_usd ?? ''
+  vehicleCommercialTermsForm.minimum_security_deposit_usd = vehicle.minimum_security_deposit_usd ?? ''
   vehicleDocumentsMessage.value = ''
   vehicleDocumentsError.value = false
   vehicleDocumentsBusy.value = true
@@ -2445,6 +2834,8 @@ function openSection(section: string): void {
   activeSection.value = section
 
   if (section === 'Réservations') {
+    reservationWorkspaceView.value = 'overview'
+    selectedReservation.value = null
     void loadReservationList()
   }
   if (section === 'Calendrier') {
@@ -3076,9 +3467,7 @@ onBeforeUnmount(() => {
               <span class="notice-icon" aria-hidden="true">01</span>
               <div>
                 <h3>Créer une réservation</h3>
-                <p>
-                  Sélectionnez une adresse, vérifiez la disponibilité, puis créez une réservation numérotée.
-                </p>
+                <p>Sélectionnez le bureau, vérifiez la disponibilité, puis créez une réservation numérotée.</p>
               </div>
             </div>
 
@@ -3110,26 +3499,80 @@ onBeforeUnmount(() => {
                 <li><span>✓</span> Rôle, société active et périmètre de site</li>
                 <li><span>✓</span> Journal d’audit sans mot de passe ni jeton</li>
                 <li><span>✓</span> Disponibilité et réservation de SUV, Mid SUV et Pick-up</li>
-                <li><span>→</span> Contrat, inspection, dépôt et reçu : non disponibles</li>
+                <li><span>→</span> Contrat, inspection et reçu : non disponibles</li>
               </ul>
             </div>
           </template>
 
           <template v-else-if="activeSection === 'Réservations'">
-            <div class="reservation-workspace">
+            <section class="reservation-hub" aria-label="Tâches de réservation">
+              <div>
+                <p class="eyebrow">Bureau actif</p>
+                <label class="active-office-select">
+                  <span class="visually-hidden">Bureau actif</span>
+                  <select v-model="activeOfficeSiteId" @change="onActiveOfficeSiteChanged">
+                    <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
+                      {{ site.name }}
+                    </option>
+                  </select>
+                </label>
+                <p>{{ activeOfficeSite?.address ?? 'Sélectionnez un bureau autorisé.' }}</p>
+              </div>
+              <div class="reservation-task-nav" role="navigation" aria-label="Tâches de réservation">
+                <button type="button" :class="{ active: reservationWorkspaceView === 'overview' }" @click="openReservationOverview">Vue d’ensemble</button>
+                <button type="button" :class="{ active: reservationWorkspaceView === 'new' }" @click="openNewReservation">Nouvelle réservation</button>
+                <button v-if="hasPermission('rental.reservations.read')" type="button" :class="{ active: reservationWorkspaceView === 'search' }" @click="openReservationSearch">Rechercher</button>
+              </div>
+            </section>
+
+            <section v-if="reservationWorkspaceView === 'overview'" class="reservation-overview-card" aria-labelledby="reservation-overview-title">
+              <div class="section-intro">
+                <p class="eyebrow">Réservations</p>
+                <h3 id="reservation-overview-title">Travaillez à partir d’une tâche</h3>
+                <p>Les dates du jour et le bureau actif sont proposés par défaut. Modifiez-les uniquement si nécessaire.</p>
+              </div>
+              <div class="reservation-task-grid">
+                <button class="reservation-task-card primary" type="button" @click="openNewReservation">
+                  <strong>Nouvelle réservation</strong>
+                  <span>Créer une réservation avec les valeurs proposées.</span>
+                </button>
+                <button v-if="hasPermission('rental.reservations.read')" class="reservation-task-card" type="button" @click="openReservationSearch">
+                  <strong>Rechercher une réservation</strong>
+                  <span>Consulter, modifier ou suivre une location.</span>
+                </button>
+              </div>
+              <div v-if="hasPermission('rental.reservations.read')" class="reservation-default-list">
+                <div class="reservation-default-list-heading">
+                  <div>
+                    <h4>Réservations de la période affichée</h4>
+                    <p>La liste est chargée automatiquement pour le mois en cours.</p>
+                  </div>
+                  <button class="secondary-button" type="button" @click="openReservationSearch">Afficher la liste complète</button>
+                </div>
+                <div v-if="reservationList.length" class="reservation-result-grid compact">
+                  <button v-for="entry in reservationList.slice(0, 4)" :key="entry.id" class="reservation-result-card" type="button" :disabled="reservationDetailsBusy" @click="reservationWorkspaceView = 'search'; selectReservation(entry)">
+                    <span class="vehicle-code">{{ entry.number }}</span>
+                    <strong>{{ reservationVehicleName(entry.vehicle) }}</strong>
+                    <span>{{ entry.customer?.display_name ?? 'Client non disponible' }}</span>
+                    <small>{{ formatCapHaitienDateTime(entry.pickup_at) }} à {{ formatCapHaitienDateTime(entry.due_at) }}</small>
+                  </button>
+                </div>
+                <p v-else-if="reservationListBusy" class="field-help">Chargement des réservations...</p>
+                <p v-else class="field-help">Aucune réservation à afficher pour cette période.</p>
+              </div>
+            </section>
+
+            <div v-if="reservationWorkspaceView === 'new'" class="reservation-workspace">
               <section class="reservation-form-card" aria-labelledby="reservation-title">
                 <div class="section-intro">
                   <p class="eyebrow">Nouvelle réservation</p>
                   <h3 id="reservation-title">Créer une réservation</h3>
-                  <p>
-                    Le bureau sélectionné est le lieu de départ par défaut. Les véhicules proposés appartiennent uniquement
-                    à la société et à cette adresse. Une réservation concurrente est refusée.
-                  </p>
+                  <p>Le bureau actif et les dates du jour sont proposés. Vérifiez les informations avant d’enregistrer.</p>
                 </div>
 
                 <form class="reservation-form" @submit.prevent="createReservation">
                   <fieldset>
-                    <legend>1 · Lieu et période</legend>
+                    <legend>1. Bureau et période</legend>
                     <label>
                       Bureau de départ
                       <select v-model="reservationForm.site_id" required :disabled="rentalBusy" @change="onReservationSiteChanged">
@@ -3145,18 +3588,18 @@ onBeforeUnmount(() => {
                     </p>
                     <div class="two-columns">
                       <label>
-                        Départ prévu
+                        Date et heure de prise en charge
                         <input v-model="reservationForm.pickup_at" type="datetime-local" required :disabled="rentalBusy" />
                       </label>
                       <label>
-                        Retour prévu
+                        Date et heure de retour prévue
                         <input v-model="reservationForm.due_at" type="datetime-local" required :disabled="rentalBusy" />
                       </label>
                     </div>
                   </fieldset>
 
                   <fieldset>
-                    <legend>2 · Véhicule disponible</legend>
+                    <legend>2. Véhicule</legend>
                     <div class="category-choice" role="group" aria-label="Catégorie de véhicule">
                       <button
                         v-for="(label, category) in categoryLabels"
@@ -3180,18 +3623,22 @@ onBeforeUnmount(() => {
                         type="button"
                         :class="{ selected: reservationForm.vehicle_id === vehicle.id }"
                         :disabled="rentalBusy"
-                        @click="reservationForm.vehicle_id = vehicle.id"
+                        @click="selectAvailableVehicle(vehicle)"
                       >
-                        <span>{{ vehicle.code }}</span>
-                        <strong>{{ vehicle.make }} {{ vehicle.model }}</strong>
-                        <small>{{ categoryLabels[vehicle.category] }} · {{ vehicle.latest_odometer_km.toLocaleString('fr-FR') }} km</small>
+                        <strong>{{ vehicleDisplayName(vehicle) }}</strong>
+                        <small>{{ categoryLabels[vehicle.category] }} · USD {{ vehicle.daily_rate_usd ?? 'À configurer' }} par jour</small>
                       </button>
                     </div>
+                    <p v-if="selectedAvailableVehicle" class="selected-vehicle-summary">
+                      <strong>{{ vehicleDisplayName(selectedAvailableVehicle) }}</strong><br />
+                      Tarif proposé : USD {{ selectedAvailableVehicle.daily_rate_usd ?? 'À configurer' }} par jour<br />
+                      Dépôt minimum : USD {{ selectedAvailableVehicle.minimum_security_deposit_usd ?? 'À configurer' }}
+                    </p>
                     <p v-else class="field-help">Sélectionnez une période puis vérifiez les disponibilités avant de choisir le véhicule.</p>
                   </fieldset>
 
                   <fieldset>
-                    <legend>3 · Client et locations</legend>
+                    <legend>3. Client</legend>
                     <div class="two-columns">
                       <label>
                         Type de client
@@ -3218,7 +3665,7 @@ onBeforeUnmount(() => {
                   </fieldset>
 
                   <fieldset>
-                    <legend>4 · Départ, retour et tarif</legend>
+                    <legend>4. Lieux et conditions</legend>
                     <div class="two-columns">
                       <label>
                         Départ
@@ -3268,7 +3715,7 @@ onBeforeUnmount(() => {
                         </select>
                       </label>
                       <label>
-                        Tarif journalier
+                        Tarif journalier confirmé
                         <input v-model="reservationForm.daily_rate" type="number" inputmode="decimal" min="0" step="0.01" required :disabled="rentalBusy" />
                       </label>
                       <label>
@@ -3292,9 +3739,12 @@ onBeforeUnmount(() => {
                   </fieldset>
 
                   <p v-if="rentalMessage" class="rental-message" :class="{ error: rentalError }" role="status">{{ rentalMessage }}</p>
-                  <button class="primary-button create-reservation" type="submit" :disabled="rentalBusy || apiStatus !== 'online'">
-                    {{ rentalBusy ? 'Enregistrement…' : 'Créer la réservation numérotée' }}
-                  </button>
+                  <div class="form-actions">
+                    <button class="secondary-button" type="button" :disabled="rentalBusy" @click="openReservationOverview">Annuler</button>
+                    <button class="primary-button create-reservation" type="submit" :disabled="rentalBusy || apiStatus !== 'online'">
+                      {{ rentalBusy ? 'Enregistrement...' : 'Enregistrer la réservation' }}
+                    </button>
+                  </div>
                 </form>
               </section>
 
@@ -3307,22 +3757,11 @@ onBeforeUnmount(() => {
                   <li><span>✓</span> L’absence de chevauchement de réservation</li>
                   <li><span>✓</span> Une référence à huit chiffres journalisée</li>
                 </ul>
-                <p class="summary-note">
-                  Le dépôt de garantie, le contrat et les inspections sont volontairement séparés : ils seront ajoutés sans exposer les données d’une autre société.
-                </p>
-
-                <div v-if="reservationCreated" class="reservation-created">
-                  <p class="eyebrow">Réservation créée</p>
-                  <strong>{{ reservationCreated.number }}</strong>
-                  <span>{{ reservationCreated.customer?.display_name }}</span>
-                  <span>{{ reservationCreated.vehicle?.code }} · {{ reservationCreated.currency }} {{ reservationCreated.daily_rate }} / jour</span>
-                  <span v-if="Number(reservationCreated.airport_fees_total_usd) > 0">Frais aéroport : USD {{ reservationCreated.airport_fees_total_usd }}</span>
-                  <small>Statut : {{ reservationCreated.state }}</small>
-                </div>
+                <p class="summary-note">Le tarif et le dépôt minimum sont confirmés par véhicule. Les contrôles de paiement et de permis sont effectués avant la mise en circulation.</p>
               </aside>
             </div>
 
-            <section v-if="hasPermission('rental.reservations.read')" class="reservation-management-card" aria-labelledby="reservation-management-title">
+            <section v-if="hasPermission('rental.reservations.read') && reservationWorkspaceView === 'search'" class="reservation-management-card" aria-labelledby="reservation-management-title">
               <div class="section-intro">
                 <p class="eyebrow">Suivi des réservations</p>
                 <h3 id="reservation-management-title">Rechercher et gérer</h3>
@@ -3378,92 +3817,236 @@ onBeforeUnmount(() => {
                   <p v-else class="field-help">Aucune réservation à afficher.</p>
                 </section>
 
-                <section class="reservation-action-panel" aria-live="polite">
-                  <p v-if="reservationDetailsBusy" class="field-help">Chargement de la réservation…</p>
-                  <p v-else-if="!selectedReservation" class="field-help">Sélectionnez une réservation pour voir les actions disponibles.</p>
-                  <template v-else>
-                    <div class="reservation-action-heading">
-                      <div>
-                        <p class="eyebrow">Réservation {{ selectedReservation.number }}</p>
-                        <h4>{{ selectedReservation.vehicle?.code ?? 'Véhicule non disponible' }}</h4>
-                        <p>{{ selectedReservation.customer?.display_name }}</p>
-                      </div>
+                <section v-if="selectedReservation" class="reservation-action-panel" aria-live="polite" role="dialog" aria-modal="true" aria-label="Détails de la réservation">
+                  <div class="reservation-action-heading">
+                    <div>
+                      <p class="eyebrow">Réservation {{ selectedReservation.number }}</p>
+                      <h4>{{ reservationVehicleName(selectedReservation.vehicle) }}</h4>
+                      <p>{{ selectedReservation.customer?.display_name ?? 'Client non disponible' }}</p>
+                    </div>
+                    <div class="reservation-dialog-actions">
                       <span class="status-chip" :class="`reservation-${selectedReservation.state}`">{{ reservationStateLabels[selectedReservation.state] }}</span>
+                      <button class="icon-button" type="button" aria-label="Fermer" @click="closeReservationDetails">Fermer</button>
+                    </div>
+                  </div>
+
+                  <dl class="reservation-facts">
+                    <div>
+                      <dt>Prise en charge</dt>
+                      <dd>{{ formatCapHaitienDateTime(selectedReservation.pickup_at) }}</dd>
+                    </div>
+                    <div>
+                      <dt>Retour prévu</dt>
+                      <dd>{{ formatCapHaitienDateTime(selectedReservation.due_at) }}</dd>
+                    </div>
+                    <div>
+                      <dt>Bureau</dt>
+                      <dd>{{ selectedReservation.site?.name ?? 'Non disponible' }}</dd>
+                    </div>
+                    <div>
+                      <dt>Tarif journalier</dt>
+                      <dd>{{ selectedReservation.currency }} {{ selectedReservation.daily_rate }}</dd>
+                    </div>
+                  </dl>
+
+                  <p v-if="reservationManagementMessage" class="rental-message" :class="{ error: reservationManagementError }" role="status">{{ reservationManagementMessage }}</p>
+
+                  <template v-if="reservationDetailTask === 'summary'">
+                    <div class="reservation-action-menu">
+                      <button v-if="selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="secondary-button" type="button" @click="openReservationDetailTask('edit')">Modifier</button>
+                      <button v-if="selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="primary-button" type="button" @click="requestReservationCheckOut">Préparer la mise en circulation</button>
+                      <button v-if="selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="danger-button" type="button" @click="requestReservationCancellation">Annuler</button>
+                      <button v-if="selectedReservation.state === 'checked_out' && hasPermission('rental.reservations.manage')" class="secondary-button" type="button" @click="openReservationDetailTask('extend')">Prolonger</button>
+                      <button v-if="selectedReservation.state === 'checked_out' && hasPermission('rental.reservations.manage')" class="primary-button" type="button" @click="requestReservationReturn">Enregistrer le retour</button>
+                    </div>
+                    <p v-if="selectedReservation.state === 'checked_out'" class="field-help">Un retour anticipé conserve le tarif et les paiements de la réservation. Aucun remboursement n’est créé automatiquement.</p>
+                  </template>
+
+                  <form v-else-if="reservationDetailTask === 'edit' && selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="reservation-action-form" @submit.prevent="saveReservationSchedule">
+                    <h5>Modifier la réservation</h5>
+                    <div class="two-columns">
+                      <label>
+                        Prise en charge
+                        <input v-model="reservationManagementForm.pickup_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
+                      </label>
+                      <label>
+                        Retour prévu
+                        <input v-model="reservationManagementForm.due_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
+                      </label>
+                    </div>
+                    <label>
+                      Véhicule
+                      <select v-model="reservationManagementForm.vehicle_id" required :disabled="reservationDetailsBusy">
+                        <option v-if="selectedReservation.vehicle" :value="selectedReservation.vehicle.id">{{ vehicleDisplayName(selectedReservation.vehicle) }}</option>
+                        <option v-for="vehicle in reservationManagementVehicles" :key="vehicle.id" :value="vehicle.id">{{ vehicleDisplayName(vehicle) }} · {{ vehicleStatusLabels[vehicle.operational_status] }}</option>
+                      </select>
+                    </label>
+                    <p class="field-help">Le système vérifie la disponibilité au moment de l’enregistrement.</p>
+                    <div class="form-actions">
+                      <button class="secondary-button" type="button" @click="openReservationDetailTask('summary')">Retour</button>
+                      <button class="primary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Enregistrer les modifications</button>
+                    </div>
+                  </form>
+
+                  <section v-else-if="reservationDetailTask === 'checkout' && selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="reservation-action-form">
+                    <h5>Document de mise en circulation</h5>
+                    <p>Enregistrez les paiements, vérifiez le permis original, puis confirmez la remise du véhicule.</p>
+                    <div class="checkout-requirements">
+                      <span :class="{ complete: selectedReservation.checkout_requirements.approved_rental_payment }">Paiement de location approuvé</span>
+                      <span :class="{ complete: selectedReservation.checkout_requirements.minimum_security_deposit_configured && selectedReservation.checkout_requirements.security_deposit_satisfied }">Dépôt minimum : USD {{ selectedReservation.checkout_requirements.held_security_deposit_usd }} / {{ selectedReservation.checkout_requirements.minimum_security_deposit_usd }}</span>
+                      <span :class="{ complete: selectedReservation.checkout_requirements.driver_license_verified }">Permis vérifié</span>
                     </div>
 
-                    <dl class="reservation-facts">
-                      <div>
-                        <dt>Départ prévu</dt>
-                        <dd>{{ formatCapHaitienDateTime(selectedReservation.pickup_at) }}</dd>
-                      </div>
-                      <div>
-                        <dt>Retour prévu</dt>
-                        <dd>{{ formatCapHaitienDateTime(selectedReservation.due_at) }}</dd>
-                      </div>
-                      <div>
-                        <dt>Adresse</dt>
-                        <dd>{{ selectedReservation.site?.name ?? 'Non disponible' }}</dd>
-                      </div>
-                    </dl>
-
-                    <p v-if="reservationManagementMessage" class="rental-message" :class="{ error: reservationManagementError }" role="status">{{ reservationManagementMessage }}</p>
-
-                    <form v-if="selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="reservation-action-form" @submit.prevent="saveReservationSchedule">
-                      <h5>Modifier la réservation</h5>
-                      <div class="two-columns">
+                    <form v-if="hasPermission('rental.payments.submit')" class="payment-entry-form" @submit.prevent="submitReservationPayment">
+                      <h6>Enregistrer un paiement</h6>
+                      <div class="three-columns">
                         <label>
-                          Départ prévu
-                          <input v-model="reservationManagementForm.pickup_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
-                        </label>
-                        <label>
-                          Retour prévu
-                          <input v-model="reservationManagementForm.due_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
-                        </label>
-                      </div>
-                      <label>
-                        Véhicule
-                        <select v-model="reservationManagementForm.vehicle_id" required :disabled="reservationDetailsBusy">
-                          <option v-if="selectedReservation.vehicle" :value="selectedReservation.vehicle.id">{{ selectedReservation.vehicle.code }} · {{ vehicleDisplayName(selectedReservation.vehicle) }}</option>
-                          <option v-for="vehicle in reservationManagementVehicles" :key="vehicle.id" :value="vehicle.id">
-                            {{ vehicle.code }} · {{ vehicleDisplayName(vehicle) }} · {{ vehicleStatusLabels[vehicle.operational_status] }}
-                          </option>
-                        </select>
-                      </label>
-                      <p class="field-help">Le système vérifie le véhicule et la période au moment de l’enregistrement.</p>
-                      <div class="reservation-action-buttons">
-                        <button class="secondary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Enregistrer les modifications</button>
-                        <button class="primary-button" type="button" :disabled="reservationDetailsBusy || apiStatus !== 'online'" @click="requestReservationCheckOut">Mettre en circulation</button>
-                      </div>
-                      <div class="reservation-cancel-row">
-                        <label>
-                          Motif d’annulation
-                          <select v-model="reservationManagementForm.cancellation_reason" :disabled="reservationDetailsBusy">
-                            <option v-for="(label, reason) in reservationCancellationReasonLabels" :key="reason" :value="reason">{{ label }}</option>
+                          Nature
+                          <select v-model="reservationPaymentForm.payment_kind" :disabled="reservationDetailsBusy" @change="onReservationPaymentKindChanged">
+                            <option value="rental">Location</option>
+                            <option value="security_deposit">Dépôt de garantie</option>
                           </select>
                         </label>
-                        <button class="danger-button" type="button" :disabled="reservationDetailsBusy || apiStatus !== 'online'" @click="requestReservationCancellation">Annuler la réservation</button>
+                        <label>
+                          Devise
+                          <select v-model="reservationPaymentForm.currency" :disabled="reservationDetailsBusy || reservationPaymentForm.payment_kind === 'security_deposit'">
+                            <option value="USD">USD</option>
+                            <option v-if="reservationPaymentForm.payment_kind !== 'security_deposit'" value="HTG">HTG</option>
+                          </select>
+                        </label>
+                        <label>
+                          Montant
+                          <input v-model="reservationPaymentForm.amount" type="number" inputmode="decimal" min="0.01" step="0.01" required :disabled="reservationDetailsBusy" />
+                        </label>
                       </div>
-                    </form>
-
-                    <form v-else-if="selectedReservation.state === 'checked_out' && hasPermission('rental.reservations.manage')" class="reservation-action-form" @submit.prevent="extendReservation">
-                      <h5>Location en circulation</h5>
                       <label>
-                        Nouvelle date de retour
-                        <input v-model="reservationManagementForm.extension_due_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
+                        Caisse qui reçoit le paiement comptant
+                        <select v-model="reservationPaymentForm.cash_register_id" required :disabled="reservationDetailsBusy">
+                          <option value="" disabled>Sélectionnez une caisse active</option>
+                          <option v-for="cashRegister in selectedReservationCashRegisters" :key="cashRegister.id" :value="cashRegister.id">{{ cashRegister.name }} · {{ cashRegister.code }}</option>
+                        </select>
                       </label>
-                      <p class="field-help">En cas de conflit, la réservation suivante reste inchangée et aucune information client n’est affichée.</p>
-                      <div class="reservation-action-buttons">
-                        <button class="secondary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Prolonger la location</button>
-                        <button class="primary-button" type="button" :disabled="reservationDetailsBusy || apiStatus !== 'online'" @click="requestReservationReturn">Enregistrer le retour</button>
-                      </div>
-                      <p class="field-help">Un retour anticipé conserve le retour prévu, le tarif et les paiements existants. Aucun remboursement n’est créé automatiquement.</p>
+                      <p class="field-help">Le paiement comptant est enregistré dans la caisse sélectionnée. Le dépôt de garantie est contrôlé en USD. L’approbation reste une étape distincte.</p>
+                      <button class="secondary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Enregistrer le paiement</button>
                     </form>
 
-                    <p v-else class="field-help">Aucune autre action n’est disponible pour cette réservation.</p>
-                  </template>
+                    <div class="payment-list" aria-label="Paiements enregistrés">
+                      <p v-if="!(selectedReservation.payments ?? []).length" class="field-help">Aucun paiement enregistré.</p>
+                      <article v-for="payment in selectedReservation.payments ?? []" :key="payment.id">
+                        <div>
+                          <strong>{{ payment.kind === 'rental' ? 'Location' : 'Dépôt de garantie' }}</strong>
+                          <span>{{ payment.currency }} {{ payment.amount }} · {{ payment.status === 'approved' ? 'Approuvé' : 'À approuver' }}</span>
+                        </div>
+                        <button v-if="payment.status === 'submitted' && hasPermission('rental.payments.approve')" class="secondary-button" type="button" :disabled="reservationDetailsBusy" @click="approveReservationPayment(payment)">Approuver</button>
+                      </article>
+                    </div>
+
+                    <form class="checkout-license-form" @submit.prevent="executeReservationCheckOut">
+                      <h6>Permis du conducteur</h6>
+                      <label>
+                        Nom complet du conducteur
+                        <input v-model.trim="reservationCheckoutForm.driver_full_name" type="text" maxlength="160" required :disabled="reservationDetailsBusy" />
+                      </label>
+                      <div class="two-columns">
+                        <label>
+                          Numéro de permis
+                          <input v-model.trim="reservationCheckoutForm.driver_license_number" type="text" maxlength="128" required :disabled="reservationDetailsBusy" />
+                        </label>
+                        <label>
+                          Expiration du permis
+                          <input v-model="reservationCheckoutForm.driver_license_expires_at" type="date" required :disabled="reservationDetailsBusy" />
+                        </label>
+                      </div>
+                      <label class="checkbox-line">
+                        <input v-model="reservationCheckoutForm.driver_license_verified" type="checkbox" :disabled="reservationDetailsBusy" />
+                        J’ai vérifié l’original du permis de conduire.
+                      </label>
+                      <div class="form-actions">
+                        <button class="secondary-button" type="button" @click="openReservationDetailTask('summary')">Retour</button>
+                        <button class="primary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Mettre en circulation</button>
+                      </div>
+                    </form>
+                  </section>
+
+                  <form v-else-if="reservationDetailTask === 'extend' && selectedReservation.state === 'checked_out' && hasPermission('rental.reservations.manage')" class="reservation-action-form" @submit.prevent="extendReservation">
+                    <h5>Prolonger la location</h5>
+                    <label>
+                      Nouvelle date de retour
+                      <input v-model="reservationManagementForm.extension_due_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
+                    </label>
+                    <p class="field-help">En cas de conflit, la réservation suivante reste inchangée et aucune information client n’est affichée.</p>
+                    <div class="form-actions">
+                      <button class="secondary-button" type="button" @click="openReservationDetailTask('summary')">Retour</button>
+                      <button class="primary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Prolonger la location</button>
+                    </div>
+                  </form>
+
+                  <section v-else-if="reservationDetailTask === 'return' && selectedReservation.state === 'checked_out' && hasPermission('rental.reservations.manage')" class="reservation-action-form">
+                    <h5>Enregistrer le retour</h5>
+                    <p>Le véhicule passera en préparation. Le tarif et les paiements existants ne seront pas modifiés.</p>
+                    <div class="form-actions">
+                      <button class="secondary-button" type="button" @click="openReservationDetailTask('summary')">Retour</button>
+                      <button class="primary-button" type="button" :disabled="reservationDetailsBusy || apiStatus !== 'online'" @click="executeReservationReturn">Enregistrer le retour</button>
+                    </div>
+                  </section>
+
+                  <form v-else-if="reservationDetailTask === 'cancel' && selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="reservation-action-form" @submit.prevent="executeReservationCancellation">
+                    <h5>Annuler la réservation</h5>
+                    <label>
+                      Motif d’annulation
+                      <select v-model="reservationManagementForm.cancellation_reason" :disabled="reservationDetailsBusy">
+                        <option v-for="(label, reason) in reservationCancellationReasonLabels" :key="reason" :value="reason">{{ label }}</option>
+                      </select>
+                    </label>
+                    <p class="field-help">Cette action n’effectue aucun remboursement automatique.</p>
+                    <div class="form-actions">
+                      <button class="secondary-button" type="button" @click="openReservationDetailTask('summary')">Retour</button>
+                      <button class="danger-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Confirmer l’annulation</button>
+                    </div>
+                  </form>
                 </section>
               </div>
             </section>
+
+            <div v-if="reservationCreated" class="confirmation-backdrop reservation-completion-backdrop" role="presentation">
+              <section class="confirmation-dialog reservation-completion-dialog" role="dialog" aria-modal="true" aria-labelledby="reservation-created-title">
+                <p class="eyebrow">Réservation enregistrée</p>
+                <h3 id="reservation-created-title">{{ reservationCreated.number }}</h3>
+                <p>La réservation est confirmée et journalisée.</p>
+                <dl class="reservation-facts">
+                  <div>
+                    <dt>Client</dt>
+                    <dd>{{ reservationCreated.customer?.display_name ?? 'Non disponible' }}</dd>
+                  </div>
+                  <div>
+                    <dt>Véhicule</dt>
+                    <dd>{{ reservationVehicleName(reservationCreated.vehicle) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Prise en charge</dt>
+                    <dd>{{ formatCapHaitienDateTime(reservationCreated.pickup_at) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Retour prévu</dt>
+                    <dd>{{ formatCapHaitienDateTime(reservationCreated.due_at) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Tarif journalier</dt>
+                    <dd>{{ reservationCreated.currency }} {{ reservationCreated.daily_rate }}</dd>
+                  </div>
+                  <div>
+                    <dt>Dépôt minimum</dt>
+                    <dd>USD {{ reservationCreated.minimum_security_deposit_usd ?? 'À configurer' }}</dd>
+                  </div>
+                </dl>
+                <p v-if="rentalMessage" class="rental-message" :class="{ error: rentalError }" role="status">{{ rentalMessage }}</p>
+                <div class="form-actions">
+                  <button class="secondary-button" type="button" @click="openReservationOverview">Retour aux réservations</button>
+                  <button class="secondary-button" type="button" @click="openNewReservation">Nouvelle réservation</button>
+                  <button class="primary-button" type="button" @click="openCreatedReservation">Voir la réservation</button>
+                </div>
+              </section>
+            </div>
           </template>
 
           <template v-else-if="activeSection === 'Calendrier'">
@@ -3630,7 +4213,7 @@ onBeforeUnmount(() => {
                       v-if="vehicle.reference_photo"
                       class="managed-vehicle-photo"
                       :src="vehicle.reference_photo.url"
-                      :alt="`${vehicle.reference_photo.label} — ${vehicle.registration_number ?? vehicle.code}`"
+                      :alt="`${vehicle.reference_photo.label} - ${vehicle.registration_number ?? vehicle.code}`"
                     />
                     <div>
                       <span class="vehicle-code">Plaque · {{ registrationStatusLabels[vehicle.registration_status ?? 'normal'] }}</span>
@@ -3647,6 +4230,14 @@ onBeforeUnmount(() => {
                       <div v-if="vehicle.model_year">
                         <dt>Année</dt>
                         <dd>{{ vehicle.model_year }}</dd>
+                      </div>
+                      <div>
+                        <dt>Tarif journalier</dt>
+                        <dd>USD {{ vehicle.daily_rate_usd ?? 'À configurer' }}</dd>
+                      </div>
+                      <div>
+                        <dt>Dépôt minimum</dt>
+                        <dd>USD {{ vehicle.minimum_security_deposit_usd ?? 'À configurer' }}</dd>
                       </div>
                     </dl>
                     <label class="status-select">
@@ -3717,6 +4308,17 @@ onBeforeUnmount(() => {
                   </label>
                   <div class="two-columns">
                     <label>
+                      Tarif quotidien en USD
+                      <input v-model="vehicleForm.daily_rate_usd" type="number" inputmode="decimal" min="0.01" step="0.01" required :disabled="vehicleBusy" />
+                    </label>
+                    <label>
+                      Dépôt minimum en USD
+                      <input v-model="vehicleForm.minimum_security_deposit_usd" type="number" inputmode="decimal" min="0" step="0.01" required :disabled="vehicleBusy" />
+                    </label>
+                  </div>
+                  <p class="field-help">Le tarif est proposé pour les modèles connus. Le dépôt minimum doit être confirmé pour chaque véhicule.</p>
+                  <div class="two-columns">
+                    <label>
                       Marque
                       <input v-model.trim="vehicleForm.make" type="text" maxlength="64" :disabled="vehicleBusy" />
                     </label>
@@ -3781,6 +4383,22 @@ onBeforeUnmount(() => {
                     <button class="secondary-button" type="submit" :disabled="vehicleDocumentsBusy || apiStatus !== 'online'">
                       {{ vehicleDocumentsBusy ? 'Enregistrement…' : 'Enregistrer la plaque' }}
                     </button>
+                  </form>
+
+                  <form class="vehicle-documents-form" @submit.prevent="updateVehicleCommercialTerms">
+                    <h4>Tarif et dépôt</h4>
+                    <div class="two-columns">
+                      <label>
+                        Tarif quotidien en USD
+                        <input v-model="vehicleCommercialTermsForm.daily_rate_usd" type="number" inputmode="decimal" min="0.01" step="0.01" required :disabled="vehicleDocumentsBusy" />
+                      </label>
+                      <label>
+                        Dépôt minimum en USD
+                        <input v-model="vehicleCommercialTermsForm.minimum_security_deposit_usd" type="number" inputmode="decimal" min="0" step="0.01" required :disabled="vehicleDocumentsBusy" />
+                      </label>
+                    </div>
+                    <p class="field-help">Les nouvelles conditions s’appliquent aux réservations futures. Les réservations existantes conservent leur dépôt minimum.</p>
+                    <button class="secondary-button" type="submit" :disabled="vehicleDocumentsBusy || apiStatus !== 'online'">Enregistrer le tarif et le dépôt</button>
                   </form>
 
                   <form class="vehicle-documents-form" @submit.prevent="saveVehicleDocuments">
@@ -3867,7 +4485,7 @@ onBeforeUnmount(() => {
     </div>
 
     <footer class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.13' }}</span>
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.14' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>

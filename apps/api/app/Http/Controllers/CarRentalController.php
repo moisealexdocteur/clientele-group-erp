@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CarRentalPayment;
 use App\Models\CarRentalReservation;
+use App\Models\CarRentalSecurityDeposit;
 use App\Models\CarRentalVehicle;
 use App\Models\CarRentalVehicleDocument;
 use App\Models\CarRentalVehicleRegistrationEvent;
@@ -146,6 +147,8 @@ final class CarRentalController extends Controller
                     ->where(fn ($query) => $query->where('company_id', $company->id)),
             ],
             'latest_odometer_km' => ['required', 'integer', 'min:0'],
+            'daily_rate_usd' => ['required', 'numeric', 'gt:0'],
+            'minimum_security_deposit_usd' => ['required', 'numeric', 'gte:0'],
         ], $this->vehicleValidationMessages());
 
         $site = $this->siteAuthorizer->siteFor($company, $access, $data['site_id']);
@@ -163,6 +166,8 @@ final class CarRentalController extends Controller
             'reference_photo_key' => $data['reference_photo_key'] ?? null,
             'vin' => $this->nullableTrimmed($data['vin'] ?? null),
             'latest_odometer_km' => $data['latest_odometer_km'],
+            'daily_rate_usd' => $data['daily_rate_usd'],
+            'minimum_security_deposit_usd' => $data['minimum_security_deposit_usd'],
             'is_active' => true,
         ]);
 
@@ -178,6 +183,8 @@ final class CarRentalController extends Controller
                 'site_id' => $vehicle->site_id,
                 'category' => $vehicle->category,
                 'operational_status' => $vehicle->operational_status,
+                'daily_rate_usd' => $vehicle->daily_rate_usd,
+                'minimum_security_deposit_usd' => $vehicle->minimum_security_deposit_usd,
                 'has_reference_photo' => $vehicle->reference_photo_key !== null,
             ],
         );
@@ -290,6 +297,47 @@ final class CarRentalController extends Controller
                     'site_id' => $model->site_id,
                     'previous_registration_status' => $previousStatus,
                     'registration_status' => $model->registration_status,
+                ],
+            );
+        }
+
+        return response()->json([
+            'data' => $this->vehiclePayload($model->load(['site', 'documents']), true, $company),
+        ]);
+    }
+
+    public function updateVehicleCommercialTerms(Request $request, string $vehicle): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+        $model = $this->vehicleFor($company, $access, $vehicle);
+
+        $data = $request->validate([
+            'daily_rate_usd' => ['required', 'numeric', 'gt:0'],
+            'minimum_security_deposit_usd' => ['required', 'numeric', 'gte:0'],
+        ], $this->vehicleValidationMessages());
+
+        $changed = (string) $model->daily_rate_usd !== (string) $data['daily_rate_usd']
+            || (string) $model->minimum_security_deposit_usd !== (string) $data['minimum_security_deposit_usd'];
+
+        $model->forceFill([
+            'daily_rate_usd' => $data['daily_rate_usd'],
+            'minimum_security_deposit_usd' => $data['minimum_security_deposit_usd'],
+        ])->save();
+
+        if ($changed) {
+            $this->audit->record(
+                eventType: 'car_rental.vehicle_commercial_terms_updated',
+                companyId: $company->id,
+                actorId: $actor?->id,
+                actorType: $actor === null ? 'SYSTEM' : 'USER',
+                subjectType: CarRentalVehicle::class,
+                subjectId: $model->id,
+                metadata: [
+                    'site_id' => $model->site_id,
+                    'daily_rate_usd' => $model->daily_rate_usd,
+                    'minimum_security_deposit_usd' => $model->minimum_security_deposit_usd,
                 ],
             );
         }
@@ -550,6 +598,7 @@ final class CarRentalController extends Controller
                 $data['vehicle_id'] ?? null,
                 $data['category'] ?? null,
             );
+            $this->assertVehicleCommercialTermsConfigured($vehicle);
 
             $customer = $this->resolveCustomer($company, $data);
             $number = $this->documentNumbers->next($company->id, 'car_rental_reservation');
@@ -561,6 +610,7 @@ final class CarRentalController extends Controller
                 'vehicle_id' => $vehicle->id,
                 'reservation_number' => $number,
                 'state' => 'reserved',
+                'lock_version' => 0,
                 'pickup_at' => $pickupAt,
                 'due_at' => $dueAt,
                 'pickup_location_type' => $data['pickup_location_type'],
@@ -571,6 +621,7 @@ final class CarRentalController extends Controller
                 'airport_dropoff_fee_usd' => $airportDropoffFee,
                 'currency' => $data['currency'],
                 'daily_rate' => $data['daily_rate'],
+                'minimum_security_deposit_usd' => $vehicle->minimum_security_deposit_usd,
                 'kilometer_plan' => $data['kilometer_plan'],
                 'included_km' => $data['kilometer_plan'] === 'limited' ? $data['included_km'] : null,
                 'additional_km_rate' => $data['kilometer_plan'] === 'limited' ? $data['additional_km_rate'] : null,
@@ -700,6 +751,10 @@ final class CarRentalController extends Controller
 
         $data = $request->validate([
             'expected_lock_version' => ['required', 'integer', 'min:0'],
+            'driver_full_name' => ['required', 'string', 'max:160'],
+            'driver_license_number' => ['required', 'string', 'max:128'],
+            'driver_license_expires_at' => ['required', 'date_format:Y-m-d'],
+            'driver_license_verified' => ['accepted'],
         ]);
 
         $model = DB::transaction(function () use ($company, $access, $reservation, $data): CarRentalReservation {
@@ -720,15 +775,70 @@ final class CarRentalController extends Controller
                 $model->id,
             );
 
+            $licenseExpiration = CarbonImmutable::createFromFormat('Y-m-d', $data['driver_license_expires_at'], $company->timezone)
+                ->startOfDay();
+
+            if ($licenseExpiration->lessThan(CarbonImmutable::now($company->timezone)->startOfDay())) {
+                throw ValidationException::withMessages([
+                    'driver_license_expires_at' => 'Le permis de conduire est expiré. Enregistrez un permis valide avant la mise en circulation.',
+                ]);
+            }
+
+            $approvedRentalPayment = CarRentalPayment::query()
+                ->where('company_id', $company->id)
+                ->where('reservation_id', $model->id)
+                ->where('payment_kind', 'rental')
+                ->where('status', 'approved')
+                ->lockForUpdate()
+                ->first();
+
+            if ($approvedRentalPayment === null) {
+                throw ValidationException::withMessages([
+                    'payment' => 'Enregistrez puis approuvez au moins un paiement de location avant la mise en circulation.',
+                ]);
+            }
+
+            $minimumDeposit = $model->minimum_security_deposit_usd;
+
+            if ($minimumDeposit === null) {
+                $this->assertVehicleCommercialTermsConfigured($vehicle);
+                $minimumDeposit = $vehicle->minimum_security_deposit_usd;
+            }
+
+            $minimumDepositAmount = (float) $minimumDeposit;
+            $heldDeposits = CarRentalSecurityDeposit::query()
+                ->where('company_id', $company->id)
+                ->where('reservation_id', $model->id)
+                ->where('status', 'held')
+                ->where('currency', 'USD')
+                ->lockForUpdate()
+                ->get(['amount']);
+            $heldDepositUsd = (float) $heldDeposits->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount);
+
+            if ($heldDepositUsd + 0.0001 < $minimumDepositAmount) {
+                throw ValidationException::withMessages([
+                    'security_deposit' => sprintf(
+                        'Un dépôt de garantie approuvé de USD %.2f est requis avant la mise en circulation. Dépôt actuellement retenu : USD %.2f.',
+                        $minimumDepositAmount,
+                        $heldDepositUsd,
+                    ),
+                ]);
+            }
+
             $now = now()->utc();
             $model->forceFill([
                 'state' => 'checked_out',
                 'checked_out_at' => $now,
+                'minimum_security_deposit_usd' => $minimumDeposit,
+                'driver_full_name' => $this->nullableTrimmed($data['driver_full_name']),
+                'driver_license_number' => $this->nullableTrimmed($data['driver_license_number']),
+                'driver_license_expires_at' => $licenseExpiration,
+                'driver_license_verified_at' => $now,
                 'lock_version' => $model->lock_version + 1,
             ])->save();
             $vehicle->forceFill(['operational_status' => 'in_circulation'])->save();
 
-            return $model->load(['site', 'vehicle', 'customerProfile']);
+            return $model->load(['site', 'vehicle', 'customerProfile', 'payments', 'securityDeposits']);
         });
 
         $this->audit->record(
@@ -742,6 +852,9 @@ final class CarRentalController extends Controller
                 'reservation_number' => $model->formattedNumber(),
                 'site_id' => $model->site_id,
                 'vehicle_id' => $model->vehicle_id,
+                'driver_license_verified' => true,
+                'approved_rental_payment_verified' => true,
+                'security_deposit_requirement_verified' => true,
             ],
         );
 
@@ -997,6 +1110,12 @@ final class CarRentalController extends Controller
             ]);
         }
 
+        if ($data['payment_kind'] === 'security_deposit' && $data['currency'] !== 'USD') {
+            throw ValidationException::withMessages([
+                'currency' => 'Le dépôt minimum de cette version est contrôlé en USD. Enregistrez le dépôt de garantie en USD.',
+            ]);
+        }
+
         $payment = DB::transaction(function () use ($company, $model, $data): CarRentalPayment {
             $cashRegisterId = $data['cash_register_id'] ?? null;
 
@@ -1090,6 +1209,24 @@ final class CarRentalController extends Controller
                 'approved_by' => $actor?->id,
                 'approved_at' => now()->utc(),
             ])->save();
+
+            if ($record->payment_kind === 'security_deposit') {
+                CarRentalSecurityDeposit::query()->updateOrCreate(
+                    [
+                        'company_id' => $company->id,
+                        'payment_id' => $record->id,
+                    ],
+                    [
+                        'reservation_id' => $model->id,
+                        'method' => $record->method,
+                        'status' => 'held',
+                        'currency' => $record->currency,
+                        'amount' => $record->amount,
+                        'held_at' => $record->approved_at,
+                        'released_at' => null,
+                    ],
+                );
+            }
 
             return $record;
         });
@@ -1348,6 +1485,8 @@ final class CarRentalController extends Controller
             'model_year' => $vehicle->model_year,
             'reference_photo' => $vehicle->referencePhoto(),
             'latest_odometer_km' => $vehicle->latest_odometer_km,
+            'daily_rate_usd' => $vehicle->daily_rate_usd,
+            'minimum_security_deposit_usd' => $vehicle->minimum_security_deposit_usd,
             'is_active' => $vehicle->is_active,
         ];
 
@@ -1360,6 +1499,21 @@ final class CarRentalController extends Controller
         }
 
         return $payload;
+    }
+
+    private function assertVehicleCommercialTermsConfigured(CarRentalVehicle $vehicle): void
+    {
+        if ($vehicle->daily_rate_usd === null || (float) $vehicle->daily_rate_usd <= 0) {
+            throw ValidationException::withMessages([
+                'vehicle_id' => 'Le tarif quotidien en USD doit être configuré pour ce véhicule avant toute réservation.',
+            ]);
+        }
+
+        if ($vehicle->minimum_security_deposit_usd === null || (float) $vehicle->minimum_security_deposit_usd < 0) {
+            throw ValidationException::withMessages([
+                'vehicle_id' => 'Le dépôt minimum en USD doit être configuré pour ce véhicule avant toute réservation.',
+            ]);
+        }
     }
 
     private function vehicleFor(Company $company, CompanyUserAccess $access, string $vehicle): CarRentalVehicle
@@ -1449,6 +1603,12 @@ final class CarRentalController extends Controller
             'latest_odometer_km.required' => 'Saisissez le kilométrage actuel.',
             'latest_odometer_km.integer' => 'Le kilométrage doit être un nombre entier.',
             'latest_odometer_km.min' => 'Le kilométrage ne peut pas être négatif.',
+            'daily_rate_usd.required' => 'Saisissez le tarif quotidien en USD.',
+            'daily_rate_usd.numeric' => 'Le tarif quotidien doit être un montant valide.',
+            'daily_rate_usd.gt' => 'Le tarif quotidien doit être supérieur à zéro.',
+            'minimum_security_deposit_usd.required' => 'Saisissez le dépôt minimum en USD.',
+            'minimum_security_deposit_usd.numeric' => 'Le dépôt minimum doit être un montant valide.',
+            'minimum_security_deposit_usd.gte' => 'Le dépôt minimum ne peut pas être négatif.',
         ];
     }
 
@@ -1562,9 +1722,13 @@ final class CarRentalController extends Controller
             'airport_fees_total_usd' => number_format($airportPickupFee + $airportDropoffFee, 2, '.', ''),
             'currency' => $reservation->currency,
             'daily_rate' => $reservation->daily_rate,
+            'minimum_security_deposit_usd' => $reservation->minimum_security_deposit_usd,
             'kilometer_plan' => $reservation->kilometer_plan,
             'included_km' => $reservation->included_km,
             'additional_km_rate' => $reservation->additional_km_rate,
+            'driver_full_name' => $reservation->driver_full_name,
+            'driver_license_expires_at' => $reservation->driver_license_expires_at?->format('Y-m-d'),
+            'driver_license_verified' => $reservation->driver_license_verified_at !== null,
             'vehicle' => $reservation->vehicle === null ? null : $this->vehiclePayload($reservation->vehicle),
             'customer' => $reservation->customerProfile === null ? null : [
                 'id' => $reservation->customerProfile->id,
@@ -1574,6 +1738,10 @@ final class CarRentalController extends Controller
             'payments' => $reservation->relationLoaded('payments')
                 ? $reservation->payments->map(fn (CarRentalPayment $payment): array => $this->paymentPayload($payment))
                 : null,
+            'security_deposits' => $reservation->relationLoaded('securityDeposits')
+                ? $reservation->securityDeposits->map(fn (CarRentalSecurityDeposit $deposit): array => $this->securityDepositPayload($deposit))
+                : null,
+            'checkout_requirements' => $this->checkoutRequirements($reservation),
         ];
     }
 
@@ -1589,6 +1757,47 @@ final class CarRentalController extends Controller
             'amount' => $payment->amount,
             'submitted_at' => $payment->submitted_at?->toIso8601String(),
             'approved_at' => $payment->approved_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function securityDepositPayload(CarRentalSecurityDeposit $deposit): array
+    {
+        return [
+            'id' => $deposit->id,
+            'payment_id' => $deposit->payment_id,
+            'method' => $deposit->method,
+            'status' => $deposit->status,
+            'currency' => $deposit->currency,
+            'amount' => $deposit->amount,
+            'held_at' => $deposit->held_at?->toIso8601String(),
+            'released_at' => $deposit->released_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function checkoutRequirements(CarRentalReservation $reservation): array
+    {
+        $payments = $reservation->relationLoaded('payments')
+            ? $reservation->payments
+            : $reservation->payments()->get();
+        $deposits = $reservation->relationLoaded('securityDeposits')
+            ? $reservation->securityDeposits
+            : $reservation->securityDeposits()->get();
+        $minimumDeposit = (float) ($reservation->minimum_security_deposit_usd ?? 0);
+        $heldDepositUsd = (float) $deposits
+            ->filter(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->status === 'held' && $deposit->currency === 'USD')
+            ->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount);
+
+        return [
+            'driver_license_verified' => $reservation->driver_license_verified_at !== null,
+            'minimum_security_deposit_configured' => $reservation->minimum_security_deposit_usd !== null,
+            'approved_rental_payment' => $payments->contains(
+                static fn (CarRentalPayment $payment): bool => $payment->payment_kind === 'rental' && $payment->status === 'approved',
+            ),
+            'minimum_security_deposit_usd' => number_format($minimumDeposit, 2, '.', ''),
+            'held_security_deposit_usd' => number_format($heldDepositUsd, 2, '.', ''),
+            'security_deposit_satisfied' => $heldDepositUsd + 0.0001 >= $minimumDeposit,
         ];
     }
 }

@@ -6,7 +6,7 @@ Le démarrage se fait sur un Hostinger KVM1 pour respecter le budget, sous Ubunt
 
 Le VPS doit être dédié au progiciel et à ses composants indispensables. Il ne cohabite pas avec une autre application métier, un environnement de développement, des builds d'images, une préproduction permanente ou une conservation longue de sauvegardes.
 
-Le profil KVM1 de référence — 1 vCPU, 4 Go RAM et 50 Go NVMe — doit être vérifié dans l'offre Hostinger au moment de l'achat. Toute différence réelle est inscrite dans le journal de déploiement.
+Le profil KVM1 de référence - 1 vCPU, 4 Go RAM et 50 Go NVMe - doit être vérifié dans l'offre Hostinger au moment de l'achat. Toute différence réelle est inscrite dans le journal de déploiement.
 
 ## 2. Inventaire des caisses connues
 

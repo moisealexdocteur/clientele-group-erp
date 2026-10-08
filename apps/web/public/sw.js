@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clientele-group-erp-v0.2.0-alpha.13'
+const CACHE_NAME = 'clientele-group-erp-v0.2.0-alpha.14'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icon.svg']
 
 self.addEventListener('install', (event) => {

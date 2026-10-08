@@ -1,4 +1,4 @@
-# Flotte Car Rental — références publiques alpha.12
+# Flotte Car Rental - références publiques alpha.12
 
 ## Objectif
 
@@ -29,7 +29,7 @@ Les années, VIN, kilométrages, adresse d’affectation, documents et état op�
 
 - La plaque courante est le seul identifiant visible du véhicule ; le système ne crée pas de code interne distinct.
 - Les types utilisables sont uniquement `Démonstration`, `Location` et `Normale`.
-- Les trois images enregistrées dans `apps/web/public/fleet` sont étiquetées « Photo de référence — publication Clientèle Group » dans l’interface.
+- Les trois images enregistrées dans `apps/web/public/fleet` sont étiquetées « Photo de référence - publication Clientèle Group » dans l’interface.
 - Une photo de référence publique ne démontre ni la propriété actuelle du véhicule, ni l’état mécanique, ni la validité d’une assurance ou d’un permis.
 - Les photos d’inspection, documents et données client restent dans les espaces privés et isolés par société.
 - La clé de photo acceptée par l’API est limitée à la liste versionnée. Une URL ou un fichier arbitraire ne peut pas être injecté dans une fiche véhicule.

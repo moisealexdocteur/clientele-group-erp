@@ -1,11 +1,12 @@
 # Pilote Clientèle Car Rental
 
-## 1. Périmètre alpha.13
+## 1. Périmètre alpha.14
 
-L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. Le périmètre alpha.13, sans donnée réelle, couvre :
+L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. Le périmètre alpha.14, sans donnée réelle, couvre :
 
 - les véhicules `suv`, `mid_suv` et `pickup` ;
 - la création d’un véhicule pour une adresse autorisée, avec plaque en cours, kilométrage, catégorie et état opérationnel ;
+- le tarif quotidien en USD et le dépôt minimum en USD, obligatoires pour toute fiche véhicule créée ou toute nouvelle réservation ;
 - l’affectation par défaut de toute la flotte actuelle à l’adresse `Pont Parois, Route Nationale 6` ;
 - le préremplissage de cette adresse lors de la création d’une adresse de société ;
 - le préremplissage contrôlé de la flotte depuis les références publiques validées, sans création automatique et avec vérification explicite des fiches incomplètes ;
@@ -19,9 +20,15 @@ L’alpha.5 reste la référence validée en préproduction pour l’authentific
 - un planning tactile par période : réservations actives, dates de départ et de retour, adresse et état de la flotte ; le mois en cours est affiché par défaut et les sept premiers jours du mois suivant sont ajoutés pendant les sept derniers jours du mois ;
 - la disponibilité par adresse et la protection contre une double réservation ;
 - la réservation par un préposé, avec numéro de huit chiffres ;
+- la date et l’heure actuelles de Cap-Haïtien par défaut pour une nouvelle réservation, un retour proposé le lendemain et le bureau actif du préposé comme adresse de prise en charge ;
+- la confirmation ou la modification explicite de chaque valeur proposée par défaut ;
+- un récapitulatif après création, avec les actions pour consulter la réservation, en créer une autre ou revenir à la liste ;
 - la recherche d’une réservation par référence ou par plaque, limitée aux adresses autorisées ;
+- des vues séparées pour modifier, encaisser, mettre en circulation, prolonger, retourner ou annuler une réservation ;
 - la modification d’une réservation avant la remise du véhicule ;
-- la mise en circulation, la prolongation contrôlée, le retour et l’annulation d’une réservation ;
+- la mise en circulation seulement après vérification du permis original, saisie du nom du conducteur, numéro et date d’expiration du permis, paiement de location approuvé et dépôt USD retenu au minimum requis ;
+- l’approbation d’un paiement de dépôt qui crée une retenue de dépôt journalisée ;
+- la prolongation contrôlée, le retour et l’annulation d’une réservation ;
 - un formulaire PWA qui oblige à sélectionner une société puis son adresse autorisée avant d’afficher les véhicules disponibles ;
 - la prise en charge ou le drop-off au site, à l’Aéroport International du Cap-Haïtien ou à une adresse configurée ;
 - le bureau physique comme lieu de départ par défaut, avec conservation de son libellé et de son adresse dans la réservation ;
@@ -34,6 +41,7 @@ L’alpha.5 reste la référence validée en préproduction pour l’authentific
 - la modification, désactivation, réactivation, réinitialisation du mot de passe et suppression définitive d’un utilisateur conforme aux limites de société ;
 - l’envoi d’un courriel de création de compte au nouvel utilisateur ;
 - l’envoi d’un courriel client lorsque la réservation est créée, le véhicule remis, la location prolongée ou le retour enregistré, si un courriel client valide est disponible.
+- la présentation de la marque et du modèle dans les courriels client, avec une image générique de catégorie. La plaque du véhicule n’est jamais envoyée au client.
 
 Les véhicules, les réservations et le planning sont limités par société puis par adresse. Le planning ne retourne ni le nom, ni les coordonnées, ni l’identifiant du client.
 
@@ -71,19 +79,21 @@ Une permission de société sans accès à l’adresse concernée est insuffisan
 
 - Un virement ne peut être créé que pour `Sogebank` et exige une référence, une clé de preuve et son hash SHA-256.
 - La saisie et l’approbation sont deux actions séparées, journalisées sans référence bancaire brute.
-- Un dépôt de passeport est déjà modélisé comme une garde documentaire, sans numéro de passeport dans la base ni dans l’audit ; l’écran et la route métier de retenue seront ajoutés avec le check-out.
+- Une saisie espèces est disponible dans la vue de mise en circulation lorsque l’adresse dispose d’une caisse active. La preuve de virement Sogebank reste à intégrer dans une vue dédiée avant utilisation opérationnelle.
+- Un dépôt de garantie est retenu uniquement après approbation du paiement associé. La mise en circulation vérifie le montant USD retenu contre le dépôt minimum enregistré dans la réservation.
+- Un dépôt de passeport est déjà modélisé comme une garde documentaire, sans numéro de passeport dans la base ni dans l’audit. Son écran et sa route métier de retenue restent à ajouter.
 - La libération, l’application partielle ou la confiscation d’un dépôt sera ajoutée avec motif, inspection post-location et document de décision.
 
 ## 5. Étapes suivantes du pilote
 
 1. contrat PDF numéroté, QR de vérification et signature client ;
-2. workflow check-out avec inspection pré-location, carburant et signature ;
+2. inspection pré-location avec carburant, odomètre, dommages et signature ;
 3. workflow retour avec inspection post-location, kilométrage et décision sur dépôt ;
 4. calcul final, frais de nettoyage de 20 USD si la propreté au retour ne correspond pas à l’inspection de départ, facture, reçu client/administration et impression thermique ;
 5. joindre le contrat signé et la facture PDF aux courriels seulement après leur génération et leur validation ;
 6. stockage chiffré des preuves et photos, liens temporaires et antivirus ;
 7. recette sur une imprimante Epson TMIII 80 mm réelle.
 
-## 6. Hors périmètre alpha.13
+## 6. Hors périmètre alpha.14
 
-Le contrat signé, les inspections actives, les dépôts de garantie actifs, les factures et reçus PDF, l’impression thermique, le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Les courriels de facture et les pièces jointes PDF sont donc préparés par le code mais ne sont pas déclenchés avant ces modules.
+Le contrat signé, les inspections actives, la libération ou l’application d’un dépôt, les factures et reçus PDF, l’impression thermique, le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Les courriels de facture et les pièces jointes PDF sont donc préparés par le code mais ne sont pas déclenchés avant ces modules.

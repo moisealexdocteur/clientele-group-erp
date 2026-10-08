@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 260" role="img" aria-labelledby="title desc">
+  <title id="title">Mid SUV de location</title>
+  <desc id="desc">Illustration générique sans plaque d'immatriculation.</desc>
+  <rect width="480" height="260" rx="24" fill="#eef0ff"/>
+  <path d="M101 169h278l-17-61c-5-18-21-30-40-30H181c-21 0-36 12-43 30z" fill="#35364d"/>
+  <path d="M174 111h64v45h-85l13-29c2-7 4-12 8-16zM251 111h65c9 0 16 6 19 15l9 30h-93z" fill="#cfd4fb"/>
+  <path d="M87 157h307c13 0 24 11 24 24v14H63v-14c0-13 11-24 24-24z" fill="#171820"/>
+  <circle cx="148" cy="195" r="29" fill="#ffffff"/><circle cx="148" cy="195" r="14" fill="#383a46"/>
+  <circle cx="329" cy="195" r="29" fill="#ffffff"/><circle cx="329" cy="195" r="14" fill="#383a46"/>
+  <rect x="204" y="177" width="72" height="12" rx="6" fill="#f4f5f8"/>
+</svg>

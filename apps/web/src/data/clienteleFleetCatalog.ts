@@ -15,6 +15,7 @@ export interface FleetCatalogVehicle {
   category: FleetCatalogCategory
   make: string
   model: string
+  dailyRateUsd?: number
   requiresReview: boolean
   reviewMessage?: string
   referencePhoto: FleetCatalogReferencePhoto | null
@@ -40,12 +41,13 @@ export const clienteleFleetCatalog: FleetCatalogVehicle[] = [
     category: 'pickup',
     make: 'Nissan',
     model: 'Frontier',
+    dailyRateUsd: 200,
     requiresReview: false,
     referencePhoto: {
       key: 'nissan-frontier-aa-85177',
       url: '/fleet/nissan-frontier-aa-85177.jpg',
       alt: 'Nissan Frontier bleu, plaque AA-85177',
-      label: 'Photo de référence — publication Clientèle Group',
+      label: 'Photo de référence - publication Clientèle Group',
       sourceUrl: CLIENTELE_FLEET_PHOTO_POST,
     },
     sourceUrl: CLIENTELE_FLEET_PHOTO_POST,
@@ -56,12 +58,13 @@ export const clienteleFleetCatalog: FleetCatalogVehicle[] = [
     category: 'suv',
     make: 'Suzuki',
     model: 'Jimny',
+    dailyRateUsd: 120,
     requiresReview: false,
     referencePhoto: {
       key: 'suzuki-jimny-lo-01727',
       url: '/fleet/suzuki-jimny-lo-01727.jpg',
       alt: 'Suzuki Jimny noir, plaque LO-01727',
-      label: 'Photo de référence — publication Clientèle Group',
+      label: 'Photo de référence - publication Clientèle Group',
       sourceUrl: CLIENTELE_FLEET_VIDEO,
     },
     sourceUrl: CLIENTELE_FLEET_VIDEO,
@@ -72,12 +75,13 @@ export const clienteleFleetCatalog: FleetCatalogVehicle[] = [
     category: 'pickup',
     make: 'Great Wall',
     model: 'Poer',
+    dailyRateUsd: 200,
     requiresReview: false,
     referencePhoto: {
       key: 'great-wall-poer-dm-00849',
       url: '/fleet/great-wall-poer-dm-00849.jpg',
       alt: 'Great Wall Poer blanche, plaque DM-00849',
-      label: 'Photo de référence — publication Clientèle Group',
+      label: 'Photo de référence - publication Clientèle Group',
       sourceUrl: CLIENTELE_FLEET_PHOTO_POST,
     },
     sourceUrl: CLIENTELE_FLEET_PHOTO_POST,
@@ -88,6 +92,7 @@ export const clienteleFleetCatalog: FleetCatalogVehicle[] = [
     category: 'suv',
     make: 'Suzuki',
     model: 'Jimny',
+    dailyRateUsd: 120,
     requiresReview: true,
     reviewMessage: 'Vérifiez la plaque sur le véhicule et la carte grise avant l’enregistrement.',
     referencePhoto: null,
@@ -110,6 +115,7 @@ export const clienteleFleetCatalog: FleetCatalogVehicle[] = [
     category: 'pickup',
     make: 'Great Wall',
     model: 'Poer',
+    dailyRateUsd: 200,
     requiresReview: true,
     reviewMessage: 'Vérifiez la plaque et le modèle sur le véhicule et la carte grise avant l’enregistrement.',
     referencePhoto: null,

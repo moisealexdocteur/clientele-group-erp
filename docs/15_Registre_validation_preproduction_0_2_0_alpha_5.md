@@ -1,4 +1,4 @@
-# Registre de validation — préproduction 0.2.0-alpha.5
+# Registre de validation - préproduction 0.2.0-alpha.5
 
 ## 1. Objet
 
@@ -14,7 +14,7 @@ Ce document fige la référence technique validée en préproduction avant la po
 | Référence Git immuable | `baseline/0.2.0-alpha.5-preprod` |
 | Images applicatives | `ghcr.io/moisealexdocteur/clientele-group-erp-app:sha-0607280` et `ghcr.io/moisealexdocteur/clientele-group-erp-web:sha-0607280` |
 | Date de validation | 07 octobre 2026, heure de Toronto |
-| Fuseau métier | Cap-Haïtien, Haïti — `America/Port-au-Prince` |
+| Fuseau métier | Cap-Haïtien, Haïti - `America/Port-au-Prince` |
 
 ## 3. Contrôles réussis
 
