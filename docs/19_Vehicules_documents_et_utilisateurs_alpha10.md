@@ -1,11 +1,11 @@
-# Véhicules, papiers et utilisateurs Car Rental — alpha.10
+# Véhicules, papiers et utilisateurs Car Rental
 
 ## Véhicule
 
 La plaque d’immatriculation en cours est l’unique identifiant opérationnel du véhicule. Aucun code interne séparé n’est demandé.
 
-- Une plaque est soit `Démonstration`, soit `Officielle`.
-- Lorsqu’une plaque officielle remplace une plaque `Démonstration`, la plaque en cours est mise à jour et l’ancienne plaque reste dans l’historique du véhicule.
+- Une plaque est soit `Démonstration`, `Location` ou `Normale`.
+- Lorsqu’une plaque est remplacée, la plaque en cours est mise à jour et l’ancienne plaque reste dans l’historique du véhicule.
 - La plaque et le VIN restent uniques dans une même société.
 - La liste de la flotte affiche la plaque, l’état opérationnel et l’état des documents sans afficher les références documentaires.
 
@@ -44,6 +44,8 @@ Pour chaque compte :
 - le propriétaire sélectionne toutes les adresses actives ou un sous-ensemble précis ;
 - la première connexion demande le code envoyé au courriel personnel ;
 - aucun mot de passe n’est envoyé par courriel ni enregistré dans le journal d’audit.
+
+Après création, le propriétaire peut modifier le profil et les adresses, désactiver ou réactiver l’accès local, réinitialiser le mot de passe et supprimer définitivement un compte non partagé. La suppression demande une confirmation explicite par courriel et conserve les transactions ainsi que le journal d’audit. Un compte actif dans une autre société conserve ses informations personnelles et son mot de passe sous le contrôle de l’utilisateur.
 
 ## Réservation et lieux
 

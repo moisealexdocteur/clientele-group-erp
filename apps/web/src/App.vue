@@ -62,9 +62,11 @@ type RentalCategory = 'suv' | 'mid_suv' | 'pickup'
 type RentalLocation = 'site' | 'cap_haitien_airport' | 'custom'
 type KilometerPlan = 'limited' | 'unlimited'
 type VehicleOperationalStatus = 'available' | 'preparation' | 'washing' | 'garage' | 'in_circulation'
-type VehicleRegistrationStatus = 'demonstration' | 'official'
+type VehicleRegistrationStatus = 'demonstration' | 'location' | 'normal'
 type VehicleDocumentType = 'registration' | 'oavct_insurance' | 'tint_permit'
 type VehicleDocumentStatus = 'not_recorded' | 'not_applicable' | 'expired' | 'expiring_soon' | 'current'
+type ReservationState = 'draft' | 'reserved' | 'checked_out' | 'completed' | 'cancelled'
+type ReservationCancellationReason = 'customer_request' | 'vehicle_unavailable' | 'business_decision' | 'other'
 
 interface RentalSite {
   id: string
@@ -115,10 +117,14 @@ interface CarRentalAvailabilityResponse {
 interface CarRentalReservation {
   id: string
   number: string
-  state: string
+  state: ReservationState
   site_id: string
+  site: RentalSite | null
   pickup_at: string
   due_at: string
+  checked_out_at: string | null
+  returned_at: string | null
+  lock_version: number
   airport_pickup_fee_usd: string
   airport_dropoff_fee_usd: string
   airport_fees_total_usd: string
@@ -133,6 +139,31 @@ interface CarRentalReservation {
     display_name: string
     customer_type: 'individual' | 'institution'
   } | null
+}
+
+interface CarRentalReservationListEntry {
+  id: string
+  number: string
+  state: ReservationState
+  pickup_at: string
+  due_at: string
+  site: RentalSite | null
+  vehicle: RentalVehicle | null
+  customer: {
+    id: string
+    display_name: string
+    customer_type: 'individual' | 'institution'
+  } | null
+}
+
+interface CarRentalReservationListResponse {
+  data: CarRentalReservationListEntry[]
+  period: {
+    from: string
+    to: string
+    timezone: string
+    timezone_label: string
+  }
 }
 
 interface CarRentalVehicleListResponse {
@@ -199,11 +230,22 @@ interface SystemCompanyUser {
   role_key: string
   site_scope: 'all' | 'selected'
   is_active: boolean
+  is_system_owner: boolean
+  can_edit_personal_profile: boolean
+  can_delete_permanently: boolean
   sites: Array<{
     id: string
     code: string
     name: string
   }>
+}
+
+interface ConfirmationRequest {
+  title: string
+  message: string
+  confirm_label: string
+  danger?: boolean
+  action: () => Promise<void>
 }
 
 type CarRentalUserRole = 'car_rental_administrator' | 'car_rental_agent' | 'car_rental_fleet'
@@ -256,6 +298,15 @@ const calendarMessage = ref('')
 const calendarError = ref(false)
 const calendarEntries = ref<CarRentalCalendarEntry[]>([])
 const calendarVehicles = ref<RentalVehicle[]>([])
+const reservationListBusy = ref(false)
+const reservationListMessage = ref('')
+const reservationListError = ref(false)
+const reservationList = ref<CarRentalReservationListEntry[]>([])
+const selectedReservation = ref<CarRentalReservation | null>(null)
+const reservationDetailsBusy = ref(false)
+const reservationManagementMessage = ref('')
+const reservationManagementError = ref(false)
+const reservationManagementVehicles = ref<RentalVehicle[]>([])
 const showSystemConfiguration = ref(false)
 const configurationBusy = ref(false)
 const configurationMessage = ref('')
@@ -268,6 +319,13 @@ const companyConfigurationErrors = ref<Record<string, string>>({})
 const siteConfigurationErrors = ref<Record<string, string>>({})
 const cashRegisterConfigurationErrors = ref<Record<string, string>>({})
 const companyUserConfigurationErrors = ref<Record<string, string>>({})
+const companyUserManagementErrors = ref<Record<string, string>>({})
+const selectedCompanyUser = ref<SystemCompanyUser | null>(null)
+const confirmationRequest = ref<ConfirmationRequest | null>(null)
+const confirmationBusy = ref(false)
+const deletionConfirmationOpen = ref(false)
+const deletionConfirmationEmail = ref('')
+const deletionConfirmationUser = ref<SystemCompanyUser | null>(null)
 let clockTimer: number | undefined
 
 const reservationForm = reactive({
@@ -301,14 +359,14 @@ const vehicleForm = reactive({
   model: '',
   model_year: '',
   registration_number: '',
-  registration_status: 'official' as VehicleRegistrationStatus,
+  registration_status: 'normal' as VehicleRegistrationStatus,
   vin: '',
   latest_odometer_km: '0',
 })
 
 const vehicleRegistrationForm = reactive({
   registration_number: '',
-  registration_status: 'official' as VehicleRegistrationStatus,
+  registration_status: 'normal' as VehicleRegistrationStatus,
 })
 
 const vehicleDocumentsForm = reactive({
@@ -329,6 +387,21 @@ const calendarForm = reactive({
   site_id: '',
   from: '',
   to: '',
+})
+
+const reservationListFilters = reactive({
+  state: '' as '' | ReservationState,
+  query: '',
+  from: '',
+  to: '',
+})
+
+const reservationManagementForm = reactive({
+  vehicle_id: '',
+  pickup_at: '',
+  due_at: '',
+  extension_due_at: '',
+  cancellation_reason: 'customer_request' as ReservationCancellationReason,
 })
 
 const companyConfigurationForm = reactive({
@@ -360,6 +433,16 @@ const companyUserConfigurationForm = reactive({
   site_ids: [] as string[],
 })
 
+const companyUserManagementForm = reactive({
+  name: '',
+  email: '',
+  role_key: 'car_rental_agent' as CarRentalUserRole,
+  site_scope: 'all' as 'all' | 'selected',
+  site_ids: [] as string[],
+  password: '',
+  password_confirmation: '',
+})
+
 const sections = [
   'Accueil',
   'Réservations',
@@ -383,7 +466,8 @@ const vehicleStatusLabels: Record<VehicleOperationalStatus, string> = {
 
 const registrationStatusLabels: Record<VehicleRegistrationStatus, string> = {
   demonstration: 'Démonstration',
-  official: 'Officielle',
+  location: 'Location',
+  normal: 'Normale',
 }
 
 const vehicleDocumentTypeLabels: Record<VehicleDocumentType, string> = {
@@ -414,9 +498,19 @@ function companyUserRoleLabel(roleKey: string): string {
   return carRentalUserRoleLabels[roleKey as CarRentalUserRole] ?? roleKey
 }
 
-const reservationStateLabels: Record<CarRentalCalendarEntry['state'], string> = {
+const reservationStateLabels: Record<ReservationState, string> = {
+  draft: 'Brouillon',
   reserved: 'Réservée',
   checked_out: 'En circulation',
+  completed: 'Terminée',
+  cancelled: 'Annulée',
+}
+
+const reservationCancellationReasonLabels: Record<ReservationCancellationReason, string> = {
+  customer_request: 'Demande du client',
+  vehicle_unavailable: 'Véhicule indisponible',
+  business_decision: 'Décision interne',
+  other: 'Autre motif',
 }
 
 const formattedCapHaitienTime = computed(() => {
@@ -698,11 +792,15 @@ function closeSystemConfiguration(): void {
   configurationMessage.value = ''
   configurationError.value = false
   clearConfigurationValidationErrors()
+  resetCompanyUserManagement()
+  confirmationRequest.value = null
+  closeDeletionConfirmation()
 }
 
 function selectConfigurationCompany(): void {
   cashRegisterConfigurationForm.site_id = selectedConfigurationCompany.value?.sites[0]?.id ?? ''
   companyUserConfigurationForm.site_ids = []
+  resetCompanyUserManagement()
   clearConfigurationFieldError(cashRegisterConfigurationErrors, 'site_id')
   clearConfigurationFieldError(companyUserConfigurationErrors, 'site_ids')
   void loadCompanyUsers()
@@ -713,6 +811,21 @@ function clearConfigurationValidationErrors(): void {
   siteConfigurationErrors.value = {}
   cashRegisterConfigurationErrors.value = {}
   companyUserConfigurationErrors.value = {}
+  companyUserManagementErrors.value = {}
+}
+
+function resetCompanyUserManagement(): void {
+  selectedCompanyUser.value = null
+  Object.assign(companyUserManagementForm, {
+    name: '',
+    email: '',
+    role_key: 'car_rental_agent',
+    site_scope: 'all',
+    site_ids: [],
+    password: '',
+    password_confirmation: '',
+  })
+  companyUserManagementErrors.value = {}
 }
 
 function clearConfigurationFieldError(
@@ -849,8 +962,10 @@ function onCompanyUserSiteScopeChanged(): void {
 }
 
 function hasValidInitialPassword(): boolean {
-  const value = companyUserConfigurationForm.password
+  return hasValidPassword(companyUserConfigurationForm.password)
+}
 
+function hasValidPassword(value: string): boolean {
   return value.length >= 12
     && /[a-z]/.test(value)
     && /[A-Z]/.test(value)
@@ -900,7 +1015,7 @@ async function createCompanyUser(): Promise<void> {
   configurationBusy.value = true
 
   try {
-    const result = await requestApi<{ data: SystemCompanyUser }>(`/api/v1/system/configuration/companies/${companyId}/users`, {
+    const result = await requestApi<{ data: SystemCompanyUser; notification?: { sent: boolean } }>(`/api/v1/system/configuration/companies/${companyId}/users`, {
       method: 'POST',
       body: JSON.stringify({
         ...companyUserConfigurationForm,
@@ -923,11 +1038,250 @@ async function createCompanyUser(): Promise<void> {
       site_scope: 'all',
       site_ids: [],
     })
-    configurationMessage.value = 'Utilisateur créé. Sa première connexion demande un code envoyé à son courriel personnel.'
+    configurationMessage.value = result.notification?.sent === false
+      ? 'Utilisateur créé. La notification de création n’a pas pu être envoyée. Vérifiez le courriel et demandez une réinitialisation de mot de passe si nécessaire.'
+      : 'Utilisateur créé. Un courriel de création a été envoyé. Un code de sécurité sera demandé à chaque connexion.'
   } catch (error) {
     showConfigurationRequestError(error, companyUserConfigurationErrors)
   } finally {
     configurationBusy.value = false
+  }
+}
+
+function selectCompanyUser(companyUser: SystemCompanyUser): void {
+  selectedCompanyUser.value = companyUser
+  Object.assign(companyUserManagementForm, {
+    name: companyUser.name ?? '',
+    email: companyUser.email ?? '',
+    role_key: companyUser.role_key as CarRentalUserRole,
+    site_scope: companyUser.site_scope,
+    site_ids: companyUser.sites.map((site) => site.id),
+    password: '',
+    password_confirmation: '',
+  })
+  companyUserManagementErrors.value = {}
+  configurationError.value = false
+  configurationMessage.value = ''
+}
+
+function onManagedCompanyUserSiteScopeChanged(): void {
+  if (companyUserManagementForm.site_scope === 'all') {
+    companyUserManagementForm.site_ids = []
+  }
+
+  clearConfigurationFieldError(companyUserManagementErrors, 'site_scope')
+  clearConfigurationFieldError(companyUserManagementErrors, 'site_ids')
+}
+
+function clearManagedCompanyUserFieldError(field: string): void {
+  clearConfigurationFieldError(companyUserManagementErrors, field)
+}
+
+function replaceCompanyUser(companyUser: SystemCompanyUser): void {
+  configurationCompanyUsers.value = configurationCompanyUsers.value
+    .map((item) => item.id === companyUser.id ? companyUser : item)
+    .sort((left, right) => (left.name ?? '').localeCompare(right.name ?? '', 'fr'))
+  selectedCompanyUser.value = companyUser
+}
+
+async function saveCompanyUser(): Promise<void> {
+  const companyId = configurationCompanyId.value
+  const companyUser = selectedCompanyUser.value
+
+  if (!companyId || !companyUser) {
+    return
+  }
+
+  companyUserManagementErrors.value = {}
+  configurationError.value = false
+  configurationMessage.value = ''
+
+  if (companyUserManagementForm.site_scope === 'selected' && !companyUserManagementForm.site_ids.length) {
+    companyUserManagementErrors.value = { site_ids: 'Sélectionnez au moins une adresse pour un accès limité.' }
+    configurationError.value = true
+    configurationMessage.value = 'Vérifiez les champs signalés.'
+    return
+  }
+
+  configurationBusy.value = true
+
+  try {
+    const result = await requestApi<{ data: SystemCompanyUser }>(`/api/v1/system/configuration/companies/${companyId}/users/${companyUser.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: companyUserManagementForm.name.trim(),
+        email: companyUserManagementForm.email.trim().toLowerCase(),
+        role_key: companyUserManagementForm.role_key,
+        site_scope: companyUserManagementForm.site_scope,
+        site_ids: companyUserManagementForm.site_ids,
+      }),
+    })
+    replaceCompanyUser(result.data)
+    selectCompanyUser(result.data)
+    configurationMessage.value = 'Modifications enregistrées.'
+  } catch (error) {
+    showConfigurationRequestError(error, companyUserManagementErrors)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+async function executeCompanyUserStatusChange(isActive: boolean): Promise<void> {
+  const companyId = configurationCompanyId.value
+  const companyUser = selectedCompanyUser.value
+  if (!companyId || !companyUser) return
+
+  configurationBusy.value = true
+  configurationError.value = false
+
+  try {
+    const result = await requestApi<{ data: SystemCompanyUser }>(`/api/v1/system/configuration/companies/${companyId}/users/${companyUser.id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive }),
+    })
+    replaceCompanyUser(result.data)
+    configurationMessage.value = isActive ? 'Accès réactivé.' : 'Accès désactivé pour cette société.'
+  } catch (error) {
+    showConfigurationRequestError(error, companyUserManagementErrors)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+function requestCompanyUserStatusChange(isActive: boolean): void {
+  const companyUser = selectedCompanyUser.value
+  if (!companyUser) return
+
+  requestConfirmation({
+    title: isActive ? 'Réactiver l’accès' : 'Désactiver l’accès',
+    message: isActive
+      ? `L’accès de ${companyUser.name} sera rétabli pour cette société.`
+      : `L’accès de ${companyUser.name} sera supprimé pour cette société. Les données et le journal restent conservés.`,
+    confirm_label: isActive ? 'Réactiver' : 'Désactiver',
+    danger: !isActive,
+    action: () => executeCompanyUserStatusChange(isActive),
+  })
+}
+
+async function resetCompanyUserPassword(): Promise<void> {
+  const companyId = configurationCompanyId.value
+  const companyUser = selectedCompanyUser.value
+  if (!companyId || !companyUser) return
+
+  companyUserManagementErrors.value = {}
+  configurationError.value = false
+  configurationMessage.value = ''
+
+  if (!hasValidPassword(companyUserManagementForm.password)) {
+    companyUserManagementErrors.value = {
+      password: 'Utilisez au moins 12 caractères, avec majuscule, minuscule, chiffre et symbole.',
+    }
+    configurationError.value = true
+    configurationMessage.value = 'Vérifiez les champs signalés.'
+    return
+  }
+
+  if (companyUserManagementForm.password !== companyUserManagementForm.password_confirmation) {
+    companyUserManagementErrors.value = { password_confirmation: 'Les deux mots de passe ne correspondent pas.' }
+    configurationError.value = true
+    configurationMessage.value = 'Vérifiez les champs signalés.'
+    return
+  }
+
+  configurationBusy.value = true
+
+  try {
+    const result = await requestApi<{ message: string }>(`/api/v1/system/configuration/companies/${companyId}/users/${companyUser.id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({
+        password: companyUserManagementForm.password,
+        password_confirmation: companyUserManagementForm.password_confirmation,
+      }),
+    })
+    companyUserManagementForm.password = ''
+    companyUserManagementForm.password_confirmation = ''
+    configurationMessage.value = result.message
+  } catch (error) {
+    showConfigurationRequestError(error, companyUserManagementErrors)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+function requestCompanyUserDeletion(): void {
+  const companyUser = selectedCompanyUser.value
+  if (!companyUser) return
+
+  requestConfirmation({
+    title: 'Supprimer définitivement l’utilisateur',
+    message: `Saisissez le courriel de ${companyUser.name} dans l’étape suivante. Le compte sera supprimé définitivement. Les transactions et le journal d’audit resteront conservés.`,
+    confirm_label: 'Continuer',
+    danger: true,
+    action: async () => {
+      // La confirmation finale demande le courriel afin d'éviter une suppression accidentelle.
+      deletionConfirmationEmail.value = ''
+      deletionConfirmationUser.value = companyUser
+      deletionConfirmationOpen.value = true
+    },
+  })
+}
+
+async function executeCompanyUserDeletion(): Promise<void> {
+  const companyId = configurationCompanyId.value
+  const companyUser = deletionConfirmationUser.value
+  if (!companyId || !companyUser) return
+
+  configurationBusy.value = true
+  configurationError.value = false
+  companyUserManagementErrors.value = {}
+
+  try {
+    await requestApi(`/api/v1/system/configuration/companies/${companyId}/users/${companyUser.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation_email: deletionConfirmationEmail.value.trim().toLowerCase() }),
+    })
+    configurationCompanyUsers.value = configurationCompanyUsers.value.filter((item) => item.id !== companyUser.id)
+    deletionConfirmationOpen.value = false
+    deletionConfirmationEmail.value = ''
+    deletionConfirmationUser.value = null
+    resetCompanyUserManagement()
+    configurationMessage.value = 'Utilisateur supprimé définitivement.'
+  } catch (error) {
+    showConfigurationRequestError(error, companyUserManagementErrors)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+function closeDeletionConfirmation(): void {
+  if (configurationBusy.value) return
+
+  deletionConfirmationOpen.value = false
+  deletionConfirmationEmail.value = ''
+  deletionConfirmationUser.value = null
+}
+
+function requestConfirmation(request: ConfirmationRequest): void {
+  confirmationRequest.value = request
+}
+
+function cancelConfirmation(): void {
+  if (!confirmationBusy.value) {
+    confirmationRequest.value = null
+  }
+}
+
+async function confirmRequestedAction(): Promise<void> {
+  const request = confirmationRequest.value
+  if (!request) return
+
+  confirmationBusy.value = true
+
+  try {
+    await request.action()
+    confirmationRequest.value = null
+  } finally {
+    confirmationBusy.value = false
   }
 }
 
@@ -1045,6 +1399,9 @@ function clearSession(): void {
   configurationCompanies.value = []
   configurationCompanyId.value = ''
   configurationCompanyUsers.value = []
+  resetCompanyUserManagement()
+  confirmationRequest.value = null
+  closeDeletionConfirmation()
   authView.value = 'sign-in'
   activeSection.value = 'Accueil'
   resetRentalForm()
@@ -1064,10 +1421,8 @@ function hasPermission(permission: string): boolean {
   return allowed.includes('*') || allowed.includes(permission)
 }
 
-function capHaitienDateInput(dayOffset = 0): string {
+function capHaitienDateParts(): { year: number; month: number; day: number } {
   const date = new Date()
-  date.setUTCDate(date.getUTCDate() + dayOffset)
-
   const values = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Port-au-Prince',
@@ -1080,7 +1435,35 @@ function capHaitienDateInput(dayOffset = 0): string {
       .map((part) => [part.type, part.value]),
   )
 
-  return `${values.year}-${values.month}-${values.day}`
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+  }
+}
+
+function formatDateInput(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function calendarDefaultPeriod(): { from: string; to: string } {
+  const today = capHaitienDateParts()
+  const lastDayOfMonth = new Date(Date.UTC(today.year, today.month, 0)).getUTCDate()
+  const isEndOfMonth = today.day >= lastDayOfMonth - 6
+
+  if (!isEndOfMonth) {
+    return {
+      from: formatDateInput(today.year, today.month, 1),
+      to: formatDateInput(today.year, today.month, lastDayOfMonth),
+    }
+  }
+
+  const firstNextMonth = new Date(Date.UTC(today.year, today.month, 1))
+
+  return {
+    from: formatDateInput(today.year, today.month, 1),
+    to: formatDateInput(firstNextMonth.getUTCFullYear(), firstNextMonth.getUTCMonth() + 1, 7),
+  }
 }
 
 function formatCapHaitienDateTime(value: string): string {
@@ -1132,6 +1515,29 @@ function resetRentalForm(siteId = ''): void {
   reservationCreated.value = null
   rentalMessage.value = ''
   rentalError.value = false
+  resetReservationWorkspace()
+}
+
+function resetReservationWorkspace(): void {
+  Object.assign(reservationListFilters, {
+    state: '',
+    query: '',
+    ...calendarDefaultPeriod(),
+  })
+  Object.assign(reservationManagementForm, {
+    vehicle_id: '',
+    pickup_at: '',
+    due_at: '',
+    extension_due_at: '',
+    cancellation_reason: 'customer_request',
+  })
+  reservationList.value = []
+  selectedReservation.value = null
+  reservationManagementVehicles.value = []
+  reservationListMessage.value = ''
+  reservationListError.value = false
+  reservationManagementMessage.value = ''
+  reservationManagementError.value = false
 }
 
 function resetVehicleWorkspace(siteId = ''): void {
@@ -1143,7 +1549,7 @@ function resetVehicleWorkspace(siteId = ''): void {
     model: '',
     model_year: '',
     registration_number: '',
-    registration_status: 'official',
+    registration_status: 'normal',
     vin: '',
     latest_odometer_km: '0',
   })
@@ -1153,7 +1559,7 @@ function resetVehicleWorkspace(siteId = ''): void {
   vehicleDocumentsError.value = false
   Object.assign(vehicleRegistrationForm, {
     registration_number: '',
-    registration_status: 'official',
+    registration_status: 'normal',
   })
   Object.assign(vehicleDocumentsForm, {
     registration_document_number: '',
@@ -1169,8 +1575,7 @@ function resetVehicleWorkspace(siteId = ''): void {
   })
   Object.assign(calendarForm, {
     site_id: '',
-    from: capHaitienDateInput(),
-    to: capHaitienDateInput(7),
+    ...calendarDefaultPeriod(),
   })
   managedVehicles.value = []
   calendarEntries.value = []
@@ -1252,7 +1657,7 @@ async function createReservation(): Promise<void> {
   rentalBusy.value = true
 
   try {
-    const result = await requestApi<{ data: CarRentalReservation }>('/api/v1/car-rental/reservations', {
+    const result = await requestApi<{ data: CarRentalReservation; customer_notification_sent?: boolean }>('/api/v1/car-rental/reservations', {
       method: 'POST',
       headers: contextHeaders(),
       body: JSON.stringify({
@@ -1293,7 +1698,9 @@ async function createReservation(): Promise<void> {
     })
 
     reservationCreated.value = result.data
-    rentalMessage.value = `Réservation ${result.data.number} créée et journalisée.`
+    rentalMessage.value = result.customer_notification_sent
+      ? `Réservation ${result.data.number} créée. Le courriel de confirmation a été envoyé au client.`
+      : `Réservation ${result.data.number} créée et journalisée.`
     rentalError.value = false
     availableVehicles.value = availableVehicles.value.filter((vehicle) => vehicle.id !== result.data.vehicle?.id)
     reservationForm.vehicle_id = ''
@@ -1303,6 +1710,309 @@ async function createReservation(): Promise<void> {
   } finally {
     rentalBusy.value = false
   }
+}
+
+function formatCapHaitienDateTimeInput(value: string): string {
+  const date = new Date(value)
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Port-au-Prince',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  )
+
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`
+}
+
+function applyManagedReservation(reservation: CarRentalReservation): void {
+  selectedReservation.value = reservation
+  Object.assign(reservationManagementForm, {
+    vehicle_id: reservation.vehicle?.id ?? '',
+    pickup_at: formatCapHaitienDateTimeInput(reservation.pickup_at),
+    due_at: formatCapHaitienDateTimeInput(reservation.due_at),
+    extension_due_at: formatCapHaitienDateTimeInput(reservation.due_at),
+    cancellation_reason: 'customer_request',
+  })
+
+  const entry: CarRentalReservationListEntry = {
+    id: reservation.id,
+    number: reservation.number,
+    state: reservation.state,
+    pickup_at: reservation.pickup_at,
+    due_at: reservation.due_at,
+    site: reservation.site,
+    vehicle: reservation.vehicle,
+    customer: reservation.customer,
+  }
+  const exists = reservationList.value.some((item) => item.id === reservation.id)
+  reservationList.value = exists
+    ? reservationList.value.map((item) => item.id === reservation.id ? entry : item)
+    : [entry, ...reservationList.value]
+}
+
+async function loadReservationList(): Promise<void> {
+  reservationListError.value = false
+  reservationListMessage.value = ''
+
+  if (!hasPermission('rental.reservations.read')) {
+    reservationListError.value = true
+    reservationListMessage.value = 'Votre rôle ne permet pas de consulter les réservations.'
+    return
+  }
+
+  reservationListBusy.value = true
+
+  try {
+    const parameters = new URLSearchParams({
+      from: reservationListFilters.from,
+      to: reservationListFilters.to,
+    })
+    if (reservationListFilters.query.trim()) parameters.set('query', reservationListFilters.query.trim())
+    if (reservationListFilters.state) parameters.set('state', reservationListFilters.state)
+
+    const result = await requestApi<CarRentalReservationListResponse>(`/api/v1/car-rental/reservations?${parameters}`, {
+      headers: contextHeaders(),
+    })
+    reservationList.value = result.data
+    reservationListMessage.value = result.data.length === 0
+      ? 'Aucune réservation ne correspond aux critères.'
+      : `${result.data.length} réservation${result.data.length > 1 ? 's' : ''} affichée${result.data.length > 1 ? 's' : ''}.`
+  } catch (error) {
+    reservationListError.value = true
+    reservationListMessage.value = messageFrom(error)
+    reservationList.value = []
+  } finally {
+    reservationListBusy.value = false
+  }
+}
+
+async function loadReservationManagementVehicles(siteId: string): Promise<void> {
+  if (!siteId || !hasPermission('rental.vehicles.read')) {
+    reservationManagementVehicles.value = []
+    return
+  }
+
+  try {
+    const parameters = new URLSearchParams({ site_id: siteId })
+    const result = await requestApi<CarRentalVehicleListResponse>(`/api/v1/car-rental/vehicles?${parameters}`, {
+      headers: contextHeaders(),
+    })
+    reservationManagementVehicles.value = result.data
+  } catch {
+    reservationManagementVehicles.value = []
+  }
+}
+
+async function selectReservation(entry: CarRentalReservationListEntry): Promise<void> {
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+  reservationManagementMessage.value = ''
+
+  try {
+    const result = await requestApi<{ data: CarRentalReservation }>(`/api/v1/car-rental/reservations/${entry.id}`, {
+      headers: contextHeaders(),
+    })
+    applyManagedReservation(result.data)
+    await loadReservationManagementVehicles(result.data.site_id)
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
+}
+
+async function saveReservationSchedule(): Promise<void> {
+  const reservation = selectedReservation.value
+
+  if (!reservation || !reservationManagementForm.vehicle_id || !reservationManagementForm.pickup_at || !reservationManagementForm.due_at) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = 'Sélectionnez un véhicule et renseignez les dates avant d’enregistrer.'
+    return
+  }
+
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+  reservationManagementMessage.value = ''
+
+  try {
+    const result = await requestApi<{ data: CarRentalReservation }>(`/api/v1/car-rental/reservations/${reservation.id}`, {
+      method: 'PATCH',
+      headers: contextHeaders(),
+      body: JSON.stringify({
+        vehicle_id: reservationManagementForm.vehicle_id,
+        pickup_at: reservationManagementForm.pickup_at,
+        due_at: reservationManagementForm.due_at,
+        expected_lock_version: reservation.lock_version,
+      }),
+    })
+    applyManagedReservation(result.data)
+    reservationManagementMessage.value = 'Réservation mise à jour. Le tarif et les paiements existants n’ont pas été modifiés.'
+    void loadCalendar()
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
+}
+
+async function executeReservationCheckOut(): Promise<void> {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+
+  try {
+    const result = await requestApi<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(`/api/v1/car-rental/reservations/${reservation.id}/check-out`, {
+      method: 'POST',
+      headers: contextHeaders(),
+      body: JSON.stringify({ expected_lock_version: reservation.lock_version }),
+    })
+    applyManagedReservation(result.data)
+    reservationManagementMessage.value = result.customer_notification_sent
+      ? 'Location mise en circulation. Le courriel client a été envoyé.'
+      : 'Location mise en circulation.'
+    void loadCalendar()
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
+}
+
+function requestReservationCheckOut(): void {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  requestConfirmation({
+    title: 'Mettre le véhicule en circulation',
+    message: `La réservation ${reservation.number} passera au statut « En circulation ».`,
+    confirm_label: 'Mettre en circulation',
+    action: executeReservationCheckOut,
+  })
+}
+
+async function extendReservation(): Promise<void> {
+  const reservation = selectedReservation.value
+  if (!reservation || !reservationManagementForm.extension_due_at) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = 'Saisissez la nouvelle date de retour.'
+    return
+  }
+
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+  reservationManagementMessage.value = ''
+
+  try {
+    const result = await requestApi<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(`/api/v1/car-rental/reservations/${reservation.id}/extend`, {
+      method: 'POST',
+      headers: contextHeaders(),
+      body: JSON.stringify({
+        due_at: reservationManagementForm.extension_due_at,
+        expected_lock_version: reservation.lock_version,
+      }),
+    })
+    applyManagedReservation(result.data)
+    reservationManagementMessage.value = result.customer_notification_sent
+      ? 'Date de retour mise à jour. Le courriel client a été envoyé.'
+      : 'Date de retour mise à jour. Toute facturation complémentaire est enregistrée séparément.'
+    void loadCalendar()
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
+}
+
+async function executeReservationReturn(): Promise<void> {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+
+  try {
+    const result = await requestApi<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(`/api/v1/car-rental/reservations/${reservation.id}/return`, {
+      method: 'POST',
+      headers: contextHeaders(),
+      body: JSON.stringify({ expected_lock_version: reservation.lock_version }),
+    })
+    applyManagedReservation(result.data)
+    reservationManagementMessage.value = result.customer_notification_sent
+      ? 'Retour enregistré. Le courriel client a été envoyé.'
+      : 'Retour enregistré. Le montant prévu au contrat n’a pas été recalculé.'
+    void loadCalendar()
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
+}
+
+function requestReservationReturn(): void {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  requestConfirmation({
+    title: 'Enregistrer le retour',
+    message: 'Le véhicule passera en préparation. Le tarif et les paiements existants ne seront pas modifiés.',
+    confirm_label: 'Enregistrer le retour',
+    action: executeReservationReturn,
+  })
+}
+
+async function executeReservationCancellation(): Promise<void> {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  reservationDetailsBusy.value = true
+  reservationManagementError.value = false
+
+  try {
+    const result = await requestApi<{ data: CarRentalReservation }>(`/api/v1/car-rental/reservations/${reservation.id}/cancel`, {
+      method: 'POST',
+      headers: contextHeaders(),
+      body: JSON.stringify({
+        reason_code: reservationManagementForm.cancellation_reason,
+        expected_lock_version: reservation.lock_version,
+      }),
+    })
+    applyManagedReservation(result.data)
+    reservationManagementMessage.value = 'Réservation annulée. Aucun remboursement n’a été créé automatiquement.'
+    void loadCalendar()
+  } catch (error) {
+    reservationManagementError.value = true
+    reservationManagementMessage.value = messageFrom(error)
+  } finally {
+    reservationDetailsBusy.value = false
+  }
+}
+
+function requestReservationCancellation(): void {
+  const reservation = selectedReservation.value
+  if (!reservation) return
+
+  requestConfirmation({
+    title: 'Annuler la réservation',
+    message: `La réservation ${reservation.number} sera annulée. Cette action ne crée pas de remboursement automatique.`,
+    confirm_label: 'Annuler la réservation',
+    danger: true,
+    action: executeReservationCancellation,
+  })
 }
 
 async function loadVehicles(): Promise<void> {
@@ -1386,7 +2096,7 @@ async function createVehicle(): Promise<void> {
       model: '',
       model_year: '',
       registration_number: '',
-      registration_status: 'official',
+      registration_status: 'normal',
       vin: '',
       latest_odometer_km: '0',
       site_id: siteId,
@@ -1507,7 +2217,7 @@ async function selectVehicle(vehicle: RentalVehicle): Promise<void> {
 
   selectedVehicle.value = vehicle
   vehicleRegistrationForm.registration_number = vehicle.registration_number ?? vehicle.code
-  vehicleRegistrationForm.registration_status = vehicle.registration_status ?? 'official'
+  vehicleRegistrationForm.registration_status = vehicle.registration_status ?? 'normal'
   vehicleDocumentsMessage.value = ''
   vehicleDocumentsError.value = false
   vehicleDocumentsBusy.value = true
@@ -1555,7 +2265,7 @@ async function updateVehicleRegistration(): Promise<void> {
     })
     applyVehicleUpdate(result.data)
     vehicleRegistrationForm.registration_number = result.data.registration_number ?? result.data.code
-    vehicleRegistrationForm.registration_status = result.data.registration_status ?? 'official'
+    vehicleRegistrationForm.registration_status = result.data.registration_status ?? 'normal'
     vehicleDocumentsMessage.value = 'Plaque mise à jour. L’ancienne plaque est conservée dans l’historique du véhicule.'
   } catch (error) {
     vehicleDocumentsError.value = true
@@ -1669,6 +2379,16 @@ async function loadCalendar(): Promise<void> {
 
 function openSection(section: string): void {
   activeSection.value = section
+
+  if (section === 'Réservations') {
+    void loadReservationList()
+  }
+  if (section === 'Calendrier') {
+    void loadCalendar()
+  }
+  if (section === 'Véhicules') {
+    void loadVehicles()
+  }
 }
 
 function changeCompany(): void {
@@ -1990,12 +2710,16 @@ onBeforeUnmount(() => {
         <section class="configuration-user-card" aria-labelledby="company-users-title">
           <div class="section-intro">
             <p class="eyebrow">Utilisateurs</p>
-            <h2 id="company-users-title">Créer un compte utilisateur Car Rental</h2>
-            <p>Ce compte est réel. Utilisez le courriel personnel de la personne ; un code est demandé à chaque connexion.</p>
+            <h2 id="company-users-title">Utilisateurs Car Rental</h2>
+            <p>Ajoutez, modifiez, désactivez ou supprimez définitivement un compte. Chaque action est journalisée.</p>
           </div>
 
           <div class="configuration-user-workspace">
             <form class="configuration-form" @submit.prevent="createCompanyUser">
+              <div class="section-intro">
+                <p class="eyebrow">Nouvel utilisateur</p>
+                <h3>Créer un compte</h3>
+              </div>
               <div class="form-field">
                 <label for="company-user-company-id">Société</label>
                 <select id="company-user-company-id" v-model="configurationCompanyId" name="company_id" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
@@ -2073,11 +2797,100 @@ onBeforeUnmount(() => {
                     <strong>{{ companyUser.name }}</strong>
                     <span>{{ companyUser.email }}</span>
                   </div>
-                  <p>{{ companyUserRoleLabel(companyUser.role_key) }}</p>
+                  <p>{{ companyUserRoleLabel(companyUser.role_key) }}<span v-if="!companyUser.is_active"> · Accès désactivé</span></p>
                   <small>{{ companyUser.site_scope === 'all' ? 'Toutes les adresses actives' : companyUser.sites.map((site) => site.name).join(', ') }}</small>
+                  <button v-if="!companyUser.is_system_owner" class="secondary-button company-user-manage-button" type="button" :disabled="configurationBusy" @click="selectCompanyUser(companyUser)">Gérer</button>
+                  <small v-else>Le compte propriétaire se gère depuis la sécurité du compte.</small>
                 </article>
               </div>
               <p v-else class="field-help">Aucun utilisateur n’est encore attribué à cette société.</p>
+            </section>
+          </div>
+        </section>
+
+        <section v-if="selectedCompanyUser" class="company-user-management-card" aria-labelledby="company-user-management-title">
+          <div class="section-intro">
+            <p class="eyebrow">Utilisateur sélectionné</p>
+            <h2 id="company-user-management-title">Gérer {{ selectedCompanyUser.name }}</h2>
+            <p>Modifiez l’accès de cet utilisateur pour la société sélectionnée.</p>
+          </div>
+
+          <p v-if="!selectedCompanyUser.can_edit_personal_profile" class="management-note">
+            Les informations personnelles et le mot de passe sont gérés par l’utilisateur, car ce compte est actif dans une autre société.
+          </p>
+
+          <form class="company-user-management-form" @submit.prevent="saveCompanyUser">
+            <div class="two-columns">
+              <div class="form-field">
+                <label for="managed-company-user-name">Nom complet</label>
+                <input id="managed-company-user-name" v-model.trim="companyUserManagementForm.name" type="text" maxlength="255" autocomplete="name" required :disabled="configurationBusy || !selectedCompanyUser.can_edit_personal_profile" :aria-invalid="Boolean(companyUserManagementErrors.name)" @input="clearManagedCompanyUserFieldError('name')" />
+                <span v-if="companyUserManagementErrors.name" class="field-error" role="alert">{{ companyUserManagementErrors.name }}</span>
+              </div>
+              <div class="form-field">
+                <label for="managed-company-user-email">Courriel personnel</label>
+                <input id="managed-company-user-email" v-model.trim="companyUserManagementForm.email" type="email" maxlength="254" autocomplete="email" required :disabled="configurationBusy || !selectedCompanyUser.can_edit_personal_profile" :aria-invalid="Boolean(companyUserManagementErrors.email)" @input="clearManagedCompanyUserFieldError('email')" />
+                <span v-if="companyUserManagementErrors.email" class="field-error" role="alert">{{ companyUserManagementErrors.email }}</span>
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="managed-company-user-role">Profil Car Rental</label>
+              <select id="managed-company-user-role" v-model="companyUserManagementForm.role_key" :disabled="configurationBusy" :aria-invalid="Boolean(companyUserManagementErrors.role_key)" @change="clearManagedCompanyUserFieldError('role_key')">
+                <option v-for="(label, roleKey) in carRentalUserRoleLabels" :key="roleKey" :value="roleKey">{{ label }}</option>
+              </select>
+              <span v-if="companyUserManagementErrors.role_key" class="field-error" role="alert">{{ companyUserManagementErrors.role_key }}</span>
+            </div>
+
+            <fieldset class="site-scope-fields" :disabled="configurationBusy">
+              <legend>Adresses autorisées</legend>
+              <label><input v-model="companyUserManagementForm.site_scope" type="radio" value="all" name="managed-company-user-site-scope" @change="onManagedCompanyUserSiteScopeChanged" /> Toutes les adresses actives</label>
+              <label><input v-model="companyUserManagementForm.site_scope" type="radio" value="selected" name="managed-company-user-site-scope" @change="onManagedCompanyUserSiteScopeChanged" /> Adresses sélectionnées</label>
+              <div v-if="companyUserManagementForm.site_scope === 'selected'" class="site-checkbox-list">
+                <label v-for="site in selectedConfigurationCompany?.sites ?? []" :key="site.id">
+                  <input v-model="companyUserManagementForm.site_ids" type="checkbox" :value="site.id" :disabled="configurationBusy" @change="clearManagedCompanyUserFieldError('site_ids')" />
+                  {{ site.name }} · {{ site.code }}
+                </label>
+              </div>
+            </fieldset>
+            <span v-if="companyUserManagementErrors.site_scope" class="field-error" role="alert">{{ companyUserManagementErrors.site_scope }}</span>
+            <span v-if="companyUserManagementErrors.site_ids" class="field-error" role="alert">{{ companyUserManagementErrors.site_ids }}</span>
+
+            <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online'">
+              {{ configurationBusy ? 'Enregistrement…' : 'Enregistrer les modifications' }}
+            </button>
+          </form>
+
+          <div class="company-user-management-actions">
+            <section>
+              <h3>Accès à la société</h3>
+              <p>{{ selectedCompanyUser.is_active ? 'L’utilisateur peut accéder à cette société.' : 'L’accès à cette société est désactivé.' }}</p>
+              <button v-if="selectedCompanyUser.is_active" class="secondary-button" type="button" :disabled="configurationBusy || apiStatus !== 'online'" @click="requestCompanyUserStatusChange(false)">Désactiver l’accès</button>
+              <button v-else class="primary-button" type="button" :disabled="configurationBusy || apiStatus !== 'online'" @click="requestCompanyUserStatusChange(true)">Réactiver l’accès</button>
+            </section>
+
+            <section v-if="selectedCompanyUser.can_edit_personal_profile">
+              <h3>Réinitialiser le mot de passe</h3>
+              <p>Le nouveau mot de passe doit contenir au moins 12 caractères, une majuscule, une minuscule, un chiffre et un symbole.</p>
+              <form class="password-reset-form" @submit.prevent="resetCompanyUserPassword">
+                <label for="managed-company-user-password">
+                  Nouveau mot de passe
+                  <input id="managed-company-user-password" v-model="companyUserManagementForm.password" type="password" minlength="12" autocomplete="new-password" :disabled="configurationBusy" :aria-invalid="Boolean(companyUserManagementErrors.password)" @input="clearManagedCompanyUserFieldError('password')" />
+                </label>
+                <span v-if="companyUserManagementErrors.password" class="field-error" role="alert">{{ companyUserManagementErrors.password }}</span>
+                <label for="managed-company-user-password-confirmation">
+                  Confirmer le nouveau mot de passe
+                  <input id="managed-company-user-password-confirmation" v-model="companyUserManagementForm.password_confirmation" type="password" minlength="12" autocomplete="new-password" :disabled="configurationBusy" :aria-invalid="Boolean(companyUserManagementErrors.password_confirmation)" @input="clearManagedCompanyUserFieldError('password_confirmation')" />
+                </label>
+                <span v-if="companyUserManagementErrors.password_confirmation" class="field-error" role="alert">{{ companyUserManagementErrors.password_confirmation }}</span>
+                <button class="secondary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online'">Réinitialiser le mot de passe</button>
+              </form>
+            </section>
+
+            <section class="danger-zone">
+              <h3>Supprimer définitivement</h3>
+              <p>Le compte sera supprimé. Les transactions et le journal d’audit restent conservés.</p>
+              <button class="danger-button" type="button" :disabled="configurationBusy || apiStatus !== 'online' || !selectedCompanyUser.can_delete_permanently" @click="requestCompanyUserDeletion">Supprimer l’utilisateur</button>
+              <p v-if="!selectedCompanyUser.can_delete_permanently" class="field-help">La suppression définitive n’est pas disponible pour un compte rattaché à une autre société.</p>
             </section>
           </div>
         </section>
@@ -2443,6 +3256,149 @@ onBeforeUnmount(() => {
                 </div>
               </aside>
             </div>
+
+            <section v-if="hasPermission('rental.reservations.read')" class="reservation-management-card" aria-labelledby="reservation-management-title">
+              <div class="section-intro">
+                <p class="eyebrow">Suivi des réservations</p>
+                <h3 id="reservation-management-title">Rechercher et gérer</h3>
+                <p>La liste du mois en cours est chargée automatiquement. Recherchez par référence ou par plaque, puis affinez si nécessaire.</p>
+              </div>
+
+              <form class="reservation-search-form" @submit.prevent="loadReservationList">
+                <label>
+                  Référence ou plaque
+                  <input v-model.trim="reservationListFilters.query" type="search" inputmode="search" maxlength="32" placeholder="Ex. 0000 0001 ou LO-01723" :disabled="reservationListBusy" />
+                </label>
+                <label>
+                  État
+                  <select v-model="reservationListFilters.state" :disabled="reservationListBusy">
+                    <option value="">Tous les états</option>
+                    <option v-for="(label, state) in reservationStateLabels" :key="state" :value="state">{{ label }}</option>
+                  </select>
+                </label>
+                <label>
+                  Du
+                  <input v-model="reservationListFilters.from" type="date" required :disabled="reservationListBusy" />
+                </label>
+                <label>
+                  Au
+                  <input v-model="reservationListFilters.to" type="date" required :disabled="reservationListBusy" />
+                </label>
+                <button class="refresh-button reservation-search-submit" type="submit" :disabled="reservationListBusy || apiStatus !== 'online'">
+                  {{ reservationListBusy ? 'Actualisation…' : 'Actualiser' }}
+                </button>
+              </form>
+              <p v-if="reservationListMessage" class="rental-message" :class="{ error: reservationListError }" role="status">{{ reservationListMessage }}</p>
+
+              <div class="reservation-management-workspace">
+                <section class="reservation-result-list" aria-label="Résultats de réservation">
+                  <p v-if="reservationListBusy" class="field-help">Chargement des réservations…</p>
+                  <div v-else-if="reservationList.length" class="reservation-result-grid">
+                    <button
+                      v-for="entry in reservationList"
+                      :key="entry.id"
+                      class="reservation-result-card"
+                      :class="{ selected: selectedReservation?.id === entry.id }"
+                      type="button"
+                      :disabled="reservationDetailsBusy"
+                      @click="selectReservation(entry)"
+                    >
+                      <span class="vehicle-code">{{ entry.number }}</span>
+                      <strong>{{ entry.vehicle?.code ?? 'Véhicule non disponible' }}</strong>
+                      <span>{{ entry.customer?.display_name ?? 'Client non disponible' }}</span>
+                      <small>{{ formatCapHaitienDateTime(entry.pickup_at) }} → {{ formatCapHaitienDateTime(entry.due_at) }}</small>
+                      <span class="status-chip" :class="`reservation-${entry.state}`">{{ reservationStateLabels[entry.state] }}</span>
+                    </button>
+                  </div>
+                  <p v-else class="field-help">Aucune réservation à afficher.</p>
+                </section>
+
+                <section class="reservation-action-panel" aria-live="polite">
+                  <p v-if="reservationDetailsBusy" class="field-help">Chargement de la réservation…</p>
+                  <p v-else-if="!selectedReservation" class="field-help">Sélectionnez une réservation pour voir les actions disponibles.</p>
+                  <template v-else>
+                    <div class="reservation-action-heading">
+                      <div>
+                        <p class="eyebrow">Réservation {{ selectedReservation.number }}</p>
+                        <h4>{{ selectedReservation.vehicle?.code ?? 'Véhicule non disponible' }}</h4>
+                        <p>{{ selectedReservation.customer?.display_name }}</p>
+                      </div>
+                      <span class="status-chip" :class="`reservation-${selectedReservation.state}`">{{ reservationStateLabels[selectedReservation.state] }}</span>
+                    </div>
+
+                    <dl class="reservation-facts">
+                      <div>
+                        <dt>Départ prévu</dt>
+                        <dd>{{ formatCapHaitienDateTime(selectedReservation.pickup_at) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Retour prévu</dt>
+                        <dd>{{ formatCapHaitienDateTime(selectedReservation.due_at) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Adresse</dt>
+                        <dd>{{ selectedReservation.site?.name ?? 'Non disponible' }}</dd>
+                      </div>
+                    </dl>
+
+                    <p v-if="reservationManagementMessage" class="rental-message" :class="{ error: reservationManagementError }" role="status">{{ reservationManagementMessage }}</p>
+
+                    <form v-if="selectedReservation.state === 'reserved' && hasPermission('rental.reservations.manage')" class="reservation-action-form" @submit.prevent="saveReservationSchedule">
+                      <h5>Modifier la réservation</h5>
+                      <div class="two-columns">
+                        <label>
+                          Départ prévu
+                          <input v-model="reservationManagementForm.pickup_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
+                        </label>
+                        <label>
+                          Retour prévu
+                          <input v-model="reservationManagementForm.due_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
+                        </label>
+                      </div>
+                      <label>
+                        Véhicule
+                        <select v-model="reservationManagementForm.vehicle_id" required :disabled="reservationDetailsBusy">
+                          <option v-if="selectedReservation.vehicle" :value="selectedReservation.vehicle.id">{{ selectedReservation.vehicle.code }} · {{ vehicleDisplayName(selectedReservation.vehicle) }}</option>
+                          <option v-for="vehicle in reservationManagementVehicles" :key="vehicle.id" :value="vehicle.id">
+                            {{ vehicle.code }} · {{ vehicleDisplayName(vehicle) }} · {{ vehicleStatusLabels[vehicle.operational_status] }}
+                          </option>
+                        </select>
+                      </label>
+                      <p class="field-help">Le système vérifie le véhicule et la période au moment de l’enregistrement.</p>
+                      <div class="reservation-action-buttons">
+                        <button class="secondary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Enregistrer les modifications</button>
+                        <button class="primary-button" type="button" :disabled="reservationDetailsBusy || apiStatus !== 'online'" @click="requestReservationCheckOut">Mettre en circulation</button>
+                      </div>
+                      <div class="reservation-cancel-row">
+                        <label>
+                          Motif d’annulation
+                          <select v-model="reservationManagementForm.cancellation_reason" :disabled="reservationDetailsBusy">
+                            <option v-for="(label, reason) in reservationCancellationReasonLabels" :key="reason" :value="reason">{{ label }}</option>
+                          </select>
+                        </label>
+                        <button class="danger-button" type="button" :disabled="reservationDetailsBusy || apiStatus !== 'online'" @click="requestReservationCancellation">Annuler la réservation</button>
+                      </div>
+                    </form>
+
+                    <form v-else-if="selectedReservation.state === 'checked_out' && hasPermission('rental.reservations.manage')" class="reservation-action-form" @submit.prevent="extendReservation">
+                      <h5>Location en circulation</h5>
+                      <label>
+                        Nouvelle date de retour
+                        <input v-model="reservationManagementForm.extension_due_at" type="datetime-local" required :disabled="reservationDetailsBusy" />
+                      </label>
+                      <p class="field-help">En cas de conflit, la réservation suivante reste inchangée et aucune information client n’est affichée.</p>
+                      <div class="reservation-action-buttons">
+                        <button class="secondary-button" type="submit" :disabled="reservationDetailsBusy || apiStatus !== 'online'">Prolonger la location</button>
+                        <button class="primary-button" type="button" :disabled="reservationDetailsBusy || apiStatus !== 'online'" @click="requestReservationReturn">Enregistrer le retour</button>
+                      </div>
+                      <p class="field-help">Un retour anticipé conserve le retour prévu, le tarif et les paiements existants. Aucun remboursement n’est créé automatiquement.</p>
+                    </form>
+
+                    <p v-else class="field-help">Aucune autre action n’est disponible pour cette réservation.</p>
+                  </template>
+                </section>
+              </div>
+            </section>
           </template>
 
           <template v-else-if="activeSection === 'Calendrier'">
@@ -2460,7 +3416,7 @@ onBeforeUnmount(() => {
                 <form class="planning-form" @submit.prevent="loadCalendar">
                   <label>
                     Adresse
-                    <select v-model="calendarForm.site_id" :disabled="calendarBusy">
+                    <select v-model="calendarForm.site_id" :disabled="calendarBusy" @change="loadCalendar">
                       <option value="">Toutes les adresses autorisées</option>
                       <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
                         {{ site.name }} · {{ site.address }}
@@ -2468,15 +3424,15 @@ onBeforeUnmount(() => {
                     </select>
                   </label>
                   <label>
-                    Début
-                    <input v-model="calendarForm.from" type="date" required :disabled="calendarBusy" />
+                    Du
+                    <input v-model="calendarForm.from" type="date" required :disabled="calendarBusy" @change="loadCalendar" />
                   </label>
                   <label>
-                    Fin
-                    <input v-model="calendarForm.to" type="date" required :disabled="calendarBusy" />
+                    Au
+                    <input v-model="calendarForm.to" type="date" required :disabled="calendarBusy" @change="loadCalendar" />
                   </label>
                   <button class="primary-button planning-submit" type="submit" :disabled="calendarBusy || apiStatus !== 'online'">
-                    {{ calendarBusy ? 'Actualisation…' : 'Afficher le planning' }}
+                    {{ calendarBusy ? 'Actualisation…' : 'Actualiser' }}
                   </button>
                 </form>
                 <p v-if="calendarMessage" class="rental-message" :class="{ error: calendarError }" role="status">
@@ -2501,7 +3457,7 @@ onBeforeUnmount(() => {
                     <small>{{ vehicle.site?.name ?? 'Adresse non disponible' }} · {{ categoryLabels[vehicle.category] }}</small>
                   </article>
                 </div>
-                <p v-else class="field-help">Affichez le planning pour consulter l’état des véhicules actifs.</p>
+                <p v-else class="field-help">Aucun véhicule actif n’est disponible pour les critères sélectionnés.</p>
               </section>
 
               <section class="calendar-list-card" aria-labelledby="calendar-list-title">
@@ -2551,7 +3507,7 @@ onBeforeUnmount(() => {
                 <form class="vehicle-filter-form" @submit.prevent="loadVehicles">
                   <label>
                     Adresse
-                    <select v-model="vehicleFilters.site_id" :disabled="vehicleBusy">
+                    <select v-model="vehicleFilters.site_id" :disabled="vehicleBusy" @change="loadVehicles">
                       <option value="">Toutes les adresses autorisées</option>
                       <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
                         {{ site.name }} · {{ site.address }}
@@ -2560,13 +3516,13 @@ onBeforeUnmount(() => {
                   </label>
                   <label>
                     État opérationnel
-                    <select v-model="vehicleFilters.operational_status" :disabled="vehicleBusy">
+                    <select v-model="vehicleFilters.operational_status" :disabled="vehicleBusy" @change="loadVehicles">
                       <option value="">Tous les états</option>
                       <option v-for="(label, status) in vehicleStatusLabels" :key="status" :value="status">{{ label }}</option>
                     </select>
                   </label>
                   <button class="refresh-button vehicle-filter-submit" type="submit" :disabled="vehicleBusy || apiStatus !== 'online'">
-                    {{ vehicleBusy ? 'Actualisation…' : 'Afficher les véhicules' }}
+                    {{ vehicleBusy ? 'Actualisation…' : 'Actualiser' }}
                   </button>
                 </form>
                 <p v-if="vehicleMessage" class="rental-message" :class="{ error: vehicleError }" role="status">
@@ -2576,7 +3532,7 @@ onBeforeUnmount(() => {
                 <div v-if="managedVehicles.length" class="managed-vehicle-grid">
                   <article v-for="vehicle in managedVehicles" :key="vehicle.id" class="managed-vehicle-card" :class="{ selected: selectedVehicle?.id === vehicle.id }">
                     <div>
-                      <span class="vehicle-code">Plaque · {{ registrationStatusLabels[vehicle.registration_status ?? 'official'] }}</span>
+                      <span class="vehicle-code">Plaque · {{ registrationStatusLabels[vehicle.registration_status ?? 'normal'] }}</span>
                       <h4>{{ vehicle.registration_number ?? vehicle.code }}</h4>
                       <p>{{ vehicleDisplayName(vehicle) }}</p>
                       <p>{{ vehicle.site?.name ?? 'Adresse non disponible' }} · {{ categoryLabels[vehicle.category] }}</p>
@@ -2616,14 +3572,14 @@ onBeforeUnmount(() => {
                     </button>
                   </article>
                 </div>
-                <p v-else class="field-help">Utilisez les critères puis sélectionnez « Afficher les véhicules ».</p>
+                <p v-else class="field-help">Aucun véhicule ne correspond aux critères sélectionnés.</p>
               </section>
 
               <section v-if="canManageVehicles" class="vehicle-create-card" aria-labelledby="vehicle-create-title">
                 <div class="section-intro">
                   <p class="eyebrow">Nouveau véhicule</p>
                   <h3 id="vehicle-create-title">Ajouter à la flotte</h3>
-                  <p>La plaque en cours identifie le véhicule. Une plaque « Démonstration » est remplacée lorsqu’une plaque officielle est attribuée.</p>
+                  <p>La plaque en cours identifie le véhicule. Sélectionnez son type : Démonstration, Location ou Normale.</p>
                 </div>
 
                 <form class="vehicle-create-form" @submit.prevent="createVehicle">
@@ -2775,8 +3731,39 @@ onBeforeUnmount(() => {
       </template>
     </template>
 
+    <div v-if="confirmationRequest" class="confirmation-backdrop" role="presentation">
+      <section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message">
+        <h2 id="confirmation-title">{{ confirmationRequest.title }}</h2>
+        <p id="confirmation-message">{{ confirmationRequest.message }}</p>
+        <div class="confirmation-actions">
+          <button class="secondary-button" type="button" :disabled="confirmationBusy" @click="cancelConfirmation">Annuler</button>
+          <button :class="confirmationRequest.danger ? 'danger-button' : 'primary-button'" type="button" :disabled="confirmationBusy" @click="confirmRequestedAction">
+            {{ confirmationBusy ? 'Traitement…' : confirmationRequest.confirm_label }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="deletionConfirmationOpen && deletionConfirmationUser" class="confirmation-backdrop" role="presentation">
+      <section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="deletion-confirmation-title" aria-describedby="deletion-confirmation-message">
+        <h2 id="deletion-confirmation-title">Confirmer la suppression définitive</h2>
+        <p id="deletion-confirmation-message">Saisissez le courriel de l’utilisateur pour confirmer la suppression de ce compte.</p>
+        <label for="deletion-confirmation-email" class="dialog-field">
+          Courriel à confirmer
+          <input id="deletion-confirmation-email" v-model.trim="deletionConfirmationEmail" type="email" inputmode="email" autocomplete="off" :placeholder="deletionConfirmationUser.email" :disabled="configurationBusy" @keyup.enter="executeCompanyUserDeletion" />
+        </label>
+        <span v-if="companyUserManagementErrors.confirmation_email" class="field-error" role="alert">{{ companyUserManagementErrors.confirmation_email }}</span>
+        <div class="confirmation-actions">
+          <button class="secondary-button" type="button" :disabled="configurationBusy" @click="closeDeletionConfirmation">Annuler</button>
+          <button class="danger-button" type="button" :disabled="configurationBusy || deletionConfirmationEmail.trim().toLowerCase() !== deletionConfirmationUser.email.toLowerCase()" @click="executeCompanyUserDeletion">
+            {{ configurationBusy ? 'Suppression…' : 'Supprimer définitivement' }}
+          </button>
+        </div>
+      </section>
+    </div>
+
     <footer class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.10' }}</span>
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.11' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>

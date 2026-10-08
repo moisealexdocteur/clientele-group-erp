@@ -25,6 +25,7 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Le premier écran mobile affiche le formulaire ou l’action principale avant tout contenu de contexte.
 - Une description ne répète pas le titre ; elle explique uniquement la prochaine décision ou une règle importante.
 - Les formulaires de configuration utilisent des titres courts : `Ajouter une société`, `Ajouter une adresse`, `Ajouter une caisse`.
+- Une liste ou un planning affiche une période utile par défaut. L’utilisateur affine seulement si nécessaire.
 
 ## Menus
 
@@ -44,6 +45,7 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 ## Dialogues et notifications
 
 - Un dialogue doit indiquer le résultat attendu, les conséquences importantes et l’action principale.
+- Toute action destructive utilise un bouton distinct, une confirmation explicite et, pour une suppression définitive, une vérification complémentaire de la cible.
 - Aucun dialogue ne doit demander une information déjà connue par le système.
 - Les erreurs de validation restent près du champ ou expliquent précisément le champ concerné.
 - Une erreur technique ou une clé interne telle que `validation.regex` ne doit jamais être affichée à l’utilisateur.
@@ -57,6 +59,7 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Un véhicule utilise un seul identifiant visible : sa plaque en cours. L’interface ne demande pas un code interne distinct.
 - Lorsqu’une plaque `Démonstration` est remplacée, le message confirme que l’ancienne plaque reste dans l’historique du véhicule.
 - Le formulaire d’utilisateur affiche la règle complète du mot de passe avant l’enregistrement : au moins 12 caractères, majuscule, minuscule, chiffre et symbole.
+- Le détail d’un utilisateur permet d’enregistrer les modifications, désactiver, réactiver, réinitialiser le mot de passe ou supprimer définitivement, avec des libellés d’action explicites.
 
 ## Contrôle avant livraison
 

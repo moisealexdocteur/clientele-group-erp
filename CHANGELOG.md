@@ -2,12 +2,36 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.11 - 2026-10-08
+
+### Ajouté
+
+- Gestion opérationnelle des réservations Car Rental : recherche par référence ou plaque, modification avant remise, mise en circulation, prolongation, retour et annulation.
+- Le planning et la liste des réservations chargent le mois courant par défaut. Pendant les sept derniers jours du mois, la vue inclut aussi les sept premiers jours du mois suivant.
+- Courriels client Car Rental au même format que le code de sécurité : confirmation de réservation, remise du véhicule, prolongation et retour.
+- Service de notification de facture prêt à joindre un PDF réel et validé. Un contrat signé peut être joint par son module lorsqu’il existe réellement.
+- Gestion complète d’un utilisateur Car Rental : modification du rôle et des adresses, désactivation/réactivation locale, réinitialisation du mot de passe et suppression définitive après double confirmation.
+- Courriel de création de compte envoyé au nouvel utilisateur, sans mot de passe dans le message ou le journal.
+
+### Corrigé
+
+- Les trois types de plaques Car Rental sont `Démonstration`, `Location` et `Normale`. Les anciennes valeurs techniques sont converties vers `Normale` par migration.
+- Le calendrier mobile utilise la date Cap-Haïtien lors du calcul de sa période par défaut.
+- Les dialogues de confirmation sont affichés pour les actions qui modifient une réservation ou un compte.
+
+### Sécurité
+
+- Une prolongation qui chevauche une réservation future est refusée sans révéler l’identité du client concerné.
+- Un retour anticipé conserve le tarif, la date contractuelle et les paiements existants. Aucun remboursement n’est généré automatiquement.
+- La suppression définitive est refusée pour le propriétaire système ou pour un compte rattaché à une autre société. Les transactions et le journal d’audit ne sont pas supprimés.
+- Les courriels client ne sont journalisés qu’avec l’état de l’envoi et le nombre de pièces jointes, sans courriel, téléphone, document ou contenu PDF dans l’audit.
+
 ## 0.2.0-alpha.10 - 2026-10-08
 
 ### Ajouté
 
 - La plaque d’immatriculation en cours est désormais l’identifiant unique visible d’un véhicule Car Rental. Aucun code interne distinct n’est demandé.
-- Une plaque `Démonstration` peut être remplacée par une plaque `Officielle`. Le changement est journalisé et l’ancienne plaque reste dans l’historique du véhicule.
+- Une plaque `Démonstration`, `Location` ou `Normale` peut être remplacée. Le changement est journalisé et l’ancienne plaque reste dans l’historique du véhicule.
 - Suivi simple des papiers de la flotte : immatriculation, assurance OAVCT et permis de vitres teintées. Les échéances OAVCT et vitres teintées sont affichées comme à jour, proche, expirée ou non renseignée.
 - Création d’utilisateurs Car Rental depuis Configuration système : profil, portée de toutes les adresses ou d’adresses sélectionnées, courriel personnel, mot de passe initial et 2FA par courriel à la première connexion.
 - L’adresse du bureau sélectionné est conservée comme lieu de départ par défaut. Les frais de prise en charge et de retour à l’Aéroport International du Cap-Haïtien peuvent être sélectionnés séparément, à 20 USD chacun.

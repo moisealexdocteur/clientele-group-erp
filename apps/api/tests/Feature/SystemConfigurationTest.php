@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AccountCreatedMail;
 use App\Models\ApiAccessToken;
 use App\Models\AuditEvent;
 use App\Models\CompanyUserAccess;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 final class SystemConfigurationTest extends TestCase
@@ -173,6 +175,8 @@ final class SystemConfigurationTest extends TestCase
 
     public function test_owner_can_create_a_real_car_rental_user_with_a_limited_site_scope(): void
     {
+        Mail::fake();
+
         $owner = User::factory()->create([
             'is_active' => true,
             'system_role' => 'owner',
@@ -212,6 +216,7 @@ final class SystemConfigurationTest extends TestCase
             ->assertJsonPath('data.email', 'agent.test.car-rental@example.test')
             ->assertJsonPath('data.role_key', 'car_rental_agent')
             ->assertJsonPath('data.site_scope', 'selected')
+            ->assertJsonPath('notification.sent', true)
             ->assertJsonCount(1, 'data.sites')
             ->assertJsonPath('data.sites.0.id', $siteA)
             ->json('data');
@@ -238,6 +243,12 @@ final class SystemConfigurationTest extends TestCase
             'is_active' => true,
         ]);
 
+        Mail::assertSent(AccountCreatedMail::class, function (AccountCreatedMail $mail): bool {
+            return $mail->recipientName === 'Agent test Car Rental'
+                && $mail->companyName === 'Clientèle Rent a Car'
+                && $mail->roleLabel === 'Agent de location';
+        });
+
         $this->withToken($ownerToken)
             ->getJson("/api/v1/system/configuration/companies/{$companyId}/users")
             ->assertOk()
@@ -262,6 +273,80 @@ final class SystemConfigurationTest extends TestCase
             ->firstOrFail();
         $this->assertArrayNotHasKey('email', $audit->metadata);
         $this->assertSame('car_rental_agent', $audit->metadata['role_key']);
+    }
+
+    public function test_owner_can_manage_then_permanently_delete_an_unshared_company_user(): void
+    {
+        Mail::fake();
+
+        $owner = User::factory()->create([
+            'is_active' => true,
+            'system_role' => 'owner',
+        ]);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $companyId = $this->createCompany($ownerToken, 'RENT-MANAGE', 'Clientèle Rent a Car');
+
+        $created = $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$companyId}/users", [
+                'name' => 'Utilisateur à gérer',
+                'email' => 'utilisateur.a.gerer@example.test',
+                'password' => 'MotDePasse!2026',
+                'password_confirmation' => 'MotDePasse!2026',
+                'role_key' => 'car_rental_agent',
+                'site_scope' => 'all',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.can_delete_permanently', true)
+            ->json('data');
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}/users/{$created['id']}", [
+                'name' => 'Utilisateur mis à jour',
+                'email' => 'utilisateur.a.gerer@example.test',
+                'role_key' => 'car_rental_fleet',
+                'site_scope' => 'all',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Utilisateur mis à jour')
+            ->assertJsonPath('data.role_key', 'car_rental_fleet');
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}/users/{$created['id']}/status", ['is_active' => false])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}/users/{$created['id']}/status", ['is_active' => true])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', true);
+
+        $employee = User::query()->findOrFail($created['user_id']);
+        [, $employeeToken] = ApiAccessToken::issueFor($employee, Request::create('/api/v1/auth/login', 'POST'));
+
+        $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$companyId}/users/{$created['id']}/reset-password", [
+                'password' => 'NouveauMotDePasse!2026',
+                'password_confirmation' => 'NouveauMotDePasse!2026',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Mot de passe réinitialisé. Les sessions existantes ont été fermées. Un code par courriel sera demandé à la prochaine connexion.');
+
+        $this->assertDatabaseHas('api_access_tokens', [
+            'token_hash' => hash('sha256', $employeeToken),
+        ]);
+
+        $this->withToken($ownerToken)
+            ->deleteJson("/api/v1/system/configuration/companies/{$companyId}/users/{$created['id']}", [
+                'confirmation_email' => 'utilisateur.a.gerer@example.test',
+            ])
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('users', ['id' => $created['user_id']]);
+        $this->assertDatabaseMissing('company_user_access', ['id' => $created['id']]);
+        $this->assertDatabaseHas('audit_events', [
+            'event_type' => 'configuration.company_user_deleted',
+            'subject_id' => $created['user_id'],
+        ]);
     }
 
     private function createCompany(string $token, string $code, string $name): string

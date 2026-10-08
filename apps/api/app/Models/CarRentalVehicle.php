@@ -23,7 +23,8 @@ final class CarRentalVehicle extends Model
 
     public const REGISTRATION_STATUSES = [
         'demonstration',
-        'official',
+        'location',
+        'normal',
     ];
 
     public $incrementing = false;

@@ -10,7 +10,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('car_rental_vehicles', function (Blueprint $table): void {
-            $table->string('registration_status', 16)->default('official')->after('registration_number');
+            $table->string('registration_status', 16)->default('normal')->after('registration_number');
         });
 
         /*
