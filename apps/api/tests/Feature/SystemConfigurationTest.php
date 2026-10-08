@@ -379,6 +379,40 @@ final class SystemConfigurationTest extends TestCase
         self::assertContains('tax_identification_number', $event->metadata['changed']);
     }
 
+    public function test_the_owner_records_the_rental_contract_terms_without_losing_them_on_identity_updates(): void
+    {
+        $owner = User::factory()->create(['is_active' => true, 'system_role' => 'owner']);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $companyId = $this->createCompany($ownerToken, 'RENT-TERMS', 'Clientèle Rent a Car');
+        $identity = [
+            'legal_name' => 'Clientèle Rent A Car',
+            'display_name' => 'Clientèle Rent a Car',
+        ];
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}", [
+                ...$identity,
+                'rental_contract_terms' => "Article 1 - Objet\nTexte de test.",
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.rental_contract_terms', "Article 1 - Objet\nTexte de test.");
+
+        // Une mise à jour de l'identité sans les conditions ne les efface pas.
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}", [
+                ...$identity,
+                'phone_numbers' => '(+509) 0000-0000',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.rental_contract_terms', "Article 1 - Objet\nTexte de test.");
+
+        $this->withToken($ownerToken)
+            ->withHeader('X-Clientele-Company-Id', $companyId)
+            ->getJson('/api/v1/context')
+            ->assertOk()
+            ->assertJsonPath('company.legal.rental_contract_terms', "Article 1 - Objet\nTexte de test.");
+    }
+
     private function createCompany(string $token, string $code, string $name): string
     {
         return $this->withToken($token)

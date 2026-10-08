@@ -1,6 +1,6 @@
 # Reprise du projet Clientèle Group ERP
 
-Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire) et 0.4.0-alpha.1 (réservations, paiements et design Fluent).
+Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire), 0.4.0-alpha.1 (réservations, paiements et design Fluent) et 0.5.0-alpha.1 (permis, fiche de sortie, signatures et contrat).
 
 ## 1. Source de vérité et état de déploiement
 
@@ -9,10 +9,10 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `cdc1152220cc4aa62b02548473d457a397b3495c` |
-| Version du dépôt | `0.4.0-alpha.1` (réservations, paiements, design Fluent, à déployer) |
-| Dernière version déployée | `0.3.0-alpha.1` |
+| Version du dépôt | `0.5.0-alpha.1` (permis, fiche de sortie, signatures, contrat PDF, à déployer) |
+| Dernière version déployée | `0.4.0-alpha.1` |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-2ce2d48` |
+| Image API et web déployée | `sha-55b85e5` |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
@@ -154,12 +154,14 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 - Ne jamais envoyer la plaque d'immatriculation au client.
 - Le courriel doit utiliser la photo réellement choisie dans la fiche véhicule si elle peut être envoyée sans afficher la plaque. Sinon, supprimer l'image ou utiliser une illustration décrite exactement comme une illustration. Ne jamais présenter une illustration générique comme la photo du véhicule.
 - Lorsqu'ils seront générés et validés, joindre la facture PDF et le contrat signé PDF. Ne jamais annoncer ou joindre un PDF fictif.
+- Le contrat signé contient la plaque et le numéro de permis : il n'est pas envoyé automatiquement par courriel (envoi seulement sur demande explicite, `send_to_customer`).
+- Le texte des articles du contrat appartient au propriétaire et se saisit dans la configuration de la société. Ne jamais l'inventer ni le versionner.
 
 ## 7. Correctifs prioritaires non terminés
 
 L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent être repris avant d'ajouter d'autres modules.
 
-État au 0.4.0-alpha.1 : les points marqués « Fait » sont réalisés. Le reste est prévu dans la livraison 2 (permis international, fiche de sortie, signatures tactiles, contrat PDF). Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md`.
+État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Restent pour Car Rental : croquis des dommages, inspection de retour avec libération du dépôt, facture PDF, P1 courriel.
 
 ### P0 : disponibilité et navigation (fait)
 
@@ -177,7 +179,7 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 4. Afficher et permettre de modifier les tarifs et le dépôt minimum uniquement selon les permissions.
 5. Utiliser la photo sélectionnée de la fiche dans l'interface et, si elle est sûre, dans le courriel.
 
-### P0 : permis et mise en circulation (points 4 et 5 faits ; points 1 à 3 : livraison 2, stockage de fichiers déjà en place)
+### P0 : permis et mise en circulation (fait)
 
 1. Ajouter une zone d'ajout de photo du permis de conduire avec stockage contrôlé, type de fichier, taille maximale, hash, accès restreint et journalisation.
 2. Ajouter pays émetteur et province ou État émetteur.

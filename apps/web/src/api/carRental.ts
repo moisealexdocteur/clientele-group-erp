@@ -6,9 +6,11 @@ import type {
   CarRentalReservation,
   CarRentalReservationListResponse,
   Currency,
+  FuelLevel,
   FuelType,
   KilometerPlan,
   PaymentMethod,
+  RentalAccessory,
   RentalCategory,
   RentalLocation,
   RentalVehicle,
@@ -240,15 +242,43 @@ export function notifyReservation(reservationId: string) {
   })
 }
 
-export function checkOutReservation(reservation: CarRentalReservation, payload: {
+export interface CheckOutPayload {
   driver_full_name: string
   driver_license_number: string
   driver_license_expires_at: string
+  driver_license_country: string
+  driver_license_subdivision?: string
+  driver_license_front_file_id: string
+  driver_license_back_file_id: string
   driver_license_verified: boolean
-}) {
+  additional_driver_name?: string
+  additional_driver_license_number?: string
+  odometer_km: number
+  fuel_level_percent: FuelLevel
+  accessories: RentalAccessory[]
+  damage_notes?: string
+  inspection_photo_file_ids: string[]
+  terms_accepted: boolean
+  customer_signature_file_id: string
+  company_signature_file_id: string
+  company_signer_name: string
+}
+
+export function checkOutReservation(reservation: CarRentalReservation, payload: CheckOutPayload) {
   return api<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(
     `${base}/reservations/${reservation.id}/check-out`,
     { method: 'POST', body: { ...payload, expected_lock_version: reservation.lock_version } },
+  )
+}
+
+/**
+ * Rattache le contrat PDF signé. Le contrat est définitif. Il n'est pas
+ * envoyé par courriel : il contient la plaque et le numéro de permis.
+ */
+export function attachContract(reservationId: string, fileId: string) {
+  return api<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(
+    `${base}/reservations/${reservationId}/contract`,
+    { method: 'POST', body: { file_id: fileId } },
   )
 }
 

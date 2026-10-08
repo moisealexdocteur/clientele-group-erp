@@ -78,6 +78,7 @@ export interface CompanyLegalIdentity {
   tax_identification_number: string | null
   address: string | null
   phone_numbers: string | null
+  rental_contract_terms?: string | null
 }
 
 export type FuelType = 'gasoline' | 'diesel'
@@ -186,6 +187,8 @@ export interface CarRentalSecurityDeposit {
 }
 
 export interface CheckoutRequirements {
+  /** Conditions générales du contrat saisies par le propriétaire. */
+  contract_terms_configured: boolean
   driver_license_verified: boolean
   approved_rental_payment: boolean
   minimum_security_deposit_configured: boolean
@@ -225,6 +228,82 @@ export interface CarRentalReservation {
   payments: CarRentalPayment[] | null
   security_deposits: CarRentalSecurityDeposit[] | null
   checkout_requirements: CheckoutRequirements
+  /** Renvoyé seulement aux rôles qui gèrent la réservation. */
+  driver_license?: DriverLicense | null
+  additional_driver?: { name: string; license_number: string | null } | null
+  checkout_inspection?: CheckoutInspection | null
+  contract?: ReservationContract
+}
+
+export interface DriverLicense {
+  country: string
+  subdivision: string | null
+  number: string | null
+  expires_at: string | null
+  /** Photos visibles seulement avec la permission des documents sensibles. */
+  front_url: string | null
+  back_url: string | null
+}
+
+export type FuelLevel = 10 | 25 | 50 | 75 | 100
+
+export type RentalAccessory =
+  | 'spare_tire'
+  | 'jack'
+  | 'wheel_wrench'
+  | 'warning_triangle'
+  | 'first_aid_kit'
+  | 'fire_extinguisher'
+  | 'vehicle_documents'
+  | 'floor_mats'
+  | 'radio'
+  | 'phone_charger'
+
+export interface CheckoutInspection {
+  inspected_at: string | null
+  odometer_km: number | null
+  fuel_level_percent: number | null
+  accessories: RentalAccessory[]
+  damage_notes: string | null
+  photo_urls: string[]
+  company_signer_name: string | null
+  customer_signed_at: string | null
+  company_signed_at: string | null
+  customer_signature_url: string | null
+  company_signature_url: string | null
+}
+
+export interface ContractSnapshot {
+  lessor: {
+    name: string
+    display_name: string
+    representative: string | null
+    tax_identification_number: string | null
+    address: string | null
+    phone_numbers: string | null
+  }
+  terms: string
+  terms_sha256: string
+  vehicle: {
+    make: string | null
+    model: string | null
+    model_year: number | null
+    registration_number: string
+    vin: string | null
+    color: string | null
+    fuel_type: FuelType | null
+    transmission: Transmission | null
+    engine_displacement_cc: number | null
+    doors: number | null
+    category: RentalCategory
+  }
+  timezone: string
+}
+
+export interface ReservationContract {
+  issued_at: string | null
+  file_url: string | null
+  snapshot: ContractSnapshot | null
 }
 
 export interface CarRentalReservationListEntry {
@@ -308,6 +387,7 @@ export interface SystemCompany {
   tax_identification_number?: string | null
   legal_address?: string | null
   phone_numbers?: string | null
+  rental_contract_terms?: string | null
   sites: SystemSite[]
 }
 

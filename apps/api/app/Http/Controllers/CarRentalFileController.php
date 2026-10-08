@@ -121,6 +121,10 @@ final class CarRentalFileController extends Controller
                 || $access->allows('rental.reservations.read'),
             StoredFile::PURPOSE_PAYMENT_PROOF => $access->allows('rental.payments.approve')
                 || $access->allows('rental.documents.sensitive'),
+            // Signatures et contrat : nécessaires pour émettre ou consulter le contrat.
+            StoredFile::PURPOSE_SIGNATURE,
+            StoredFile::PURPOSE_RENTAL_CONTRACT => $access->allows('rental.reservations.manage')
+                || $access->allows('rental.documents.sensitive'),
             default => $access->allows('rental.documents.sensitive'),
         };
     }

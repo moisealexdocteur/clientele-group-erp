@@ -21,6 +21,7 @@ export function updateCompany(companyId: string, payload: {
   tax_identification_number?: string | null
   legal_address?: string | null
   phone_numbers?: string | null
+  rental_contract_terms?: string | null
 }) {
   return api<{ data: SystemCompany }>(`${base}/${companyId}`, { ...global, method: 'PATCH', body: payload })
 }

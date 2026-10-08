@@ -27,6 +27,7 @@ final class Company extends Model
         'tax_identification_number',
         'legal_address',
         'phone_numbers',
+        'rental_contract_terms',
     ];
 
     protected function casts(): array

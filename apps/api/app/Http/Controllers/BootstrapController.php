@@ -12,7 +12,7 @@ final class BootstrapController extends Controller
             'application' => [
                 'name' => config('app.name'),
                 'environment' => app()->environment(),
-                'version' => '0.4.0-alpha.1',
+                'version' => '0.5.0-alpha.1',
             ],
             'display' => [
                 'locale' => 'fr-HT',

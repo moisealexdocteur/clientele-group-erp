@@ -58,6 +58,15 @@ final class CarRentalReservation extends Model
         'driver_license_verified_at',
         'lock_version',
         'rate_overridden',
+        'driver_license_country',
+        'driver_license_subdivision',
+        'driver_license_front_file_id',
+        'driver_license_back_file_id',
+        'additional_driver_name',
+        'additional_driver_license_number',
+        'contract_snapshot',
+        'contract_file_id',
+        'contract_issued_at',
     ];
 
     protected function casts(): array
@@ -77,6 +86,10 @@ final class CarRentalReservation extends Model
             'additional_km_rate' => 'decimal:2',
             'included_km' => 'integer',
             'driver_license_number' => 'encrypted',
+            'additional_driver_name' => 'encrypted',
+            'additional_driver_license_number' => 'encrypted',
+            'contract_snapshot' => 'array',
+            'contract_issued_at' => 'immutable_datetime',
             'driver_license_expires_at' => 'immutable_date',
             'driver_license_verified_at' => 'immutable_datetime',
             'lock_version' => 'integer',

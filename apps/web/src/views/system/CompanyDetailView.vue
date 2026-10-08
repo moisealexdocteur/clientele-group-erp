@@ -22,6 +22,9 @@ const loading = useRequest()
 const siteRequest = useRequest()
 const registerRequest = useRequest()
 const legalRequest = useRequest()
+const termsRequest = useRequest()
+const termsOpen = ref(false)
+const termsDraft = ref('')
 
 const company = computed(() => system.company(props.companyId))
 const siteOpen = ref(false)
@@ -93,6 +96,30 @@ async function saveLegal(): Promise<void> {
   await system.load()
   legalOpen.value = false
   ui.toast('Identité légale enregistrée.')
+}
+
+function openTerms(): void {
+  termsDraft.value = company.value?.rental_contract_terms ?? ''
+  termsRequest.reset()
+  termsOpen.value = true
+}
+
+async function saveTerms(): Promise<void> {
+  const current = company.value
+  if (!current || !termsDraft.value.trim()) return
+  const result = await termsRequest.run(() => updateCompany(props.companyId, {
+    legal_name: current.legal_name,
+    display_name: current.display_name,
+    legal_representative: current.legal_representative ?? null,
+    tax_identification_number: current.tax_identification_number ?? null,
+    legal_address: current.legal_address ?? null,
+    phone_numbers: current.phone_numbers ?? null,
+    rental_contract_terms: termsDraft.value.trim(),
+  }))
+  if (!result) return
+  await system.load()
+  termsOpen.value = false
+  ui.toast('Conditions du contrat enregistrées. Elles s’appliquent aux prochaines remises.')
 }
 
 async function saveSite(): Promise<void> {
@@ -178,6 +205,20 @@ async function saveRegister(): Promise<void> {
       </dl>
     </section>
 
+    <section class="panel" aria-labelledby="terms-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="terms-title" class="title-section">Conditions du contrat de location</h2>
+          <p class="text-secondary text-small">Imprimées dans chaque contrat. Un contrat déjà signé conserve sa version.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openTerms">Modifier</button>
+      </div>
+      <p v-if="!company.rental_contract_terms" class="alert alert-warning">
+        Non configurées. Aucune location ne peut être remise tant que les articles du contrat ne sont pas saisis.
+      </p>
+      <div v-else class="terms-preview">{{ company.rental_contract_terms }}</div>
+    </section>
+
     <section class="stack" aria-labelledby="sites-title">
       <h2 id="sites-title" class="title-section">Adresses et caisses</h2>
 
@@ -242,6 +283,21 @@ async function saveRegister(): Promise<void> {
     </template>
   </SheetDialog>
 
+  <SheetDialog :open="termsOpen" title="Conditions du contrat de location" description="Saisissez les articles du contrat papier, un article par paragraphe. Une ligne qui commence par « Article » est imprimée en gras." :locked="termsRequest.busy.value" @close="termsOpen = false">
+    <form id="terms-form" class="form" novalidate @submit.prevent="saveTerms">
+      <FormField label="Articles du contrat" required :help="`${termsDraft.length.toLocaleString('fr-FR')} caractères sur 40 000`" :error="termsRequest.fieldErrors.value.rental_contract_terms" v-slot="field">
+        <textarea v-model="termsDraft" v-bind="field.attrs" class="textarea terms-input" rows="16" maxlength="40000" placeholder="Article 1 - ..."></textarea>
+      </FormField>
+      <InlineAlert :message="termsRequest.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="termsRequest.busy.value" @click="termsOpen = false">Annuler</button>
+      <button class="btn btn-primary" type="submit" form="terms-form" :disabled="termsRequest.busy.value || !termsDraft.trim() || !app.canReachServer">
+        {{ termsRequest.busy.value ? 'Enregistrement' : 'Enregistrer' }}
+      </button>
+    </template>
+  </SheetDialog>
+
   <SheetDialog :open="siteOpen" title="Ajouter une adresse" :locked="siteRequest.busy.value" @close="siteOpen = false">
     <form id="site-form" class="form" novalidate @submit.prevent="saveSite">
       <FormField label="Code d’adresse" help="Les espaces et accents sont convertis automatiquement." :error="siteRequest.fieldErrors.value.code" v-slot="field">
@@ -288,6 +344,23 @@ async function saveRegister(): Promise<void> {
 </template>
 
 <style scoped>
+.terms-preview {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.terms-input {
+  min-height: 320px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
 .registers {
   display: grid;
   gap: 8px;
