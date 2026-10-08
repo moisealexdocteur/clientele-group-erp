@@ -32,6 +32,7 @@ final class CarRentalFileController extends Controller
         StoredFile::PURPOSE_INSPECTION_PHOTO => 'rental.reservations.manage',
         StoredFile::PURPOSE_SIGNATURE => 'rental.reservations.manage',
         StoredFile::PURPOSE_RENTAL_CONTRACT => 'rental.reservations.manage',
+        StoredFile::PURPOSE_RENTAL_INVOICE => 'rental.invoices.issue',
     ];
 
     public function __construct(
@@ -125,6 +126,7 @@ final class CarRentalFileController extends Controller
             StoredFile::PURPOSE_SIGNATURE,
             StoredFile::PURPOSE_RENTAL_CONTRACT => $access->allows('rental.reservations.manage')
                 || $access->allows('rental.documents.sensitive'),
+            StoredFile::PURPOSE_RENTAL_INVOICE => $access->allows('rental.reservations.read'),
             default => $access->allows('rental.documents.sensitive'),
         };
     }

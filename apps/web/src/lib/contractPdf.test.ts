@@ -53,6 +53,7 @@ function reservation(terms: string): CarRentalReservation {
       fuel_level_percent: 75,
       accessories: ['spare_tire', 'jack'],
       damage_notes: null,
+      damage_marks: [{ x: 0.2, y: 0.3, kind: 'scratch', note: 'Portière avant gauche' }, { x: 0.8, y: 0.85, kind: 'dent', note: null }],
       photo_urls: [],
       company_signer_name: 'Agent Comptoir',
       customer_signed_at: '2026-10-09T09:05:00-04:00',

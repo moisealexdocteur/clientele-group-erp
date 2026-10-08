@@ -47,6 +47,8 @@ final class SystemConfigurationController extends Controller
                 'rental.reservations.override_rate',
                 'rental.payments.credit',
                 'rental.documents.sensitive',
+                'rental.deposits.settle',
+                'rental.invoices.issue',
             ],
         ],
         'car_rental_agent' => [
@@ -58,6 +60,7 @@ final class SystemConfigurationController extends Controller
                 'rental.vehicles.read',
                 'rental.calendar.read',
                 'rental.payments.submit',
+                'rental.invoices.issue',
             ],
         ],
         'car_rental_fleet' => [

@@ -118,6 +118,15 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/reservations/{reservation}/contract', [CarRentalController::class, 'attachContract'])
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.contract');
+            Route::post('/reservations/{reservation}/deposit-settlement', [CarRentalController::class, 'settleDeposit'])
+                ->middleware('company.permission:rental.deposits.settle')
+                ->name('api.v1.car-rental.reservations.deposit-settlement');
+            Route::post('/reservations/{reservation}/invoice', [CarRentalController::class, 'issueInvoice'])
+                ->middleware('company.permission:rental.invoices.issue')
+                ->name('api.v1.car-rental.reservations.invoice');
+            Route::post('/reservations/{reservation}/invoice/file', [CarRentalController::class, 'attachInvoiceFile'])
+                ->middleware('company.permission:rental.invoices.issue')
+                ->name('api.v1.car-rental.reservations.invoice-file');
             Route::post('/reservations/{reservation}/extend', [CarRentalController::class, 'extendReservation'])
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.extend');

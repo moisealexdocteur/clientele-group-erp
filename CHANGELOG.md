@@ -2,6 +2,23 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.6.0-alpha.1 - 2026-10-11
+
+Cycle Car Rental complet. Détail : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`.
+
+### Ajouté
+
+- Croquis tactile des dommages à la remise et au retour, imprimé dans le contrat.
+- Écran de retour : kilométrage contrôlé, carburant et accessoires comparés au départ, dommages, photos, signature du client.
+- Frais du retour appliqués seulement sur case cochée : nettoyage 20 USD, kilométrage supplémentaire selon le contrat, autres frais réservés à l'administration.
+- Règlement du dépôt de garantie par l'administration : libération ou retenue motivée.
+- Facture numérotée sur huit chiffres, contenu figé, PDF envoyé au client (sans plaque ni permis).
+- Permissions `rental.deposits.settle` et `rental.invoices.issue`.
+
+### Corrigé
+
+- Courriels : l'image est présentée comme une illustration de catégorie, jamais comme la photo du véhicule.
+
 ## 0.5.0-alpha.1 - 2026-10-10
 
 Livraison 2 des retours de recette. Détail : `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`.

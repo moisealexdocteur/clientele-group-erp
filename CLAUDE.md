@@ -1,6 +1,6 @@
 # Reprise du projet Clientèle Group ERP
 
-Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire), 0.4.0-alpha.1 (réservations, paiements et design Fluent) et 0.5.0-alpha.1 (permis, fiche de sortie, signatures et contrat).
+Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire), 0.4.0-alpha.1 (réservations, paiements et design Fluent) 0.5.0-alpha.1 (permis, fiche de sortie, signatures et contrat) et 0.6.0-alpha.1 (retour, croquis, dépôt et facture).
 
 ## 1. Source de vérité et état de déploiement
 
@@ -9,10 +9,10 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `cdc1152220cc4aa62b02548473d457a397b3495c` |
-| Version du dépôt | `0.5.0-alpha.1` (permis, fiche de sortie, signatures, contrat PDF, à déployer) |
-| Dernière version déployée | `0.4.0-alpha.1` |
+| Version du dépôt | `0.6.0-alpha.1` (retour, croquis, dépôt, facture, à déployer) |
+| Dernière version déployée | `0.5.0-alpha.1` |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-55b85e5` |
+| Image API et web déployée | `sha-7b3c2c6` |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
@@ -91,6 +91,7 @@ Les tests API pertinents sont notamment dans :
 - Le mot de passe initial doit être expliqué avant saisie : au moins 12 caractères, majuscule, minuscule, chiffre et symbole.
 - La gestion d'utilisateur doit permettre création, consultation, modification, désactivation, réactivation, réinitialisation et suppression définitive selon les droits.
 - La création d'un compte envoie un courriel au format visuel validé.
+- Permissions ajoutées en 0.6.0 : `rental.deposits.settle` (régler le dépôt, autres frais, administrateur) et `rental.invoices.issue` (facture, administrateur et agent).
 - Permissions ajoutées en 0.4.0 : `rental.reservations.override_rate` (modifier le tarif de la fiche), `rental.payments.credit` (accorder un crédit), `rental.documents.sensitive` (voir permis et reçus). Elles sont accordées au rôle administrateur Car Rental, jamais à l'agent par défaut.
 - Les fichiers (photos, reçus, permis) sont privés : volume Docker `clientele-documents`, 10 Mo au plus, hash SHA-256, lecture selon la permission et journalisation.
 
@@ -161,7 +162,7 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 
 L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent être repris avant d'ajouter d'autres modules.
 
-État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Restent pour Car Rental : croquis des dommages, inspection de retour avec libération du dépôt, facture PDF, P1 courriel.
+État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Le cycle Car Rental (remise, retour, croquis, dépôt, facture, P1 courriel) est complet en 0.6.0-alpha.1 : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`. Étape suivante : socle commun (taux HTG/USD avec alerte BRH, reçu 8 chiffres avec QR, impression 80 mm, écran client, exports PDF et Excel).
 
 ### P0 : disponibilité et navigation (fait)
 
@@ -187,7 +188,7 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 4. Dans le dialogue de mise en circulation, afficher le tarif de location, les paiements approuvés, le dépôt requis, le dépôt retenu et le solde requis avant confirmation.
 5. Ne permettre l'action finale que lorsque toutes les exigences sont remplies. Donner une erreur précise par exigence manquante.
 
-### P1 : courriel et vérité de l'information affichée
+### P1 : courriel et vérité de l'information affichée (fait)
 
 1. Remplacer l'image générique par une vraie photo de fiche seulement si elle ne révèle pas la plaque.
 2. Sinon, corriger le libellé vers `Illustration de catégorie` ou ne pas afficher d'image.

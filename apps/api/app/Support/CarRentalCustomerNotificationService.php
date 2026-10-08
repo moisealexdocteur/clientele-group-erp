@@ -146,9 +146,13 @@ final class CarRentalCustomerNotificationService
             default => 'car-rental-suv.svg',
         };
         $imageUrl = rtrim((string) config('app.url'), '/') . '/vehicle-images/' . $imageName;
-        $imageAlt = $vehicleName !== ''
-            ? 'Image indicative du véhicule ' . $vehicleName
-            : 'Image indicative du véhicule de location';
+        // Illustration générique de la catégorie, jamais présentée comme la
+        // photo du véhicule : les photos réelles peuvent montrer la plaque.
+        $imageAlt = 'Illustration de catégorie ' . match ($vehicleCategory) {
+            'pickup' => 'pick-up',
+            'mid_suv' => 'SUV intermédiaire',
+            default => 'SUV',
+        };
 
         $content = match ($event) {
             self::RESERVATION_UPDATED => [
@@ -169,7 +173,7 @@ final class CarRentalCustomerNotificationService
             self::RETURN_RECORDED => [
                 'subject' => 'Votre retour de véhicule est enregistré - Clientèle Group',
                 'heading' => 'Votre retour est enregistré',
-                'intro' => 'Le retour du véhicule a été enregistré. La facturation finale est traitée séparément.',
+                'intro' => 'Le retour du véhicule a été enregistré. La facture vous sera envoyée séparément.',
             ],
             self::SIGNED_CONTRACT_ISSUED => [
                 'subject' => 'Votre contrat de location signé est disponible - Clientèle Group',

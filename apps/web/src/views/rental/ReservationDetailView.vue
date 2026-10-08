@@ -6,9 +6,11 @@ import {
   extendReservation,
   fetchReservation,
   notifyReservation,
-  returnReservation,
+  issueInvoice,
+  settleDeposit,
   submitPayment,
 } from '../../api/carRental'
+import DamageSketch from '../../components/rental/DamageSketch.vue'
 import { privateFileUrl } from '../../api/client'
 import type { CarRentalPayment, CarRentalReservation, Currency, PaymentMethod, ReservationCancellationReason } from '../../api/types'
 import { useSessionStore } from '../../stores/session'
@@ -48,7 +50,7 @@ const loading = useRequest()
 const action = useRequest()
 
 const reservation = ref<CarRentalReservation | null>(null)
-type Task = 'extend' | 'cancel' | 'payment' | null
+type Task = 'extend' | 'cancel' | 'payment' | 'deposit' | null
 const task = ref<Task>(null)
 
 const canManage = computed(() => session.can('rental.reservations.manage'))
@@ -124,23 +126,6 @@ async function saveCancel(): Promise<void> {
   replace(result.data)
   task.value = null
   ui.toast('Réservation annulée. Aucun remboursement n’a été créé automatiquement.')
-}
-
-async function recordReturn(): Promise<void> {
-  if (!reservation.value) return
-  const confirmed = await ui.confirm({
-    title: 'Enregistrer le retour',
-    message: 'Le véhicule passera en préparation. Le tarif et les paiements existants ne seront pas modifiés. Un retour anticipé conserve le montant prévu.',
-    confirmLabel: 'Enregistrer le retour',
-  })
-  if (!confirmed) return
-  const result = await action.run(() => returnReservation(reservation.value as CarRentalReservation))
-  if (!result) {
-    ui.toast(action.error.value, 'danger')
-    return
-  }
-  replace(result.data)
-  ui.toast(result.customer_notification_sent ? 'Retour enregistré. Le courriel client a été envoyé.' : 'Retour enregistré.')
 }
 
 function openPayment(kind: 'rental' | 'security_deposit' = 'rental', amount = ''): void {
@@ -255,6 +240,76 @@ async function approve(payment: CarRentalPayment): Promise<void> {
   ui.toast('Paiement approuvé.')
 }
 
+/* ---------- Dépôt de garantie et facture ---------- */
+
+const isCompleted = computed(() => reservation.value?.state === 'completed')
+const canSettleDeposit = computed(() => session.can('rental.deposits.settle'))
+const canIssueInvoice = computed(() => session.can('rental.invoices.issue'))
+const heldDeposits = computed(() => (reservation.value?.security_deposits ?? []).filter((deposit) => deposit.status === 'held' && deposit.currency === 'USD'))
+const heldDepositTotal = computed(() => Math.round(heldDeposits.value.reduce((sum, deposit) => sum + Number(deposit.amount ?? 0), 0) * 100) / 100)
+const settledDeposits = computed(() => (reservation.value?.security_deposits ?? []).filter((deposit) => ['released', 'partially_applied', 'forfeited'].includes(deposit.status)))
+const chargesTotal = computed(() => Math.round((reservation.value?.additional_charges ?? []).reduce((sum, charge) => sum + Number(charge.amount), 0) * 100) / 100)
+const depositForm = reactive({ retained: '0', reason: '' })
+const invoicing = ref(false)
+
+const depositMissing = computed(() => {
+  const items: string[] = []
+  const retained = Number(depositForm.retained)
+  if (depositForm.retained === '' || retained < 0) items.push('Le montant retenu (0 pour tout libérer)')
+  else if (retained > heldDepositTotal.value) items.push(`Une retenue d’au plus ${formatMoney(heldDepositTotal.value, 'USD')}`)
+  if (retained > 0 && !depositForm.reason.trim()) items.push('Le motif de la retenue')
+  return items
+})
+
+function openDeposit(): void {
+  depositForm.retained = reservation.value?.currency === 'USD' && chargesTotal.value > 0
+    ? Math.min(chargesTotal.value, heldDepositTotal.value).toFixed(2)
+    : '0'
+  depositForm.reason = chargesTotal.value > 0 ? (reservation.value?.additional_charges ?? []).map((charge) => charge.label).join(', ') : ''
+  action.reset()
+  task.value = 'deposit'
+}
+
+async function saveDeposit(): Promise<void> {
+  if (!reservation.value || depositMissing.value.length) return
+  const reservationId = reservation.value.id
+  const result = await action.run(() => settleDeposit(reservationId, Number(depositForm.retained).toFixed(2), depositForm.reason.trim()))
+  if (!result) return
+  replace(result.data)
+  task.value = null
+  ui.toast(Number(depositForm.retained) > 0 ? 'Dépôt réglé : la retenue est enregistrée, le reste est libéré.' : 'Dépôt libéré en totalité.')
+}
+
+async function createInvoice(): Promise<void> {
+  if (!reservation.value) return
+  invoicing.value = true
+  try {
+    let current = reservation.value
+    if (!current.invoice) {
+      current = (await issueInvoice(current.id)).data
+      replace(current)
+    }
+    const { issueInvoicePdf } = await import('../../components/rental/issueInvoice')
+    const result = await issueInvoicePdf(current)
+    replace(result.data)
+    ui.toast(result.customer_notification_sent ? 'Facture enregistrée et envoyée au client.' : 'Facture enregistrée.')
+  } catch (error) {
+    ui.toast(error instanceof Error ? error.message : 'La facture n’a pas pu être créée.', 'danger')
+  } finally {
+    invoicing.value = false
+  }
+}
+
+async function openInvoice(): Promise<void> {
+  const path = reservation.value?.invoice?.file_url
+  if (!path) return
+  try {
+    window.open(await privateFileUrl(path), '_blank', 'noopener')
+  } catch {
+    ui.toast('La facture ne peut pas être affichée avec vos droits.', 'danger')
+  }
+}
+
 /* ---------- Contrat signé ---------- */
 
 const canIssueContract = computed(() =>
@@ -336,7 +391,8 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
         <!-- Actions principales, au pouce. -->
         <div v-if="canManage && (isReserved || isOut)" class="btn-row">
           <template v-if="isOut">
-            <button class="btn btn-primary" type="button" :disabled="action.busy.value || !app.canReachServer" @click="recordReturn">Enregistrer le retour</button>
+            <RouterLink v-if="app.canReachServer" class="btn btn-primary" :to="{ name: 'rental.reservation.return', params: { reservationId } }">Enregistrer le retour</RouterLink>
+            <button v-else class="btn btn-primary" type="button" disabled>Enregistrer le retour</button>
             <button class="btn btn-secondary" type="button" :disabled="!app.canReachServer" @click="openExtend">Prolonger</button>
           </template>
           <template v-if="isReserved">
@@ -396,6 +452,79 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
           <p v-else class="text-muted">Aucun paiement enregistré.</p>
         </section>
 
+        <section v-if="isCompleted" class="panel" aria-labelledby="settlement-title">
+          <h2 id="settlement-title" class="title-section">Dépôt et facture</h2>
+          <ul v-if="(reservation.additional_charges ?? []).length" class="charges">
+            <li v-for="(charge, index) in reservation.additional_charges" :key="index">
+              <span>{{ charge.label }}</span>
+              <strong>{{ formatMoney(charge.amount, reservation.currency) }}</strong>
+            </li>
+          </ul>
+          <p v-else class="text-secondary text-small">Aucun frais supplémentaire au retour.</p>
+
+          <div class="settlement-step">
+            <strong>Dépôt de garantie</strong>
+            <template v-if="heldDeposits.length">
+              <span class="text-secondary text-small">{{ formatMoney(heldDepositTotal, 'USD') }} retenus, à régler.</span>
+              <button v-if="canSettleDeposit" class="btn btn-secondary" type="button" :disabled="!app.canReachServer" @click="openDeposit">Régler le dépôt</button>
+              <span v-else class="text-small">En attente d’un administrateur.</span>
+            </template>
+            <span v-else-if="settledDeposits.length" class="text-secondary text-small">
+              Réglé : {{ formatMoney(settledDeposits.reduce((sum, deposit) => sum + Number(deposit.applied_amount ?? 0), 0), 'USD') }} retenus<template v-if="settledDeposits[0]?.settlement_note"> ({{ settledDeposits[0].settlement_note }})</template>, le reste est libéré.
+            </span>
+            <span v-else class="text-secondary text-small">Aucun dépôt à régler.</span>
+          </div>
+
+          <div class="settlement-step">
+            <strong>Facture</strong>
+            <template v-if="reservation.invoice?.file_url">
+              <span class="text-secondary text-small">N° {{ reservation.invoice.number }} - solde dû {{ formatMoney(reservation.invoice.balance_due, reservation.invoice.currency) }}</span>
+              <button class="btn btn-secondary" type="button" @click="openInvoice">Ouvrir la facture PDF</button>
+            </template>
+            <template v-else-if="canIssueInvoice">
+              <span v-if="heldDeposits.length" class="text-secondary text-small">Disponible après le règlement du dépôt.</span>
+              <button class="btn btn-primary" type="button" :disabled="invoicing || heldDeposits.length > 0 || !app.canReachServer" @click="createInvoice">
+                {{ invoicing ? 'Création en cours' : reservation.invoice ? 'Créer le PDF de la facture' : 'Émettre la facture' }}
+              </button>
+            </template>
+            <span v-else class="text-secondary text-small">Pas encore émise.</span>
+          </div>
+        </section>
+
+        <section v-if="reservation.return_inspection" class="panel" aria-labelledby="return-title">
+          <h2 id="return-title" class="title-section">Fiche de retour</h2>
+          <dl class="facts">
+            <div>
+              <dt>Kilométrage au retour</dt>
+              <dd>{{ reservation.return_inspection.odometer_km?.toLocaleString('fr-FR') ?? '-' }} km</dd>
+            </div>
+            <div v-if="reservation.checkout_inspection?.odometer_km != null && reservation.return_inspection.odometer_km != null">
+              <dt>Distance parcourue</dt>
+              <dd>{{ (reservation.return_inspection.odometer_km - reservation.checkout_inspection.odometer_km).toLocaleString('fr-FR') }} km</dd>
+            </div>
+            <div>
+              <dt>Carburant</dt>
+              <dd>{{ fuelLevelLabel(reservation.return_inspection.fuel_level_percent) }}</dd>
+            </div>
+            <div v-if="reservation.return_inspection.damage_notes">
+              <dt>Dommages constatés</dt>
+              <dd>{{ reservation.return_inspection.damage_notes }}</dd>
+            </div>
+            <div v-if="reservation.return_inspection.company_signer_name">
+              <dt>Contrôle</dt>
+              <dd>{{ reservation.return_inspection.company_signer_name }}</dd>
+            </div>
+          </dl>
+          <DamageSketch
+            :model-value="reservation.return_inspection.damage_marks"
+            :reference="reservation.checkout_inspection?.damage_marks ?? []"
+            readonly
+          />
+          <div v-if="reservation.return_inspection.photo_urls.length" class="doc-photos">
+            <PrivateImage v-for="url in reservation.return_inspection.photo_urls" :key="url" :path="url" alt="Photo de l’état du véhicule au retour" />
+          </div>
+        </section>
+
         <section v-if="reservation.contract?.file_url || canIssueContract" class="panel" aria-labelledby="contract-title">
           <div class="panel-header">
             <div>
@@ -434,6 +563,7 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
               <dd>{{ reservation.checkout_inspection.company_signer_name }}</dd>
             </div>
           </dl>
+          <DamageSketch v-if="reservation.checkout_inspection.damage_marks.length" :model-value="reservation.checkout_inspection.damage_marks" readonly />
           <div v-if="reservation.checkout_inspection.photo_urls.length" class="doc-photos">
             <PrivateImage v-for="url in reservation.checkout_inspection.photo_urls" :key="url" :path="url" alt="Photo de l’état du véhicule au départ" />
           </div>
@@ -531,6 +661,33 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
       </aside>
     </div>
   </div>
+
+  <!-- Régler le dépôt -->
+  <SheetDialog :open="task === 'deposit'" title="Régler le dépôt de garantie" :description="`Dépôt retenu : ${formatMoney(heldDepositTotal, 'USD')}. Indiquez 0 pour tout libérer.`" :locked="action.busy.value" @close="task = null">
+    <form id="deposit-form" class="form" novalidate @submit.prevent="saveDeposit">
+      <p v-if="chargesTotal > 0" class="text-secondary text-small">
+        Frais au retour : {{ formatMoney(chargesTotal, reservation?.currency ?? 'USD') }}. Le montant proposé peut être modifié.
+      </p>
+      <FormField label="Montant retenu (USD)" required :error="action.fieldErrors.value.retained_amount_usd" v-slot="field">
+        <input v-model="depositForm.retained" v-bind="field.attrs" class="input input-amount" type="number" inputmode="decimal" min="0" :max="heldDepositTotal" step="0.01" />
+      </FormField>
+      <FormField label="Motif de la retenue" :required="Number(depositForm.retained) > 0" :error="action.fieldErrors.value.reason" v-slot="field">
+        <textarea v-model="depositForm.reason" v-bind="field.attrs" class="textarea" rows="3" maxlength="500"></textarea>
+      </FormField>
+      <p class="text-small">Libéré au client : <strong>{{ formatMoney(Math.max(0, heldDepositTotal - (Number(depositForm.retained) || 0)), 'USD') }}</strong></p>
+      <div v-if="depositMissing.length" class="missing" role="status">
+        <strong>À compléter</strong>
+        <ul>
+          <li v-for="item in depositMissing" :key="item">{{ item }}</li>
+        </ul>
+      </div>
+      <InlineAlert :message="action.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="task = null">Fermer</button>
+      <button class="btn btn-primary" type="submit" form="deposit-form" :disabled="action.busy.value || depositMissing.length > 0">Enregistrer le règlement</button>
+    </template>
+  </SheetDialog>
 
   <!-- Prolonger -->
   <SheetDialog :open="task === 'extend'" title="Prolonger la location" description="En cas de conflit, la réservation suivante reste inchangée et aucune information client n’est affichée." :locked="action.busy.value" @close="task = null">
@@ -726,6 +883,30 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.charges {
+  display: grid;
+}
+
+.charges li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.charges li:first-child {
+  border-top: 0;
+}
+
+.settlement-step {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .doc-photos {
