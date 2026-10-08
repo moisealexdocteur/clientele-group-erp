@@ -98,17 +98,19 @@ services:
       app:
         condition: service_healthy
     networks: [traefik-public, clientele-internal]
+    # Les clés sont statiques : Docker Compose n'interpole pas de façon fiable
+    # les noms de labels Traefik générés dynamiquement sur cet hôte.
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-public"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.rule=Host(`${APP_DOMAIN}`)"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.entrypoints=websecure"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.tls=true"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.middlewares=clientele-security@file"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.priority=${TRAEFIK_ROUTER_PRIORITY}"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.service=${TRAEFIK_ROUTER_NAME}"
-      - "traefik.http.services.${TRAEFIK_ROUTER_NAME}.loadbalancer.server.port=8080"
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.clientele-erp-preprod.rule: "Host(`preprod.erp.clientelegroup.tech`)"
+      traefik.http.routers.clientele-erp-preprod.entrypoints: websecure
+      traefik.http.routers.clientele-erp-preprod.tls: "true"
+      traefik.http.routers.clientele-erp-preprod.tls.certresolver: letsencrypt
+      traefik.http.routers.clientele-erp-preprod.middlewares: clientele-security@file
+      traefik.http.routers.clientele-erp-preprod.priority: "1000"
+      traefik.http.routers.clientele-erp-preprod.service: clientele-erp-preprod
+      traefik.http.services.clientele-erp-preprod.loadbalancer.server.port: "8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s
