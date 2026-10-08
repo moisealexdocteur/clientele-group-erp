@@ -19,6 +19,12 @@ L’interface Clientèle Group ERP utilise des conventions de produits professio
 
 Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans l’interface métier. Exemples à éviter : titres très longs, slogans, promesses de sécurité non nécessaires, ou explications qui ne changent pas l’action de l’utilisateur.
 
+## Densité des écrans
+
+- Un titre de tâche reste lisible sans dominer l’écran : 32 à 46 px sur grand écran, 30 à 38 px sur téléphone.
+- Le premier écran mobile affiche le formulaire ou l’action principale avant tout contenu de contexte.
+- Une description ne répète pas le titre ; elle explique uniquement la prochaine décision ou une règle importante.
+
 ## Menus
 
 - Un menu ne contient que des fonctions disponibles pour le rôle et réellement actives dans la version livrée.

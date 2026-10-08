@@ -2047,7 +2047,7 @@ onBeforeUnmount(() => {
     </template>
 
     <footer class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.7' }}</span>
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.8' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>

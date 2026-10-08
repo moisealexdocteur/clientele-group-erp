@@ -87,9 +87,9 @@ final class CarRentalAvailabilityService
         CarbonImmutable $pickupAt,
         CarbonImmutable $dueAt,
     ): void {
-        if (! $vehicle->is_active || $vehicle->operational_status === 'garage') {
+        if (! $vehicle->is_active || $vehicle->operational_status !== 'available') {
             throw ValidationException::withMessages([
-                'vehicle_id' => 'Ce véhicule n’est pas disponible à la location.',
+                'vehicle_id' => 'Ce véhicule n’est pas actuellement disponible à la location.',
             ]);
         }
 
@@ -119,7 +119,7 @@ final class CarRentalAvailabilityService
             ->where('company_id', $companyId)
             ->where('site_id', $siteId)
             ->where('is_active', true)
-            ->where('operational_status', '!=', 'garage')
+            ->where('operational_status', 'available')
             ->when($category !== null, static fn ($query) => $query->where('category', $category))
             ->whereDoesntHave('reservations', static function ($query) use ($pickupAt, $dueAt): void {
                 $query

@@ -2,6 +2,18 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.8 - 2026-10-08
+
+### Corrigé
+
+- La disponibilité Car Rental retourne exclusivement les véhicules actifs dont l’état est `Disponible`. Les véhicules en préparation, lavage, garage ou en circulation ne peuvent plus être proposés par erreur.
+- Le code interne d’un véhicule est normalisé et contrôlé : lettres majuscules, chiffres, tiret et soulignement uniquement.
+
+### Interface
+
+- Les titres de connexion, de sélection de société et de configuration globale sont réduits pour privilégier la tâche et l’action principale.
+- Le standard d’interface précise la densité attendue des écrans et la priorité du formulaire sur mobile.
+
 ## 0.2.0-alpha.7 - 2026-10-08
 
 ### Ajouté

@@ -136,12 +136,12 @@ button {
 
 .access-intro h1 {
   max-width: 520px;
-  font-size: clamp(2.25rem, 4.2vw, 3.7rem);
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
 }
 
 .company-choice h1 {
   max-width: 680px;
-  font-size: clamp(2.25rem, 4.8vw, 3.8rem);
+  font-size: clamp(2rem, 3.6vw, 2.9rem);
 }
 
 .access-intro > p:not(.eyebrow) {
@@ -342,7 +342,7 @@ button {
 .configuration-header h1 {
   max-width: 720px;
   margin-bottom: 12px;
-  font-size: clamp(2.1rem, 5vw, 4rem);
+  font-size: clamp(2rem, 3.8vw, 3rem);
 }
 
 .configuration-header > p:not(.eyebrow) {
@@ -1578,7 +1578,7 @@ h3 {
 
   .access-intro h1,
   .company-choice h1 {
-    font-size: clamp(2rem, 9vw, 2.9rem);
+    font-size: clamp(1.9rem, 8vw, 2.35rem);
   }
 
   .access-points {
