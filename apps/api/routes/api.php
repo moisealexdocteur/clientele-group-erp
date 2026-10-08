@@ -32,6 +32,18 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/context', CompanyContextController::class)->name('api.v1.context');
 
         Route::prefix('car-rental')->group(function (): void {
+            Route::get('/vehicles', [CarRentalController::class, 'vehicles'])
+                ->middleware('company.permission:rental.vehicles.read')
+                ->name('api.v1.car-rental.vehicles.index');
+            Route::post('/vehicles', [CarRentalController::class, 'storeVehicle'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.store');
+            Route::patch('/vehicles/{vehicle}/operational-status', [CarRentalController::class, 'updateVehicleStatus'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.operational-status');
+            Route::get('/calendar', [CarRentalController::class, 'calendar'])
+                ->middleware('company.permission:rental.calendar.read')
+                ->name('api.v1.car-rental.calendar');
             Route::get('/availability', [CarRentalController::class, 'availability'])
                 ->middleware('company.permission:rental.availability.read')
                 ->name('api.v1.car-rental.availability');
