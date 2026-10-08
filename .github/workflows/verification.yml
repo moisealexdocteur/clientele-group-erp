@@ -20,6 +20,10 @@ jobs:
           test -f docs/03_Impression_et_mode_kiosque.md
           test -f docs/05_Securite_et_acces.md
           test -f apps/api/database/001_noyau.sql
+      - name: Vérifier les fichiers d’exploitation
+        run: |
+          bash -n infra/deploy-preprod.sh
+          docker compose --env-file infra/.env.example -f infra/compose.yaml config -q
 
   api:
     runs-on: ubuntu-latest
