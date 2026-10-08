@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
+use Illuminate\Support\Collection;
 
 /**
  * Applique la portée de site après le contexte de société. Un accès à une
@@ -13,6 +14,30 @@ use App\Models\Site;
  */
 final class CompanySiteAuthorizer
 {
+    /**
+     * @return Collection<int, string>
+     */
+    public function activeSiteIdsFor(Company $company, CompanyUserAccess $access): Collection
+    {
+        return Site::query()
+            ->where('company_id', $company->id)
+            ->where('is_active', true)
+            ->when(
+                $access->hasSelectedSiteScope(),
+                static function ($query) use ($access, $company): void {
+                    $query->whereIn(
+                        'id',
+                        CompanyUserSiteAccess::query()
+                            ->where('company_user_access_id', $access->id)
+                            ->where('company_id', $company->id)
+                            ->where('is_active', true)
+                            ->pluck('site_id'),
+                    );
+                },
+            )
+            ->pluck('id');
+    }
+
     public function siteFor(Company $company, CompanyUserAccess $access, string $siteId): Site
     {
         $site = Site::query()
