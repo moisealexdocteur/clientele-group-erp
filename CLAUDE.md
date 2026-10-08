@@ -1,6 +1,6 @@
 # Reprise du projet Clientèle Group ERP
 
-Ce document est la référence de transition à lire avant toute modification. Il fige l'état connu le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction.
+Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec la version 0.3.0-alpha.1 (interface modulaire).
 
 ## 1. Source de vérité et état de déploiement
 
@@ -9,7 +9,8 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `cdc1152220cc4aa62b02548473d457a397b3495c` |
-| Version | `0.2.0-alpha.14` |
+| Version du dépôt | `0.3.0-alpha.1` (interface modulaire, à déployer) |
+| Dernière version déployée | `0.2.0-alpha.14` |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
 | Image API et web déployée | `sha-cdc1152` |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
@@ -39,7 +40,7 @@ Le script demande un jeton GitHub classique ayant seulement l'autorisation `read
 
 ## 3. Architecture actuelle
 
-- Frontend : PWA Vue et TypeScript dans `apps/web`.
+- Frontend : PWA Vue 3, TypeScript, Vue Router et Pinia dans `apps/web`. Un écran par fichier dans `src/views`, composants par domaine dans `src/components`, appels serveur dans `src/api`, dates et devises dans `src/lib`. Détail : `docs/22_Interface_modulaire_0.3.0.md`. Ne jamais recréer un fichier d'interface unique.
 - Backend : Laravel et PHP dans `apps/api`.
 - Infrastructure locale : Docker Compose et Traefik dans `infra`.
 - Base de données : PostgreSQL.
@@ -99,7 +100,11 @@ Le pilote est ordonné ainsi :
 2. Auto Parts et ventes de motocyclettes.
 3. Guest House.
 4. Market.
-5. Hotel, Bar et Restaurant.
+5. Gas Station (Pont Parois, Limonade) : ventes au comptant et à crédit approuvé pour les entreprises.
+6. Hotel, Bar et Restaurant.
+7. Paie du personnel en HTG pour toutes les sociétés.
+
+Avant le module 2, terminer Car Rental (inspection avec croquis et photos, contrat signé, facture PDF), puis le socle commun : taux HTG/USD avec alerte BRH, reçu numéroté sur 8 chiffres avec QR, impression 80 mm, écran client, exports PDF et Excel.
 
 Les besoins globaux à conserver dans les documents fonctionnels comprennent notamment :
 
@@ -152,7 +157,9 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 
 L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent être repris avant d'ajouter d'autres modules.
 
-### P0 : disponibilité et navigation
+État au 0.3.0-alpha.1 : les points marqués « Fait » sont réalisés dans l'interface. Les points marqués « API » demandent une évolution du serveur avant l'interface.
+
+### P0 : disponibilité et navigation (fait)
 
 1. Dans la création d'une réservation, placer le résultat de recherche et les véhicules disponibles dans le même panneau ou dialogue que les critères de disponibilité.
 2. Charger immédiatement les véhicules disponibles pour les valeurs par défaut, sans exiger une première recherche manuelle.
@@ -160,7 +167,7 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 4. Rendre chaque véhicule et chaque réservation cliquable depuis liste, calendrier, résultat et résumé.
 5. Ouvrir une vue de détail dédiée et appliquer les droits d'accès avant d'afficher une action de modification.
 
-### P0 : fiche véhicule
+### P0 : fiche véhicule (fait sauf point 3 : API)
 
 1. Refaire la fiche en sections courtes et faciles à saisir : identité, tarification, disponibilité, documents, photo et état.
 2. Utiliser des champs sur une ligne lorsque cela convient et des libellés explicites.
@@ -168,7 +175,7 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 4. Afficher et permettre de modifier les tarifs et le dépôt minimum uniquement selon les permissions.
 5. Utiliser la photo sélectionnée de la fiche dans l'interface et, si elle est sûre, dans le courriel.
 
-### P0 : permis et mise en circulation
+### P0 : permis et mise en circulation (points 4 et 5 faits ; points 1 à 3 : API)
 
 1. Ajouter une zone d'ajout de photo du permis de conduire avec stockage contrôlé, type de fichier, taille maximale, hash, accès restreint et journalisation.
 2. Ajouter pays émetteur et province ou État émetteur.
@@ -186,7 +193,8 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 
 | Zone | Fichiers principaux |
 | --- | --- |
-| Parcours Car Rental PWA | `apps/web/src/App.vue`, `apps/web/src/styles.css` |
+| Parcours Car Rental PWA | `apps/web/src/views/rental/`, `apps/web/src/components/rental/`, `apps/web/src/styles/main.css` |
+| Navigation et droits côté interface | `apps/web/src/router/index.ts`, `apps/web/src/stores/session.ts` |
 | Catalogue de flotte | `apps/web/src/data/clienteleFleetCatalog.ts`, `apps/web/public/fleet/` |
 | API Car Rental | `apps/api/app/Http/Controllers/CarRentalController.php` |
 | Autorisation société et adresse | `apps/api/app/Support/CompanySiteAuthorizer.php`, `apps/api/app/Http/Controllers/CompanyContextController.php` |
@@ -202,7 +210,7 @@ Avant une nouvelle préproduction :
 
 1. Ajouter ou mettre à jour les tests API des règles métier modifiées.
 2. Exécuter `php artisan test` dans `apps/api`.
-3. Exécuter `npm run typecheck` et `npm run build` dans `apps/web`.
+3. Exécuter `npm run typecheck`, `npm test` et `npm run build` dans `apps/web`.
 4. Vérifier qu'aucun caractère U+2014 n'existe dans les fichiers versionnés.
 5. Vérifier le mobile et le tactile avec une largeur de téléphone avant de considérer l'interface prête.
 6. Vérifier les permissions société et adresse avec au moins deux contextes différents.

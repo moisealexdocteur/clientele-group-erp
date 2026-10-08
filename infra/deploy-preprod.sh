@@ -219,6 +219,8 @@ if [[ -z "${GHCR_TOKEN}" ]]; then
   echo "Jeton absent. Arrêt sans démarrer de conteneur." >&2
   exit 1
 fi
+# Le jeton ne doit jamais rester dans ~/.docker/config.json, même si le téléchargement échoue.
+trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
 unset GHCR_TOKEN
 compose pull

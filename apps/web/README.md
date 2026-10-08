@@ -1,17 +1,31 @@
 # Interface Web et PWA
 
-L'interface est une PWA Vue 3 et TypeScript. Le premier écran est volontairement limité au pilote Clientèle Rent a Car : état de connexion, format Cap-Haïtien, contexte de société explicite et modules à venir. Il ne contient aucune réservation, véhicule, adresse ou donnée client inventée.
+PWA Vue 3, TypeScript, Vue Router et Pinia. L'organisation détaillée, les adresses des écrans et les règles visuelles sont décrites dans `docs/22_Interface_modulaire_0.3.0.md`.
 
-La PWA vérifie `/api/health` et `/api/v1/bootstrap`. Son service worker cache le shell applicatif uniquement ; il ne met jamais en cache les réponses `/api`, les données métier ou les opérations de caisse.
+## Commandes
 
-Contraintes de développement :
+```bash
+npm ci              # installer les dépendances
+npm run dev         # serveur de développement
+npm run typecheck   # vérification TypeScript
+npm test            # tests unitaires (Vitest)
+npm run build       # compilation de production dans dist/
+```
 
-- composants par domaine et non par page unique ;
-- design tokens pour le branding des sociétés ;
-- PWA avec service worker et cache contrôlé ;
-- IndexedDB pour file hors ligne chiffrée quand le navigateur le permet ;
-- API typée et idempotence sur les mutations ;
-- vue POS optimisée tablette et kiosque ;
-- impression isolée dans une route de reçu sans navigation ni éléments inutiles ;
+## Règles de développement
+
+- Un écran par fichier dans `src/views`, des composants par domaine dans `src/components`.
+- Tout appel serveur passe par `src/api` ; aucune vue n'appelle `fetch` directement.
+- Toute date affichée passe par `src/lib/time.ts` (heure de Cap-Haïtien, AM ou PM).
+- Tout montant affiché passe par `src/lib/money.ts`.
+- Les couleurs, tailles et rayons viennent des jetons de `src/styles/main.css`.
+- Le service worker ne met jamais en cache les réponses `/api`.
+
+## Contraintes à venir
+
+- IndexedDB pour la file hors ligne chiffrée de la caisse ;
+- idempotence des mutations côté API ;
+- vue caisse optimisée tablette et kiosque ;
+- impression isolée dans une route de reçu sans navigation ;
 - affichage client dans une session séparée à jeton révocable ;
-- tests unitaires des calculs, tests d'intégration des flux et recette matérielle.
+- tests d'intégration des flux et recette matérielle.
