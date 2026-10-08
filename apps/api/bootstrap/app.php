@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Http\Middleware\AuthenticateApiToken;
 use App\Http\Middleware\CompanyContextMiddleware;
 use App\Http\Middleware\EnsureCompanyPermission;
+use App\Http\Middleware\EnsureSystemOwner;
 use App\Http\Middleware\RequestCorrelationMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.token' => AuthenticateApiToken::class,
             'company.context' => CompanyContextMiddleware::class,
             'company.permission' => EnsureCompanyPermission::class,
+            'system.owner' => EnsureSystemOwner::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

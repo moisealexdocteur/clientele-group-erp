@@ -116,52 +116,40 @@ button {
 
 .access-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(340px, 0.75fr);
   gap: 20px;
-  min-height: 570px;
+  max-width: 940px;
+  min-height: 430px;
+  margin: 0 auto;
 }
 
 .access-intro {
-  position: relative;
-  overflow: hidden;
   border-radius: 24px;
   background: #0e0e10;
   color: #fefefe;
-  padding: clamp(28px, 5vw, 56px);
-}
-
-.access-intro::after {
-  position: absolute;
-  right: -125px;
-  bottom: -130px;
-  width: 330px;
-  height: 330px;
-  border: 52px solid #f70707;
-  border-radius: 50%;
-  content: "";
-}
-
-.access-intro > * {
-  position: relative;
-  z-index: 1;
+  padding: clamp(28px, 4vw, 46px);
 }
 
 .access-intro .eyebrow {
   color: #ffc4c4;
 }
 
-.access-intro h1,
+.access-intro h1 {
+  max-width: 520px;
+  font-size: clamp(2.25rem, 4.2vw, 3.7rem);
+}
+
 .company-choice h1 {
   max-width: 680px;
-  font-size: clamp(2.5rem, 7vw, 5.7rem);
+  font-size: clamp(2.25rem, 4.8vw, 3.8rem);
 }
 
 .access-intro > p:not(.eyebrow) {
   max-width: 580px;
   margin-bottom: 0;
   color: #dedee2;
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: 0.96rem;
+  line-height: 1.55;
 }
 
 .access-points {
@@ -280,7 +268,9 @@ button {
 
 .primary-button:disabled,
 .text-button:disabled,
-.company-button:disabled {
+.company-button:disabled,
+.secondary-button:disabled,
+.refresh-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -313,6 +303,265 @@ button {
 
 .company-choice {
   min-height: 430px;
+}
+
+.secondary-button {
+  min-height: 48px;
+  border: 1px solid #2222e6;
+  border-radius: 10px;
+  background: #fff;
+  color: #2222e6;
+  padding: 0 15px;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.secondary-button:not(:disabled):hover,
+.secondary-button:not(:disabled):focus-visible {
+  background: #eef0ff;
+}
+
+.configuration-page {
+  display: grid;
+  gap: 16px;
+}
+
+.configuration-header {
+  border-radius: 20px;
+  background: #0e0e10;
+  color: #fefefe;
+  padding: clamp(24px, 4vw, 42px);
+}
+
+.configuration-header .eyebrow {
+  color: #ffc4c4;
+}
+
+.configuration-header h1 {
+  max-width: 720px;
+  margin-bottom: 12px;
+  font-size: clamp(2.1rem, 5vw, 4rem);
+}
+
+.configuration-header > p:not(.eyebrow) {
+  max-width: 720px;
+  margin-bottom: 0;
+  color: #dedee2;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.configuration-message {
+  margin: 0;
+  border-left: 3px solid #168449;
+  border-radius: 10px;
+  background: #edf9f1;
+  color: #1a5f39;
+  padding: 12px 14px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.configuration-message.error {
+  border-left-color: #f70707;
+  background: #fff1f1;
+  color: #7b0909;
+}
+
+.configuration-workspace {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.configuration-form-card,
+.configuration-list-card {
+  border: 1px solid #e0e2e8;
+  border-radius: 18px;
+  background: #fefefe;
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.configuration-form-card {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+}
+
+.configuration-form {
+  display: grid;
+  gap: 13px;
+}
+
+.configuration-form label {
+  display: grid;
+  gap: 7px;
+  color: #30313a;
+  font-size: 0.79rem;
+  font-weight: 780;
+}
+
+.configuration-form input,
+.configuration-form select,
+.configuration-form textarea {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #d8dbe5;
+  border-radius: 10px;
+  background: #fff;
+  color: #0e0e10;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.configuration-form textarea {
+  min-height: 94px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.configuration-form input:focus,
+.configuration-form select:focus,
+.configuration-form textarea:focus {
+  border-color: #2222e6;
+  box-shadow: 0 0 0 3px rgba(34, 34, 230, 0.12);
+}
+
+.configuration-form input:disabled,
+.configuration-form select:disabled,
+.configuration-form textarea:disabled {
+  background: #f5f5f7;
+  color: #777985;
+  cursor: not-allowed;
+}
+
+.configuration-form .toggle-field {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e0e2e8;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.configuration-form .toggle-field input {
+  width: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  margin: 0;
+  accent-color: #2222e6;
+}
+
+.configuration-list-card {
+  display: grid;
+  gap: 18px;
+}
+
+.configuration-company-list,
+.configuration-site-list {
+  display: grid;
+  gap: 12px;
+}
+
+.configuration-company-card,
+.configuration-site-card {
+  border: 1px solid #e1e3ea;
+  border-radius: 14px;
+  background: #f8f8fa;
+  padding: 16px;
+}
+
+.configuration-company-card > header,
+.configuration-site-card > div,
+.configuration-company-card ul li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.configuration-company-card header span,
+.configuration-site-card > div > span,
+.configuration-company-card ul li > span {
+  color: #2222e6;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+}
+
+.configuration-company-card h3 {
+  margin: 4px 0 0;
+  color: #252630;
+  font-size: 1.05rem;
+}
+
+.configuration-company-card header small {
+  color: #656773;
+  font-size: 0.74rem;
+  text-align: right;
+}
+
+.configuration-company-card > p,
+.configuration-site-card > p {
+  margin: 10px 0 0;
+  color: #535560;
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.configuration-site-list {
+  margin-top: 14px;
+}
+
+.configuration-site-card {
+  background: #fff;
+}
+
+.configuration-site-card strong {
+  color: #30313a;
+  font-size: 0.9rem;
+}
+
+.configuration-site-card ul {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.configuration-site-card ul li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  border-top: 1px solid #e6e7ed;
+  padding-top: 10px;
+}
+
+.configuration-site-card ul li strong {
+  font-size: 0.82rem;
+}
+
+.configuration-site-card ul li small {
+  grid-column: 1 / -1;
+  color: #656773;
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.configuration-empty,
+.empty-configuration {
+  margin: 0;
+  color: #656773;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .company-grid {
@@ -1252,6 +1501,10 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+  .configuration-workspace {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .planning-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1325,7 +1578,7 @@ h3 {
 
   .access-intro h1,
   .company-choice h1 {
-    font-size: clamp(2.2rem, 11vw, 3.5rem);
+    font-size: clamp(2rem, 9vw, 2.9rem);
   }
 
   .access-points {
@@ -1354,7 +1607,8 @@ h3 {
   .three-columns,
   .reservation-summary,
   .planning-form,
-  .vehicle-filter-form {
+  .vehicle-filter-form,
+  .configuration-workspace {
     grid-template-columns: 1fr;
   }
 
