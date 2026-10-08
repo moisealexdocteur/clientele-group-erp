@@ -25,7 +25,7 @@ Les numéros sont fonctionnels, pas des promesses de date. Une version est livr�
 
 ### État réel au 7 octobre 2026
 
-La préversion `0.2.0-alpha.4` rend le socle exécutable et ajoute la connexion par mot de passe + code courriel, la réinitialisation personnelle, les sessions révocables, les rôles locaux et le contexte obligatoire de société. Le premier flux Car Rental est construit : écran PWA de réservation par adresse, disponibilité, véhicule, réservation et soumission/approbation de paiement espèces ou virement Sogebank. Les dépôts et inspections sont modélisés mais leurs workflows ne sont pas encore actifs. Une vérification automatisée couvre le refus de chevauchement et le périmètre de site. La préproduction ne peut pas encore envoyer de code réel tant que son SMTP transactionnel n’est pas configuré : elle reste réservée aux tests techniques sans compte humain. Taux BRH, appareils, caisses, reçus, contrats, inspections réelles et retour Car Rental restent à terminer ; cette version ne doit pas recevoir de données réelles ni être déclarée prête à la production.
+La préversion `0.2.0-alpha.5` rend le socle exécutable et ajoute la connexion par mot de passe + code courriel, la réinitialisation personnelle, les sessions révocables, les rôles locaux et le contexte obligatoire de société. La préproduction utilise désormais une sortie SMTP dédiée et validée par un message Gmail de test. Le premier flux Car Rental est construit : écran PWA de réservation par adresse, disponibilité, véhicule, réservation et soumission/approbation de paiement espèces ou virement Sogebank. Les dépôts et inspections sont modélisés mais leurs workflows ne sont pas encore actifs. Une vérification automatisée couvre le refus de chevauchement et le périmètre de site. Les taux BRH, appareils, caisses, reçus, contrats, inspections réelles, retour Car Rental et le centre d’importations Excel restent à terminer ; cette version ne doit pas recevoir de données réelles ni être déclarée prête à la production.
 
 ## 3. Lot 0.2 - Noyau plateforme
 
@@ -91,6 +91,7 @@ Un préposé réserve un véhicule disponible, confirme le dépôt, génère le 
 | P0 | Taux HTG/USD et règle BRH | Sociétés et rôles |
 | P0 | Caisses, reçus QR et impression | Identité, taux et audit |
 | P0 | PWA hors ligne contrôlée | Caisse et appareil |
+| P0 | Importations Excel contrôlées | Sociétés, sites, rôles, audit et stockage de fichiers |
 | P1 | Car Rental | Calendrier, dépôts, documents, fichiers et caisse |
 | P1 | Auto Parts et motocyclettes | Stock, multi-entrepôts, prix et documents |
 | P1 | Rapports financiers et exports | Transactions confirmées |
