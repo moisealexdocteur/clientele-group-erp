@@ -273,7 +273,7 @@ async function signIn(): Promise<void> {
     password.value = ''
     emailCode.value = ''
     authView.value = 'verify'
-    authMessage.value = 'Un code à six chiffres vient d’être envoyé à votre adresse personnelle.'
+    authMessage.value = 'Un code à six chiffres a été envoyé à votre adresse personnelle.'
   } catch (error) {
     authMessage.value = messageFrom(error)
   } finally {
@@ -468,7 +468,7 @@ async function loadAvailability(): Promise<void> {
 
   if (!reservationForm.site_id || !reservationForm.pickup_at || !reservationForm.due_at) {
     rentalError.value = true
-    rentalMessage.value = 'Choisissez l’adresse de l’opération, la date de départ et la date de retour avant de vérifier la disponibilité.'
+    rentalMessage.value = 'Sélectionnez le site, la date de départ et la date de retour avant de vérifier la disponibilité.'
     return
   }
 
@@ -507,13 +507,13 @@ async function createReservation(): Promise<void> {
 
   if (!reservationForm.site_id || !reservationForm.customer_name.trim() || !reservationForm.pickup_at || !reservationForm.due_at || !reservationForm.daily_rate) {
     rentalError.value = true
-    rentalMessage.value = 'Complétez l’adresse, le client, les dates et le tarif avant d’enregistrer la réservation.'
+    rentalMessage.value = 'Renseignez le site, le client, les dates et le tarif avant d’enregistrer la réservation.'
     return
   }
 
   if (!reservationForm.vehicle_id && !reservationForm.category) {
     rentalError.value = true
-    rentalMessage.value = 'Choisissez une catégorie ou un véhicule disponible.'
+    rentalMessage.value = 'Sélectionnez une catégorie ou un véhicule disponible.'
     return
   }
 
@@ -557,7 +557,7 @@ async function createReservation(): Promise<void> {
     })
 
     reservationCreated.value = result.data
-    rentalMessage.value = `Réservation ${result.data.number} créée et journalisée.`
+    rentalMessage.value = `Réservation ${result.data.number} créée.`
     rentalError.value = false
     availableVehicles.value = availableVehicles.value.filter((vehicle) => vehicle.id !== result.data.vehicle?.id)
     reservationForm.vehicle_id = ''
@@ -639,24 +639,24 @@ onBeforeUnmount(() => {
 
     <section v-if="authView !== 'authenticated'" class="access-layout" aria-labelledby="access-title">
       <div class="access-intro">
-        <p class="eyebrow">Accès personnel obligatoire</p>
-        <h1 id="access-title">Un poste sécurisé, une personne identifiée.</h1>
+        <p class="eyebrow">Connexion requise</p>
+        <h1 id="access-title">Connexion sécurisée</h1>
         <p>
-          Sélection de société, adresse et données clients restent invisibles avant la connexion.
-          Le code reçu par courriel personnel confirme chaque ouverture de session.
+          Les sociétés, sites et données clients sont accessibles après la connexion.
+          Un code de vérification envoyé à votre adresse personnelle est requis pour ouvrir la session.
         </p>
         <ul class="access-points">
-          <li><span>01</span> Compte individuel et mot de passe protégé</li>
-          <li><span>02</span> Code de sécurité à usage unique</li>
-          <li><span>03</span> Société et site choisis après connexion</li>
+          <li><span>01</span> Adresse courriel et mot de passe</li>
+          <li><span>02</span> Code de vérification</li>
+          <li><span>03</span> Accès selon vos autorisations</li>
         </ul>
       </div>
 
       <section class="access-card" aria-live="polite">
         <template v-if="authView === 'sign-in'">
           <p class="eyebrow">Connexion</p>
-          <h2>Ouvrir la session</h2>
-          <p class="access-description">Utilisez votre adresse courriel personnelle et votre mot de passe.</p>
+          <h2>Se connecter</h2>
+          <p class="access-description">Saisissez votre adresse courriel personnelle et votre mot de passe.</p>
 
           <form class="access-form" @submit.prevent="signIn">
             <label>
@@ -689,7 +689,7 @@ onBeforeUnmount(() => {
             </label>
             <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
             <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-              {{ authBusy ? 'Ouverture…' : 'Ouvrir la session' }}
+              {{ authBusy ? 'Ouverture…' : 'Se connecter' }}
             </button>
             <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'sign-in'; authMessage = ''">
               Revenir à la connexion
@@ -747,8 +747,8 @@ onBeforeUnmount(() => {
     <template v-else>
       <section v-if="!activeContext" class="company-choice" aria-labelledby="company-choice-title">
         <p class="eyebrow">Session ouverte · {{ user?.name }}</p>
-        <h1 id="company-choice-title">Choisissez votre société de travail.</h1>
-        <p>Cette sélection détermine les données, les sites et les fonctions autorisés pour cette session.</p>
+        <h1 id="company-choice-title">Sélectionnez une société</h1>
+        <p>Votre sélection détermine les données, sites et fonctions disponibles pendant cette session.</p>
         <div v-if="companies.length" class="company-grid">
           <button v-for="company in companies" :key="company.id" class="company-button" type="button" :disabled="authBusy" @click="selectCompany(company.id)">
             <span>{{ company.code }}</span>
@@ -756,9 +756,9 @@ onBeforeUnmount(() => {
             <small>Rôle : {{ company.role_key }}</small>
           </button>
         </div>
-        <p v-else class="form-message">Aucune société active n’est encore attribuée à votre compte.</p>
+        <p v-else class="form-message">Aucune société n’est actuellement attribuée à votre compte. Contactez l’administrateur.</p>
         <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
-        <button class="text-button" type="button" @click="logout">Fermer la session</button>
+        <button class="text-button" type="button" @click="logout">Se déconnecter</button>
       </section>
 
       <template v-else>
@@ -766,7 +766,7 @@ onBeforeUnmount(() => {
           <span class="avatar" aria-hidden="true">{{ userInitial }}</span>
           <span><strong>{{ user?.name }}</strong> · {{ activeCompanyName }}</span>
           <button class="text-button change-company" type="button" @click="changeCompany">Changer de société</button>
-          <button class="text-button" type="button" @click="logout">Fermer la session</button>
+          <button class="text-button" type="button" @click="logout">Se déconnecter</button>
         </section>
 
         <section class="context-card" aria-labelledby="context-title">
@@ -807,10 +807,10 @@ onBeforeUnmount(() => {
             <div class="notice-card">
               <span class="notice-icon" aria-hidden="true">01</span>
               <div>
-                <h3>Réservations sécurisées par société et adresse</h3>
+                <h3>Réservations par société et site</h3>
                 <p>
-                  La session est limitée à la société choisie et aux adresses autorisées. Le premier flux
-                  permet maintenant de vérifier la disponibilité et de créer une réservation numérotée.
+                  Cette session est limitée à la société et aux sites autorisés. Vous pouvez consulter la disponibilité
+                  et créer une réservation.
                 </p>
               </div>
             </div>
@@ -835,8 +835,8 @@ onBeforeUnmount(() => {
 
             <div class="checklist-card">
               <div>
-                <p class="eyebrow">État de la fondation</p>
-                <h3>Contrôles déjà disponibles</h3>
+                <p class="eyebrow">État du système</p>
+                <h3>Fonctions disponibles</h3>
               </div>
               <ul>
                 <li><span>✓</span> Code par courriel personnel et session révocable</li>
@@ -853,10 +853,10 @@ onBeforeUnmount(() => {
               <section class="reservation-form-card" aria-labelledby="reservation-title">
                 <div class="section-intro">
                   <p class="eyebrow">Nouvelle réservation</p>
-                  <h3 id="reservation-title">Réserver à partir d’une adresse réelle</h3>
+                  <h3 id="reservation-title">Créer une réservation</h3>
                   <p>
-                    Les véhicules proposés appartiennent uniquement à la société et à l’adresse de travail
-                    sélectionnées. Une réservation concurrente est refusée par le serveur.
+                    Les véhicules affichés sont limités à la société et au site sélectionnés.
+                    Le système empêche les réservations qui se chevauchent.
                   </p>
                 </div>
 
@@ -864,9 +864,9 @@ onBeforeUnmount(() => {
                   <fieldset>
                     <legend>1 · Lieu et période</legend>
                     <label>
-                      Adresse de l’opération
+                      Site
                       <select v-model="reservationForm.site_id" required :disabled="rentalBusy" @change="onReservationSiteChanged">
-                        <option value="" disabled>Choisissez une adresse autorisée</option>
+                        <option value="" disabled>Sélectionnez un site</option>
                         <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
                           {{ site.name }} · {{ site.address }}
                         </option>
@@ -903,7 +903,7 @@ onBeforeUnmount(() => {
                       </button>
                     </div>
                     <button class="availability-button" type="button" :disabled="rentalBusy || apiStatus !== 'online'" @click="loadAvailability">
-                      {{ rentalBusy ? 'Vérification…' : 'Voir les véhicules disponibles' }}
+                      {{ rentalBusy ? 'Vérification…' : 'Vérifier la disponibilité' }}
                     </button>
                     <div v-if="availableVehicles.length" class="vehicle-list" aria-label="Véhicules disponibles">
                       <button
@@ -920,11 +920,11 @@ onBeforeUnmount(() => {
                         <small>{{ categoryLabels[vehicle.category] }} · {{ vehicle.latest_odometer_km.toLocaleString('fr-FR') }} km</small>
                       </button>
                     </div>
-                    <p v-else class="field-help">Sélectionnez une période puis vérifiez les disponibilités avant de choisir le véhicule.</p>
+                    <p v-else class="field-help">Sélectionnez la période puis vérifiez la disponibilité.</p>
                   </fieldset>
 
                   <fieldset>
-                    <legend>3 · Client et locations</legend>
+                    <legend>3 · Client et location</legend>
                     <div class="two-columns">
                       <label>
                         Type de client
@@ -951,12 +951,12 @@ onBeforeUnmount(() => {
                   </fieldset>
 
                   <fieldset>
-                    <legend>4 · Départ, retour et tarif</legend>
+                    <legend>4 · Lieux et tarif</legend>
                     <div class="two-columns">
                       <label>
                         Lieu de départ
                         <select v-model="reservationForm.pickup_location_type" :disabled="rentalBusy">
-                          <option value="site">Adresse de l’opération</option>
+                          <option value="site">Site</option>
                           <option value="cap_haitien_airport">Aéroport International du Cap-Haïtien</option>
                           <option value="custom">Autre lieu précisé</option>
                         </select>
@@ -964,7 +964,7 @@ onBeforeUnmount(() => {
                       <label>
                         Lieu de retour
                         <select v-model="reservationForm.dropoff_location_type" :disabled="rentalBusy">
-                          <option value="site">Adresse de l’opération</option>
+                          <option value="site">Site</option>
                           <option value="cap_haitien_airport">Aéroport International du Cap-Haïtien</option>
                           <option value="custom">Autre lieu précisé</option>
                         </select>
@@ -1014,14 +1014,14 @@ onBeforeUnmount(() => {
 
                   <p v-if="rentalMessage" class="rental-message" :class="{ error: rentalError }" role="status">{{ rentalMessage }}</p>
                   <button class="primary-button create-reservation" type="submit" :disabled="rentalBusy || apiStatus !== 'online'">
-                    {{ rentalBusy ? 'Enregistrement…' : 'Créer la réservation numérotée' }}
+                    {{ rentalBusy ? 'Enregistrement…' : 'Créer la réservation' }}
                   </button>
                 </form>
               </section>
 
               <aside class="reservation-summary" aria-label="Résumé de sécurité de la réservation">
                 <p class="eyebrow">Contrôles actifs</p>
-                <h3>Ce que le système vérifie</h3>
+                <h3>Vérifications</h3>
                 <ul>
                   <li><span>✓</span> La société sélectionnée par la session</li>
                   <li><span>✓</span> L’adresse précise autorisée à l’utilisateur</li>
@@ -1029,7 +1029,7 @@ onBeforeUnmount(() => {
                   <li><span>✓</span> Une référence à huit chiffres journalisée</li>
                 </ul>
                 <p class="summary-note">
-                  Le dépôt de garantie, le contrat et les inspections sont volontairement séparés : ils seront ajoutés sans exposer les données d’une autre société.
+                  Les dépôts, contrats et inspections seront ajoutés dans les prochains lots.
                 </p>
 
                 <div v-if="reservationCreated" class="reservation-created">
