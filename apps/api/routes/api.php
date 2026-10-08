@@ -40,6 +40,10 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.sites.store');
             Route::post('/companies/{company}/cash-registers', [SystemConfigurationController::class, 'storeCashRegister'])
                 ->name('api.v1.system.configuration.cash-registers.store');
+            Route::get('/companies/{company}/users', [SystemConfigurationController::class, 'companyUsers'])
+                ->name('api.v1.system.configuration.company-users.index');
+            Route::post('/companies/{company}/users', [SystemConfigurationController::class, 'storeCompanyUser'])
+                ->name('api.v1.system.configuration.company-users.store');
         });
 
     Route::middleware(['api.token', 'company.context'])->group(function (): void {
@@ -55,6 +59,15 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/vehicles/{vehicle}/operational-status', [CarRentalController::class, 'updateVehicleStatus'])
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.operational-status');
+            Route::patch('/vehicles/{vehicle}/registration', [CarRentalController::class, 'updateVehicleRegistration'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.registration');
+            Route::get('/vehicles/{vehicle}/documents', [CarRentalController::class, 'vehicleDocuments'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.documents.index');
+            Route::put('/vehicles/{vehicle}/documents', [CarRentalController::class, 'saveVehicleDocuments'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.documents.store');
             Route::get('/calendar', [CarRentalController::class, 'calendar'])
                 ->middleware('company.permission:rental.calendar.read')
                 ->name('api.v1.car-rental.calendar');

@@ -2,6 +2,28 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.10 - 2026-10-08
+
+### Ajouté
+
+- La plaque d’immatriculation en cours est désormais l’identifiant unique visible d’un véhicule Car Rental. Aucun code interne distinct n’est demandé.
+- Une plaque `Démonstration` peut être remplacée par une plaque `Officielle`. Le changement est journalisé et l’ancienne plaque reste dans l’historique du véhicule.
+- Suivi simple des papiers de la flotte : immatriculation, assurance OAVCT et permis de vitres teintées. Les échéances OAVCT et vitres teintées sont affichées comme à jour, proche, expirée ou non renseignée.
+- Création d’utilisateurs Car Rental depuis Configuration système : profil, portée de toutes les adresses ou d’adresses sélectionnées, courriel personnel, mot de passe initial et 2FA par courriel à la première connexion.
+- L’adresse du bureau sélectionné est conservée comme lieu de départ par défaut. Les frais de prise en charge et de retour à l’Aéroport International du Cap-Haïtien peuvent être sélectionnés séparément, à 20 USD chacun.
+- Documentation fonctionnelle des véhicules, papiers et utilisateurs dans `docs/19_Vehicules_documents_et_utilisateurs_alpha10.md`.
+
+### Interface
+
+- Le menu propriétaire utilise le libellé `Configuration système`.
+- La gestion de flotte affiche la plaque, le type de plaque et l’état des documents. Les contrôles de gestion des papiers restent accessibles au toucher après sélection d’un véhicule.
+- Le formulaire d’utilisateur affiche la règle complète du mot de passe avant l’enregistrement.
+
+### Sécurité
+
+- Les papiers et l’historique d’immatriculation sont isolés par société avec Row Level Security PostgreSQL.
+- Les références de papiers, les courriels et les mots de passe sont exclus des métadonnées d’audit.
+
 ## 0.2.0-alpha.9 - 2026-10-08
 
 ### Corrigé

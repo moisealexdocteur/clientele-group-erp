@@ -62,6 +62,9 @@ type RentalCategory = 'suv' | 'mid_suv' | 'pickup'
 type RentalLocation = 'site' | 'cap_haitien_airport' | 'custom'
 type KilometerPlan = 'limited' | 'unlimited'
 type VehicleOperationalStatus = 'available' | 'preparation' | 'washing' | 'garage' | 'in_circulation'
+type VehicleRegistrationStatus = 'demonstration' | 'official'
+type VehicleDocumentType = 'registration' | 'oavct_insurance' | 'tint_permit'
+type VehicleDocumentStatus = 'not_recorded' | 'not_applicable' | 'expired' | 'expiring_soon' | 'current'
 
 interface RentalSite {
   id: string
@@ -81,6 +84,22 @@ interface RentalVehicle {
   model_year: number | null
   latest_odometer_km: number
   is_active: boolean
+  registration_number?: string
+  registration_status?: VehicleRegistrationStatus
+  document_statuses?: Array<{
+    type: VehicleDocumentType
+    status: VehicleDocumentStatus
+    expires_at: string | null
+  }>
+}
+
+interface RentalVehicleDocument {
+  id: string
+  type: VehicleDocumentType
+  document_number: string | null
+  issued_at: string | null
+  expires_at: string | null
+  status: VehicleDocumentStatus
 }
 
 interface CarRentalAvailabilityResponse {
@@ -100,6 +119,9 @@ interface CarRentalReservation {
   site_id: string
   pickup_at: string
   due_at: string
+  airport_pickup_fee_usd: string
+  airport_dropoff_fee_usd: string
+  airport_fees_total_usd: string
   currency: 'HTG' | 'USD'
   daily_rate: string
   kilometer_plan: KilometerPlan
@@ -169,6 +191,23 @@ interface SystemCompany {
   sites: SystemSite[]
 }
 
+interface SystemCompanyUser {
+  id: string
+  user_id: string
+  name: string
+  email: string
+  role_key: string
+  site_scope: 'all' | 'selected'
+  is_active: boolean
+  sites: Array<{
+    id: string
+    code: string
+    name: string
+  }>
+}
+
+type CarRentalUserRole = 'car_rental_administrator' | 'car_rental_agent' | 'car_rental_fleet'
+
 type ApiValidationErrors = Record<string, string[]>
 
 class ApiError extends Error {
@@ -207,6 +246,11 @@ const vehicleBusy = ref(false)
 const vehicleMessage = ref('')
 const vehicleError = ref(false)
 const managedVehicles = ref<RentalVehicle[]>([])
+const selectedVehicle = ref<RentalVehicle | null>(null)
+const selectedVehicleDocuments = ref<RentalVehicleDocument[]>([])
+const vehicleDocumentsBusy = ref(false)
+const vehicleDocumentsMessage = ref('')
+const vehicleDocumentsError = ref(false)
 const calendarBusy = ref(false)
 const calendarMessage = ref('')
 const calendarError = ref(false)
@@ -218,9 +262,12 @@ const configurationMessage = ref('')
 const configurationError = ref(false)
 const configurationCompanies = ref<SystemCompany[]>([])
 const configurationCompanyId = ref('')
+const configurationCompanyUsers = ref<SystemCompanyUser[]>([])
+const configurationUsersBusy = ref(false)
 const companyConfigurationErrors = ref<Record<string, string>>({})
 const siteConfigurationErrors = ref<Record<string, string>>({})
 const cashRegisterConfigurationErrors = ref<Record<string, string>>({})
+const companyUserConfigurationErrors = ref<Record<string, string>>({})
 let clockTimer: number | undefined
 
 const reservationForm = reactive({
@@ -237,6 +284,8 @@ const reservationForm = reactive({
   pickup_location_detail: '',
   dropoff_location_type: 'cap_haitien_airport' as RentalLocation,
   dropoff_location_detail: '',
+  apply_airport_pickup_fee: false,
+  apply_airport_dropoff_fee: false,
   currency: 'USD' as 'HTG' | 'USD',
   daily_rate: '',
   kilometer_plan: 'limited' as KilometerPlan,
@@ -246,15 +295,29 @@ const reservationForm = reactive({
 
 const vehicleForm = reactive({
   site_id: '',
-  code: '',
   category: 'suv' as RentalCategory,
   operational_status: 'available' as VehicleOperationalStatus,
   make: '',
   model: '',
   model_year: '',
   registration_number: '',
+  registration_status: 'official' as VehicleRegistrationStatus,
   vin: '',
   latest_odometer_km: '0',
+})
+
+const vehicleRegistrationForm = reactive({
+  registration_number: '',
+  registration_status: 'official' as VehicleRegistrationStatus,
+})
+
+const vehicleDocumentsForm = reactive({
+  registration_document_number: '',
+  registration_issued_at: '',
+  oavct_document_number: '',
+  oavct_expires_at: '',
+  tint_document_number: '',
+  tint_expires_at: '',
 })
 
 const vehicleFilters = reactive({
@@ -287,6 +350,16 @@ const cashRegisterConfigurationForm = reactive({
   name: '',
 })
 
+const companyUserConfigurationForm = reactive({
+  name: '',
+  email: '',
+  password: '',
+  password_confirmation: '',
+  role_key: 'car_rental_agent' as CarRentalUserRole,
+  site_scope: 'all' as 'all' | 'selected',
+  site_ids: [] as string[],
+})
+
 const sections = [
   'Accueil',
   'Réservations',
@@ -306,6 +379,39 @@ const vehicleStatusLabels: Record<VehicleOperationalStatus, string> = {
   washing: 'Lavage',
   garage: 'Garage',
   in_circulation: 'En circulation',
+}
+
+const registrationStatusLabels: Record<VehicleRegistrationStatus, string> = {
+  demonstration: 'Démonstration',
+  official: 'Officielle',
+}
+
+const vehicleDocumentTypeLabels: Record<VehicleDocumentType, string> = {
+  registration: 'Immatriculation',
+  oavct_insurance: 'Assurance OAVCT',
+  tint_permit: 'Permis de vitres teintées',
+}
+
+const vehicleDocumentStatusLabels: Record<VehicleDocumentStatus, string> = {
+  not_recorded: 'Non renseigné',
+  not_applicable: 'Sans expiration',
+  expired: 'Expiré',
+  expiring_soon: 'Expire bientôt',
+  current: 'À jour',
+}
+
+const carRentalUserRoleLabels: Record<CarRentalUserRole, string> = {
+  car_rental_administrator: 'Administrateur Car Rental',
+  car_rental_agent: 'Agent de location',
+  car_rental_fleet: 'Gestionnaire de flotte',
+}
+
+function companyUserRoleLabel(roleKey: string): string {
+  if (roleKey === 'owner') {
+    return 'Propriétaire du système'
+  }
+
+  return carRentalUserRoleLabels[roleKey as CarRentalUserRole] ?? roleKey
 }
 
 const reservationStateLabels: Record<CarRentalCalendarEntry['state'], string> = {
@@ -360,6 +466,11 @@ const visibleSections = computed(() => sections.filter((section) => {
 
 const activeSite = computed(() => (
   activeContext.value?.sites.find((site) => site.id === reservationForm.site_id) ?? null
+))
+
+const airportFeesTotalUsd = computed(() => (
+  (reservationForm.pickup_location_type === 'cap_haitien_airport' && reservationForm.apply_airport_pickup_fee ? 20 : 0)
+  + (reservationForm.dropoff_location_type === 'cap_haitien_airport' && reservationForm.apply_airport_dropoff_fee ? 20 : 0)
 ))
 
 async function requestApi<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -591,13 +702,17 @@ function closeSystemConfiguration(): void {
 
 function selectConfigurationCompany(): void {
   cashRegisterConfigurationForm.site_id = selectedConfigurationCompany.value?.sites[0]?.id ?? ''
+  companyUserConfigurationForm.site_ids = []
   clearConfigurationFieldError(cashRegisterConfigurationErrors, 'site_id')
+  clearConfigurationFieldError(companyUserConfigurationErrors, 'site_ids')
+  void loadCompanyUsers()
 }
 
 function clearConfigurationValidationErrors(): void {
   companyConfigurationErrors.value = {}
   siteConfigurationErrors.value = {}
   cashRegisterConfigurationErrors.value = {}
+  companyUserConfigurationErrors.value = {}
 }
 
 function clearConfigurationFieldError(
@@ -614,14 +729,16 @@ function clearConfigurationFieldError(
 }
 
 function clearConfigurationFormFieldError(
-  form: 'company' | 'site' | 'cash-register',
+  form: 'company' | 'site' | 'cash-register' | 'company-user',
   field: string,
 ): void {
   const errors = form === 'company'
     ? companyConfigurationErrors
     : form === 'site'
       ? siteConfigurationErrors
-      : cashRegisterConfigurationErrors
+      : form === 'cash-register'
+        ? cashRegisterConfigurationErrors
+        : companyUserConfigurationErrors
 
   clearConfigurationFieldError(errors, field)
 }
@@ -691,9 +808,124 @@ async function loadSystemConfiguration(): Promise<void> {
     if (!selectedCompany?.sites.some((site) => site.id === cashRegisterConfigurationForm.site_id)) {
       cashRegisterConfigurationForm.site_id = selectedCompany?.sites[0]?.id ?? ''
     }
+    await loadCompanyUsers()
   } catch (error) {
     configurationError.value = true
     configurationMessage.value = messageFrom(error)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+async function loadCompanyUsers(): Promise<void> {
+  const companyId = configurationCompanyId.value
+
+  if (!companyId || !canManageSystemConfiguration.value) {
+    configurationCompanyUsers.value = []
+    return
+  }
+
+  configurationUsersBusy.value = true
+
+  try {
+    const result = await requestApi<{ data: SystemCompanyUser[] }>(`/api/v1/system/configuration/companies/${companyId}/users`)
+    configurationCompanyUsers.value = result.data
+  } catch (error) {
+    configurationError.value = true
+    configurationMessage.value = messageFrom(error)
+    configurationCompanyUsers.value = []
+  } finally {
+    configurationUsersBusy.value = false
+  }
+}
+
+function onCompanyUserSiteScopeChanged(): void {
+  if (companyUserConfigurationForm.site_scope === 'all') {
+    companyUserConfigurationForm.site_ids = []
+  }
+
+  clearConfigurationFieldError(companyUserConfigurationErrors, 'site_scope')
+  clearConfigurationFieldError(companyUserConfigurationErrors, 'site_ids')
+}
+
+function hasValidInitialPassword(): boolean {
+  const value = companyUserConfigurationForm.password
+
+  return value.length >= 12
+    && /[a-z]/.test(value)
+    && /[A-Z]/.test(value)
+    && /\d/.test(value)
+    && /[^A-Za-z0-9]/.test(value)
+}
+
+async function createCompanyUser(): Promise<void> {
+  const companyId = configurationCompanyId.value
+  if (!companyId) {
+    configurationError.value = true
+    configurationMessage.value = 'Sélectionnez une société avant d’ajouter un utilisateur.'
+    return
+  }
+
+  companyUserConfigurationErrors.value = {}
+  configurationError.value = false
+  configurationMessage.value = ''
+
+  if (!hasValidInitialPassword()) {
+    companyUserConfigurationErrors.value = {
+      password: 'Utilisez au moins 12 caractères, avec majuscule, minuscule, chiffre et symbole.',
+    }
+    configurationError.value = true
+    configurationMessage.value = 'Vérifiez les champs signalés.'
+    return
+  }
+
+  if (companyUserConfigurationForm.password !== companyUserConfigurationForm.password_confirmation) {
+    companyUserConfigurationErrors.value = {
+      password_confirmation: 'Les deux mots de passe ne correspondent pas.',
+    }
+    configurationError.value = true
+    configurationMessage.value = 'Vérifiez les champs signalés.'
+    return
+  }
+
+  if (companyUserConfigurationForm.site_scope === 'selected' && !companyUserConfigurationForm.site_ids.length) {
+    companyUserConfigurationErrors.value = {
+      site_ids: 'Sélectionnez au moins une adresse pour un accès limité.',
+    }
+    configurationError.value = true
+    configurationMessage.value = 'Vérifiez les champs signalés.'
+    return
+  }
+
+  configurationBusy.value = true
+
+  try {
+    const result = await requestApi<{ data: SystemCompanyUser }>(`/api/v1/system/configuration/companies/${companyId}/users`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...companyUserConfigurationForm,
+        name: companyUserConfigurationForm.name.trim(),
+        email: companyUserConfigurationForm.email.trim().toLowerCase(),
+      }),
+    })
+
+    configurationCompanyUsers.value = [
+      ...configurationCompanyUsers.value,
+      result.data,
+    ].sort((left, right) => left.name.localeCompare(right.name, 'fr'))
+
+    Object.assign(companyUserConfigurationForm, {
+      name: '',
+      email: '',
+      password: '',
+      password_confirmation: '',
+      role_key: 'car_rental_agent',
+      site_scope: 'all',
+      site_ids: [],
+    })
+    configurationMessage.value = 'Utilisateur créé. Sa première connexion demande un code envoyé à son courriel personnel.'
+  } catch (error) {
+    showConfigurationRequestError(error, companyUserConfigurationErrors)
   } finally {
     configurationBusy.value = false
   }
@@ -812,6 +1044,7 @@ function clearSession(): void {
   showSystemConfiguration.value = false
   configurationCompanies.value = []
   configurationCompanyId.value = ''
+  configurationCompanyUsers.value = []
   authView.value = 'sign-in'
   activeSection.value = 'Accueil'
   resetRentalForm()
@@ -887,6 +1120,8 @@ function resetRentalForm(siteId = ''): void {
     pickup_location_detail: '',
     dropoff_location_type: 'cap_haitien_airport',
     dropoff_location_detail: '',
+    apply_airport_pickup_fee: false,
+    apply_airport_dropoff_fee: false,
     currency: 'USD',
     daily_rate: '',
     kilometer_plan: 'limited',
@@ -902,15 +1137,31 @@ function resetRentalForm(siteId = ''): void {
 function resetVehicleWorkspace(siteId = ''): void {
   Object.assign(vehicleForm, {
     site_id: siteId,
-    code: '',
     category: 'suv',
     operational_status: 'available',
     make: '',
     model: '',
     model_year: '',
     registration_number: '',
+    registration_status: 'official',
     vin: '',
     latest_odometer_km: '0',
+  })
+  selectedVehicle.value = null
+  selectedVehicleDocuments.value = []
+  vehicleDocumentsMessage.value = ''
+  vehicleDocumentsError.value = false
+  Object.assign(vehicleRegistrationForm, {
+    registration_number: '',
+    registration_status: 'official',
+  })
+  Object.assign(vehicleDocumentsForm, {
+    registration_document_number: '',
+    registration_issued_at: '',
+    oavct_document_number: '',
+    oavct_expires_at: '',
+    tint_document_number: '',
+    tint_expires_at: '',
   })
   Object.assign(vehicleFilters, {
     site_id: siteId,
@@ -1025,6 +1276,10 @@ async function createReservation(): Promise<void> {
         dropoff_location_detail: reservationForm.dropoff_location_type === 'custom'
           ? reservationForm.dropoff_location_detail.trim()
           : undefined,
+        apply_airport_pickup_fee: reservationForm.pickup_location_type === 'cap_haitien_airport'
+          && reservationForm.apply_airport_pickup_fee,
+        apply_airport_dropoff_fee: reservationForm.dropoff_location_type === 'cap_haitien_airport'
+          && reservationForm.apply_airport_dropoff_fee,
         currency: reservationForm.currency,
         daily_rate: reservationForm.daily_rate,
         kilometer_plan: reservationForm.kilometer_plan,
@@ -1071,6 +1326,10 @@ async function loadVehicles(): Promise<void> {
       headers: contextHeaders(),
     })
     managedVehicles.value = result.data
+    if (selectedVehicle.value && !result.data.some((vehicle) => vehicle.id === selectedVehicle.value?.id)) {
+      selectedVehicle.value = null
+      selectedVehicleDocuments.value = []
+    }
     vehicleMessage.value = result.data.length === 0
       ? 'Aucun véhicule ne correspond aux critères sélectionnés.'
       : `${result.data.length} véhicule${result.data.length > 1 ? 's' : ''} affiché${result.data.length > 1 ? 's' : ''}.`
@@ -1093,9 +1352,9 @@ async function createVehicle(): Promise<void> {
     return
   }
 
-  if (!vehicleForm.site_id || !vehicleForm.code.trim() || vehicleForm.latest_odometer_km === '') {
+  if (!vehicleForm.site_id || !vehicleForm.registration_number.trim() || vehicleForm.latest_odometer_km === '') {
     vehicleError.value = true
-    vehicleMessage.value = 'Renseignez l’adresse, le code interne et le kilométrage actuel.'
+    vehicleMessage.value = 'Renseignez l’adresse, la plaque en cours et le kilométrage actuel.'
     return
   }
 
@@ -1107,13 +1366,13 @@ async function createVehicle(): Promise<void> {
       headers: contextHeaders(),
       body: JSON.stringify({
         site_id: vehicleForm.site_id,
-        code: vehicleForm.code.trim(),
         category: vehicleForm.category,
         operational_status: vehicleForm.operational_status,
         make: vehicleForm.make.trim() || undefined,
         model: vehicleForm.model.trim() || undefined,
         model_year: vehicleForm.model_year === '' ? undefined : Number(vehicleForm.model_year),
-        registration_number: vehicleForm.registration_number.trim() || undefined,
+        registration_number: vehicleForm.registration_number.trim(),
+        registration_status: vehicleForm.registration_status,
         vin: vehicleForm.vin.trim() || undefined,
         latest_odometer_km: Number(vehicleForm.latest_odometer_km),
       }),
@@ -1121,18 +1380,18 @@ async function createVehicle(): Promise<void> {
 
     const siteId = vehicleForm.site_id
     Object.assign(vehicleForm, {
-      code: '',
       category: 'suv',
       operational_status: 'available',
       make: '',
       model: '',
       model_year: '',
       registration_number: '',
+      registration_status: 'official',
       vin: '',
       latest_odometer_km: '0',
       site_id: siteId,
     })
-    vehicleMessage.value = `Véhicule ${result.data.code} enregistré.`
+    vehicleMessage.value = `Véhicule ${result.data.registration_number ?? result.data.code} enregistré.`
 
     if (!vehicleFilters.site_id || vehicleFilters.site_id === result.data.site_id) {
       managedVehicles.value = [
@@ -1140,6 +1399,7 @@ async function createVehicle(): Promise<void> {
         ...managedVehicles.value.filter((vehicle) => vehicle.id !== result.data.id),
       ].sort((left, right) => left.code.localeCompare(right.code, 'fr'))
     }
+    await selectVehicle(result.data)
   } catch (error) {
     vehicleError.value = true
     vehicleMessage.value = messageFrom(error)
@@ -1182,14 +1442,185 @@ async function updateVehicleStatus(vehicle: RentalVehicle, status: VehicleOperat
       headers: contextHeaders(),
       body: JSON.stringify({ operational_status: status }),
     })
-    managedVehicles.value = managedVehicles.value.map((item) => item.id === result.data.id ? result.data : item)
+    applyVehicleUpdate(result.data)
     calendarVehicles.value = calendarVehicles.value.map((item) => item.id === result.data.id ? result.data : item)
-    vehicleMessage.value = `État de ${result.data.code} mis à jour : ${vehicleStatusLabels[result.data.operational_status]}.`
+    vehicleMessage.value = `État de ${result.data.registration_number ?? result.data.code} mis à jour : ${vehicleStatusLabels[result.data.operational_status]}.`
   } catch (error) {
     vehicleError.value = true
     vehicleMessage.value = messageFrom(error)
   } finally {
     vehicleBusy.value = false
+  }
+}
+
+function applyVehicleUpdate(vehicle: RentalVehicle): void {
+  managedVehicles.value = managedVehicles.value.map((item) => item.id === vehicle.id ? vehicle : item)
+  if (selectedVehicle.value?.id === vehicle.id) {
+    selectedVehicle.value = vehicle
+  }
+}
+
+function documentFor(type: VehicleDocumentType): RentalVehicleDocument | undefined {
+  return selectedVehicleDocuments.value.find((document) => document.type === type)
+}
+
+function vehicleDocumentStatusFor(vehicle: RentalVehicle, type: VehicleDocumentType): VehicleDocumentStatus {
+  return vehicle.document_statuses?.find((document) => document.type === type)?.status ?? 'not_recorded'
+}
+
+function applyVehicleDocuments(documents: RentalVehicleDocument[]): void {
+  selectedVehicleDocuments.value = documents
+  const registration = documentFor('registration')
+  const oavct = documentFor('oavct_insurance')
+  const tint = documentFor('tint_permit')
+
+  Object.assign(vehicleDocumentsForm, {
+    registration_document_number: registration?.document_number ?? '',
+    registration_issued_at: registration?.issued_at ?? '',
+    oavct_document_number: oavct?.document_number ?? '',
+    oavct_expires_at: oavct?.expires_at ?? '',
+    tint_document_number: tint?.document_number ?? '',
+    tint_expires_at: tint?.expires_at ?? '',
+  })
+
+  if (selectedVehicle.value) {
+    const documentStatuses = (Object.keys(vehicleDocumentTypeLabels) as VehicleDocumentType[]).map((type) => {
+      const document = documents.find((item) => item.type === type)
+
+      return {
+        type,
+        status: document?.status ?? 'not_recorded',
+        expires_at: document?.expires_at ?? null,
+      }
+    })
+    applyVehicleUpdate({
+      ...selectedVehicle.value,
+      document_statuses: documentStatuses,
+    })
+  }
+}
+
+async function selectVehicle(vehicle: RentalVehicle): Promise<void> {
+  if (!canManageVehicles.value) {
+    return
+  }
+
+  selectedVehicle.value = vehicle
+  vehicleRegistrationForm.registration_number = vehicle.registration_number ?? vehicle.code
+  vehicleRegistrationForm.registration_status = vehicle.registration_status ?? 'official'
+  vehicleDocumentsMessage.value = ''
+  vehicleDocumentsError.value = false
+  vehicleDocumentsBusy.value = true
+  const vehicleId = vehicle.id
+
+  try {
+    const result = await requestApi<{ data: RentalVehicleDocument[] }>(`/api/v1/car-rental/vehicles/${vehicleId}/documents`, {
+      headers: contextHeaders(),
+    })
+
+    if (selectedVehicle.value?.id === vehicleId) {
+      applyVehicleDocuments(result.data)
+    }
+  } catch (error) {
+    if (selectedVehicle.value?.id === vehicleId) {
+      vehicleDocumentsError.value = true
+      vehicleDocumentsMessage.value = messageFrom(error)
+      selectedVehicleDocuments.value = []
+    }
+  } finally {
+    vehicleDocumentsBusy.value = false
+  }
+}
+
+async function updateVehicleRegistration(): Promise<void> {
+  const vehicle = selectedVehicle.value
+  if (!vehicle || !vehicleRegistrationForm.registration_number.trim()) {
+    vehicleDocumentsError.value = true
+    vehicleDocumentsMessage.value = 'Saisissez la plaque en cours avant de l’enregistrer.'
+    return
+  }
+
+  vehicleDocumentsBusy.value = true
+  vehicleDocumentsError.value = false
+  vehicleDocumentsMessage.value = ''
+
+  try {
+    const result = await requestApi<{ data: RentalVehicle }>(`/api/v1/car-rental/vehicles/${vehicle.id}/registration`, {
+      method: 'PATCH',
+      headers: contextHeaders(),
+      body: JSON.stringify({
+        registration_number: vehicleRegistrationForm.registration_number.trim(),
+        registration_status: vehicleRegistrationForm.registration_status,
+      }),
+    })
+    applyVehicleUpdate(result.data)
+    vehicleRegistrationForm.registration_number = result.data.registration_number ?? result.data.code
+    vehicleRegistrationForm.registration_status = result.data.registration_status ?? 'official'
+    vehicleDocumentsMessage.value = 'Plaque mise à jour. L’ancienne plaque est conservée dans l’historique du véhicule.'
+  } catch (error) {
+    vehicleDocumentsError.value = true
+    vehicleDocumentsMessage.value = messageFrom(error)
+  } finally {
+    vehicleDocumentsBusy.value = false
+  }
+}
+
+async function saveVehicleDocuments(): Promise<void> {
+  const vehicle = selectedVehicle.value
+  if (!vehicle) {
+    return
+  }
+
+  const documents: Array<Record<string, string>> = []
+  const registrationHasValue = vehicleDocumentsForm.registration_document_number.trim() || vehicleDocumentsForm.registration_issued_at
+  const oavctHasValue = vehicleDocumentsForm.oavct_document_number.trim() || vehicleDocumentsForm.oavct_expires_at
+  const tintHasValue = vehicleDocumentsForm.tint_document_number.trim() || vehicleDocumentsForm.tint_expires_at
+
+  if (registrationHasValue) {
+    documents.push({
+      type: 'registration',
+      document_number: vehicleDocumentsForm.registration_document_number.trim(),
+      issued_at: vehicleDocumentsForm.registration_issued_at,
+    })
+  }
+  if (oavctHasValue) {
+    documents.push({
+      type: 'oavct_insurance',
+      document_number: vehicleDocumentsForm.oavct_document_number.trim(),
+      expires_at: vehicleDocumentsForm.oavct_expires_at,
+    })
+  }
+  if (tintHasValue) {
+    documents.push({
+      type: 'tint_permit',
+      document_number: vehicleDocumentsForm.tint_document_number.trim(),
+      expires_at: vehicleDocumentsForm.tint_expires_at,
+    })
+  }
+
+  if (!documents.length) {
+    vehicleDocumentsError.value = true
+    vehicleDocumentsMessage.value = 'Saisissez au moins une référence ou une date avant d’enregistrer.'
+    return
+  }
+
+  vehicleDocumentsBusy.value = true
+  vehicleDocumentsError.value = false
+  vehicleDocumentsMessage.value = ''
+
+  try {
+    const result = await requestApi<{ data: RentalVehicleDocument[] }>(`/api/v1/car-rental/vehicles/${vehicle.id}/documents`, {
+      method: 'PUT',
+      headers: contextHeaders(),
+      body: JSON.stringify({ documents }),
+    })
+    applyVehicleDocuments(result.data)
+    vehicleDocumentsMessage.value = 'Documents enregistrés.'
+  } catch (error) {
+    vehicleDocumentsError.value = true
+    vehicleDocumentsMessage.value = messageFrom(error)
+  } finally {
+    vehicleDocumentsBusy.value = false
   }
 }
 
@@ -1425,8 +1856,8 @@ onBeforeUnmount(() => {
 
         <section class="configuration-header">
           <p class="eyebrow">Configuration système</p>
-          <h1 id="configuration-title">Sociétés, adresses et caisses</h1>
-          <p>Ajoutez les éléments nécessaires à l’exploitation. Les modifications sont journalisées.</p>
+          <h1 id="configuration-title">Sociétés et utilisateurs</h1>
+          <p>Créez les sociétés, les adresses, les caisses et les accès nécessaires. Les modifications sont journalisées.</p>
         </section>
 
         <p v-if="configurationMessage" class="configuration-message" :class="{ error: configurationError }" :role="configurationError ? 'alert' : 'status'" aria-live="polite">
@@ -1556,6 +1987,101 @@ onBeforeUnmount(() => {
           </section>
         </div>
 
+        <section class="configuration-user-card" aria-labelledby="company-users-title">
+          <div class="section-intro">
+            <p class="eyebrow">Utilisateurs</p>
+            <h2 id="company-users-title">Créer un compte utilisateur Car Rental</h2>
+            <p>Ce compte est réel. Utilisez le courriel personnel de la personne ; un code est demandé à chaque connexion.</p>
+          </div>
+
+          <div class="configuration-user-workspace">
+            <form class="configuration-form" @submit.prevent="createCompanyUser">
+              <div class="form-field">
+                <label for="company-user-company-id">Société</label>
+                <select id="company-user-company-id" v-model="configurationCompanyId" name="company_id" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
+                  <option value="" disabled>Sélectionnez une société</option>
+                  <option v-for="company in configurationCompanies" :key="company.id" :value="company.id">
+                    {{ company.display_name }} · {{ company.code }}
+                  </option>
+                </select>
+              </div>
+              <div class="two-columns">
+                <div class="form-field">
+                  <label for="company-user-name">Nom complet</label>
+                  <input id="company-user-name" v-model.trim="companyUserConfigurationForm.name" name="name" type="text" maxlength="255" autocomplete="name" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(companyUserConfigurationErrors.name)" :aria-describedby="companyUserConfigurationErrors.name ? 'company-user-name-error' : undefined" @input="clearConfigurationFormFieldError('company-user', 'name')" />
+                  <span v-if="companyUserConfigurationErrors.name" id="company-user-name-error" class="field-error" role="alert">{{ companyUserConfigurationErrors.name }}</span>
+                </div>
+                <div class="form-field">
+                  <label for="company-user-email">Courriel personnel</label>
+                  <input id="company-user-email" v-model.trim="companyUserConfigurationForm.email" name="email" type="email" maxlength="254" autocomplete="email" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(companyUserConfigurationErrors.email)" :aria-describedby="companyUserConfigurationErrors.email ? 'company-user-email-error' : undefined" @input="clearConfigurationFormFieldError('company-user', 'email')" />
+                  <span v-if="companyUserConfigurationErrors.email" id="company-user-email-error" class="field-error" role="alert">{{ companyUserConfigurationErrors.email }}</span>
+                </div>
+              </div>
+              <div class="form-field">
+                <label for="company-user-role">Profil Car Rental</label>
+                <select id="company-user-role" v-model="companyUserConfigurationForm.role_key" name="role_key" :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(companyUserConfigurationErrors.role_key)" :aria-describedby="companyUserConfigurationErrors.role_key ? 'company-user-role-error' : undefined" @change="clearConfigurationFormFieldError('company-user', 'role_key')">
+                  <option v-for="(label, roleKey) in carRentalUserRoleLabels" :key="roleKey" :value="roleKey">{{ label }}</option>
+                </select>
+                <span v-if="companyUserConfigurationErrors.role_key" id="company-user-role-error" class="field-error" role="alert">{{ companyUserConfigurationErrors.role_key }}</span>
+              </div>
+              <fieldset class="site-scope-fields" :disabled="configurationBusy || !configurationCompanyId">
+                <legend>Adresses autorisées</legend>
+                <label><input v-model="companyUserConfigurationForm.site_scope" type="radio" value="all" name="company-user-site-scope" @change="onCompanyUserSiteScopeChanged" /> Toutes les adresses actives</label>
+                <label><input v-model="companyUserConfigurationForm.site_scope" type="radio" value="selected" name="company-user-site-scope" @change="onCompanyUserSiteScopeChanged" /> Adresses sélectionnées</label>
+                <div v-if="companyUserConfigurationForm.site_scope === 'selected'" class="site-checkbox-list">
+                  <label v-for="site in selectedConfigurationCompany?.sites ?? []" :key="site.id">
+                    <input v-model="companyUserConfigurationForm.site_ids" type="checkbox" :value="site.id" :disabled="configurationBusy" @change="clearConfigurationFormFieldError('company-user', 'site_ids')" />
+                    {{ site.name }} · {{ site.code }}
+                  </label>
+                </div>
+              </fieldset>
+              <span v-if="companyUserConfigurationErrors.site_scope" class="field-error" role="alert">{{ companyUserConfigurationErrors.site_scope }}</span>
+              <span v-if="companyUserConfigurationErrors.site_ids" class="field-error" role="alert">{{ companyUserConfigurationErrors.site_ids }}</span>
+              <div class="two-columns">
+                <div class="form-field">
+                  <label for="company-user-password">Mot de passe initial</label>
+                  <input id="company-user-password" v-model="companyUserConfigurationForm.password" name="password" type="password" minlength="12" autocomplete="new-password" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(companyUserConfigurationErrors.password)" :aria-describedby="companyUserConfigurationErrors.password ? 'company-user-password-help company-user-password-error' : 'company-user-password-help'" @input="clearConfigurationFormFieldError('company-user', 'password')" />
+                  <span id="company-user-password-help" class="field-help">Au moins 12 caractères, avec majuscule, minuscule, chiffre et symbole.</span>
+                  <span v-if="companyUserConfigurationErrors.password" id="company-user-password-error" class="field-error" role="alert">{{ companyUserConfigurationErrors.password }}</span>
+                </div>
+                <div class="form-field">
+                  <label for="company-user-password-confirmation">Confirmer le mot de passe</label>
+                  <input id="company-user-password-confirmation" v-model="companyUserConfigurationForm.password_confirmation" name="password_confirmation" type="password" minlength="12" autocomplete="new-password" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(companyUserConfigurationErrors.password_confirmation)" :aria-describedby="companyUserConfigurationErrors.password_confirmation ? 'company-user-password-confirmation-error' : undefined" @input="clearConfigurationFormFieldError('company-user', 'password_confirmation')" />
+                  <span v-if="companyUserConfigurationErrors.password_confirmation" id="company-user-password-confirmation-error" class="field-error" role="alert">{{ companyUserConfigurationErrors.password_confirmation }}</span>
+                </div>
+              </div>
+              <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online' || !configurationCompanyId">
+                {{ configurationBusy ? 'Enregistrement…' : 'Créer l’utilisateur' }}
+              </button>
+            </form>
+
+            <section class="configuration-user-list" aria-labelledby="company-user-list-title">
+              <div class="workspace-heading">
+                <div>
+                  <p class="eyebrow">Accès attribués</p>
+                  <h3 id="company-user-list-title">Utilisateurs de la société</h3>
+                </div>
+                <button class="refresh-button" type="button" :disabled="configurationUsersBusy || !configurationCompanyId" @click="loadCompanyUsers">
+                  {{ configurationUsersBusy ? 'Actualisation…' : 'Actualiser' }}
+                </button>
+              </div>
+              <p v-if="!configurationCompanyId" class="field-help">Sélectionnez une société pour afficher ses utilisateurs.</p>
+              <p v-else-if="configurationUsersBusy" class="field-help">Chargement des utilisateurs…</p>
+              <div v-else-if="configurationCompanyUsers.length" class="company-user-list">
+                <article v-for="companyUser in configurationCompanyUsers" :key="companyUser.id" class="company-user-item">
+                  <div>
+                    <strong>{{ companyUser.name }}</strong>
+                    <span>{{ companyUser.email }}</span>
+                  </div>
+                  <p>{{ companyUserRoleLabel(companyUser.role_key) }}</p>
+                  <small>{{ companyUser.site_scope === 'all' ? 'Toutes les adresses actives' : companyUser.sites.map((site) => site.name).join(', ') }}</small>
+                </article>
+              </div>
+              <p v-else class="field-help">Aucun utilisateur n’est encore attribué à cette société.</p>
+            </section>
+          </div>
+        </section>
+
         <section class="configuration-list-card">
           <div class="workspace-heading">
             <div>
@@ -1619,7 +2145,7 @@ onBeforeUnmount(() => {
         </p>
         <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
         <button v-if="canManageSystemConfiguration" class="secondary-button" type="button" @click="openSystemConfiguration">
-          Ouvrir la configuration globale
+          Ouvrir la configuration système
         </button>
         <button class="text-button" type="button" @click="logout">Fermer la session</button>
       </section>
@@ -1628,7 +2154,7 @@ onBeforeUnmount(() => {
         <section class="session-strip" aria-label="Session active">
           <span class="avatar" aria-hidden="true">{{ userInitial }}</span>
           <span><strong>{{ user?.name }}</strong> · {{ activeCompanyName }}</span>
-          <button v-if="canManageSystemConfiguration" class="text-button" type="button" @click="openSystemConfiguration">Configuration globale</button>
+          <button v-if="canManageSystemConfiguration" class="text-button" type="button" @click="openSystemConfiguration">Configuration système</button>
           <button class="text-button change-company" type="button" @click="changeCompany">Changer de société</button>
           <button class="text-button" type="button" @click="logout">Fermer la session</button>
         </section>
@@ -1716,10 +2242,10 @@ onBeforeUnmount(() => {
               <section class="reservation-form-card" aria-labelledby="reservation-title">
                 <div class="section-intro">
                   <p class="eyebrow">Nouvelle réservation</p>
-                  <h3 id="reservation-title">Réserver à partir d’une adresse réelle</h3>
+                  <h3 id="reservation-title">Créer une réservation</h3>
                   <p>
-                    Les véhicules proposés appartiennent uniquement à la société et à l’adresse de travail
-                    sélectionnées. Une réservation concurrente est refusée par le serveur.
+                    Le bureau sélectionné est le lieu de départ par défaut. Les véhicules proposés appartiennent uniquement
+                    à la société et à cette adresse. Une réservation concurrente est refusée.
                   </p>
                 </div>
 
@@ -1727,7 +2253,7 @@ onBeforeUnmount(() => {
                   <fieldset>
                     <legend>1 · Lieu et période</legend>
                     <label>
-                      Adresse de l’opération
+                      Bureau de départ
                       <select v-model="reservationForm.site_id" required :disabled="rentalBusy" @change="onReservationSiteChanged">
                         <option value="" disabled>Choisissez une adresse autorisée</option>
                         <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
@@ -1737,7 +2263,7 @@ onBeforeUnmount(() => {
                     </label>
                     <p v-if="activeSite" class="site-context">
                       Société : <strong>{{ activeContext.company.name }}</strong><br />
-                      Adresse active : <strong>{{ activeSite.name }} · {{ activeSite.address }}</strong>
+                      Bureau physique : <strong>{{ activeSite.name }} · {{ activeSite.address }}</strong>
                     </p>
                     <div class="two-columns">
                       <label>
@@ -1817,17 +2343,17 @@ onBeforeUnmount(() => {
                     <legend>4 · Départ, retour et tarif</legend>
                     <div class="two-columns">
                       <label>
-                        Lieu de départ
+                        Départ
                         <select v-model="reservationForm.pickup_location_type" :disabled="rentalBusy">
-                          <option value="site">Adresse de l’opération</option>
+                          <option value="site">Bureau sélectionné</option>
                           <option value="cap_haitien_airport">Aéroport International du Cap-Haïtien</option>
                           <option value="custom">Autre lieu précisé</option>
                         </select>
                       </label>
                       <label>
-                        Lieu de retour
+                        Retour
                         <select v-model="reservationForm.dropoff_location_type" :disabled="rentalBusy">
-                          <option value="site">Adresse de l’opération</option>
+                          <option value="site">Bureau sélectionné</option>
                           <option value="cap_haitien_airport">Aéroport International du Cap-Haïtien</option>
                           <option value="custom">Autre lieu précisé</option>
                         </select>
@@ -1843,6 +2369,18 @@ onBeforeUnmount(() => {
                         <input v-model.trim="reservationForm.dropoff_location_detail" type="text" maxlength="1000" required :disabled="rentalBusy" />
                       </label>
                     </div>
+                    <fieldset v-if="reservationForm.pickup_location_type === 'cap_haitien_airport' || reservationForm.dropoff_location_type === 'cap_haitien_airport'" class="service-fee-options">
+                      <legend>Frais de service aéroport</legend>
+                      <label v-if="reservationForm.pickup_location_type === 'cap_haitien_airport'">
+                        <input v-model="reservationForm.apply_airport_pickup_fee" type="checkbox" :disabled="rentalBusy" />
+                        Appliquer 20 USD pour la prise en charge à l’aéroport
+                      </label>
+                      <label v-if="reservationForm.dropoff_location_type === 'cap_haitien_airport'">
+                        <input v-model="reservationForm.apply_airport_dropoff_fee" type="checkbox" :disabled="rentalBusy" />
+                        Appliquer 20 USD pour le retour à l’aéroport
+                      </label>
+                      <p v-if="airportFeesTotalUsd" class="field-help">Frais aéroport retenus : USD {{ airportFeesTotalUsd.toFixed(2) }}.</p>
+                    </fieldset>
                     <div class="three-columns">
                       <label>
                         Devise du tarif
@@ -1900,6 +2438,7 @@ onBeforeUnmount(() => {
                   <strong>{{ reservationCreated.number }}</strong>
                   <span>{{ reservationCreated.customer?.display_name }}</span>
                   <span>{{ reservationCreated.vehicle?.code }} · {{ reservationCreated.currency }} {{ reservationCreated.daily_rate }} / jour</span>
+                  <span v-if="Number(reservationCreated.airport_fees_total_usd) > 0">Frais aéroport : USD {{ reservationCreated.airport_fees_total_usd }}</span>
                   <small>Statut : {{ reservationCreated.state }}</small>
                 </div>
               </aside>
@@ -2035,10 +2574,11 @@ onBeforeUnmount(() => {
                 </p>
 
                 <div v-if="managedVehicles.length" class="managed-vehicle-grid">
-                  <article v-for="vehicle in managedVehicles" :key="vehicle.id" class="managed-vehicle-card">
+                  <article v-for="vehicle in managedVehicles" :key="vehicle.id" class="managed-vehicle-card" :class="{ selected: selectedVehicle?.id === vehicle.id }">
                     <div>
-                      <span class="vehicle-code">{{ vehicle.code }}</span>
-                      <h4>{{ vehicleDisplayName(vehicle) }}</h4>
+                      <span class="vehicle-code">Plaque · {{ registrationStatusLabels[vehicle.registration_status ?? 'official'] }}</span>
+                      <h4>{{ vehicle.registration_number ?? vehicle.code }}</h4>
+                      <p>{{ vehicleDisplayName(vehicle) }}</p>
                       <p>{{ vehicle.site?.name ?? 'Adresse non disponible' }} · {{ categoryLabels[vehicle.category] }}</p>
                     </div>
                     <dl>
@@ -2061,6 +2601,19 @@ onBeforeUnmount(() => {
                         <option v-for="(label, status) in vehicleStatusLabels" :key="status" :value="status">{{ label }}</option>
                       </select>
                     </label>
+                    <dl class="vehicle-document-statuses">
+                      <div>
+                        <dt>Assurance OAVCT</dt>
+                        <dd :class="`document-status-${vehicleDocumentStatusFor(vehicle, 'oavct_insurance')}`">{{ vehicleDocumentStatusLabels[vehicleDocumentStatusFor(vehicle, 'oavct_insurance')] }}</dd>
+                      </div>
+                      <div>
+                        <dt>Vitres teintées</dt>
+                        <dd :class="`document-status-${vehicleDocumentStatusFor(vehicle, 'tint_permit')}`">{{ vehicleDocumentStatusLabels[vehicleDocumentStatusFor(vehicle, 'tint_permit')] }}</dd>
+                      </div>
+                    </dl>
+                    <button v-if="canManageVehicles" class="secondary-button vehicle-documents-button" type="button" :disabled="vehicleBusy || vehicleDocumentsBusy" @click="selectVehicle(vehicle)">
+                      {{ selectedVehicle?.id === vehicle.id ? 'Papiers sélectionnés' : 'Gérer les papiers' }}
+                    </button>
                   </article>
                 </div>
                 <p v-else class="field-help">Utilisez les critères puis sélectionnez « Afficher les véhicules ».</p>
@@ -2070,7 +2623,7 @@ onBeforeUnmount(() => {
                 <div class="section-intro">
                   <p class="eyebrow">Nouveau véhicule</p>
                   <h3 id="vehicle-create-title">Ajouter à la flotte</h3>
-                  <p>Le code interne, l’immatriculation et le VIN sont contrôlés au niveau de la société.</p>
+                  <p>La plaque en cours identifie le véhicule. Une plaque « Démonstration » est remplacée lorsqu’une plaque officielle est attribuée.</p>
                 </div>
 
                 <form class="vehicle-create-form" @submit.prevent="createVehicle">
@@ -2085,16 +2638,23 @@ onBeforeUnmount(() => {
                   </label>
                   <div class="two-columns">
                     <label>
-                      Code interne
-                      <input v-model.trim="vehicleForm.code" type="text" maxlength="32" required :disabled="vehicleBusy" />
+                      Plaque d’immatriculation en cours
+                      <input v-model.trim="vehicleForm.registration_number" type="text" maxlength="32" autocapitalize="characters" required :disabled="vehicleBusy" />
                     </label>
                     <label>
-                      Catégorie
-                      <select v-model="vehicleForm.category" :disabled="vehicleBusy">
-                        <option v-for="(label, category) in categoryLabels" :key="category" :value="category">{{ label }}</option>
+                      Type de plaque
+                      <select v-model="vehicleForm.registration_status" :disabled="vehicleBusy">
+                        <option v-for="(label, status) in registrationStatusLabels" :key="status" :value="status">{{ label }}</option>
                       </select>
                     </label>
                   </div>
+                  <p class="field-help">Utilisez la plaque affichée sur le véhicule. Le système ne demande pas de code interne distinct.</p>
+                  <label>
+                    Catégorie
+                    <select v-model="vehicleForm.category" :disabled="vehicleBusy">
+                      <option v-for="(label, category) in categoryLabels" :key="category" :value="category">{{ label }}</option>
+                    </select>
+                  </label>
                   <div class="two-columns">
                     <label>
                       Marque
@@ -2121,20 +2681,86 @@ onBeforeUnmount(() => {
                       </select>
                     </label>
                   </div>
-                  <div class="two-columns">
-                    <label>
-                      Immatriculation (facultatif)
-                      <input v-model.trim="vehicleForm.registration_number" type="text" maxlength="64" :disabled="vehicleBusy" />
-                    </label>
-                    <label>
-                      VIN (facultatif)
-                      <input v-model.trim="vehicleForm.vin" type="text" maxlength="64" :disabled="vehicleBusy" />
-                    </label>
-                  </div>
+                  <label>
+                    VIN (facultatif)
+                    <input v-model.trim="vehicleForm.vin" type="text" maxlength="64" autocapitalize="characters" :disabled="vehicleBusy" />
+                  </label>
                   <button class="primary-button create-vehicle" type="submit" :disabled="vehicleBusy || apiStatus !== 'online'">
                     {{ vehicleBusy ? 'Enregistrement…' : 'Enregistrer le véhicule' }}
                   </button>
                 </form>
+              </section>
+
+              <section v-if="selectedVehicle && canManageVehicles" class="vehicle-documents-card" aria-labelledby="vehicle-documents-title">
+                <div class="section-intro">
+                  <p class="eyebrow">Papiers du véhicule</p>
+                  <h3 id="vehicle-documents-title">{{ selectedVehicle.registration_number ?? selectedVehicle.code }}</h3>
+                  <p>Enregistrez la plaque en cours et les dates utiles. Les références restent limitées à cette société.</p>
+                </div>
+
+                <p v-if="vehicleDocumentsMessage" class="rental-message" :class="{ error: vehicleDocumentsError }" :role="vehicleDocumentsError ? 'alert' : 'status'">
+                  {{ vehicleDocumentsMessage }}
+                </p>
+
+                <div class="vehicle-documents-workspace">
+                  <form class="vehicle-documents-form" @submit.prevent="updateVehicleRegistration">
+                    <h4>Plaque en cours</h4>
+                    <div class="two-columns">
+                      <label>
+                        Plaque d’immatriculation
+                        <input v-model.trim="vehicleRegistrationForm.registration_number" type="text" maxlength="32" autocapitalize="characters" required :disabled="vehicleDocumentsBusy" />
+                      </label>
+                      <label>
+                        Type de plaque
+                        <select v-model="vehicleRegistrationForm.registration_status" :disabled="vehicleDocumentsBusy">
+                          <option v-for="(label, status) in registrationStatusLabels" :key="status" :value="status">{{ label }}</option>
+                        </select>
+                      </label>
+                    </div>
+                    <p class="field-help">Lors du remplacement d’une plaque « Démonstration », l’ancienne plaque est conservée dans l’historique.</p>
+                    <button class="secondary-button" type="submit" :disabled="vehicleDocumentsBusy || apiStatus !== 'online'">
+                      {{ vehicleDocumentsBusy ? 'Enregistrement…' : 'Enregistrer la plaque' }}
+                    </button>
+                  </form>
+
+                  <form class="vehicle-documents-form" @submit.prevent="saveVehicleDocuments">
+                    <h4>Documents et dates</h4>
+                    <p class="field-help">La flotte est traitée comme équipée de vitres teintées. Renseignez le permis et son expiration.</p>
+                    <div class="two-columns">
+                      <label>
+                        Référence d’immatriculation
+                        <input v-model.trim="vehicleDocumentsForm.registration_document_number" type="text" maxlength="100" :disabled="vehicleDocumentsBusy" />
+                      </label>
+                      <label>
+                        Date de délivrance
+                        <input v-model="vehicleDocumentsForm.registration_issued_at" type="date" :disabled="vehicleDocumentsBusy" />
+                      </label>
+                    </div>
+                    <div class="two-columns">
+                      <label>
+                        Référence d’assurance OAVCT
+                        <input v-model.trim="vehicleDocumentsForm.oavct_document_number" type="text" maxlength="100" :disabled="vehicleDocumentsBusy" />
+                      </label>
+                      <label>
+                        Expiration de l’assurance OAVCT
+                        <input v-model="vehicleDocumentsForm.oavct_expires_at" type="date" :disabled="vehicleDocumentsBusy" />
+                      </label>
+                    </div>
+                    <div class="two-columns">
+                      <label>
+                        Référence du permis de vitres teintées
+                        <input v-model.trim="vehicleDocumentsForm.tint_document_number" type="text" maxlength="100" :disabled="vehicleDocumentsBusy" />
+                      </label>
+                      <label>
+                        Expiration du permis de vitres teintées
+                        <input v-model="vehicleDocumentsForm.tint_expires_at" type="date" :disabled="vehicleDocumentsBusy" />
+                      </label>
+                    </div>
+                    <button class="primary-button" type="submit" :disabled="vehicleDocumentsBusy || apiStatus !== 'online'">
+                      {{ vehicleDocumentsBusy ? 'Enregistrement…' : 'Enregistrer les documents' }}
+                    </button>
+                  </form>
+                </div>
               </section>
             </div>
           </template>
@@ -2150,7 +2776,7 @@ onBeforeUnmount(() => {
     </template>
 
     <footer class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.8' }}</span>
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.10' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>

@@ -5,13 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\CashRegister;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
+use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\CompanyContext;
+use App\Support\PasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +27,39 @@ use Illuminate\Validation\ValidationException;
  */
 final class SystemConfigurationController extends Controller
 {
+    /** @var array<string, array{permissions: array<int, string>}> */
+    private const CAR_RENTAL_ROLE_PROFILES = [
+        'car_rental_administrator' => [
+            'permissions' => [
+                'rental.availability.read',
+                'rental.reservations.create',
+                'rental.reservations.read',
+                'rental.vehicles.read',
+                'rental.vehicles.manage',
+                'rental.calendar.read',
+                'rental.payments.submit',
+                'rental.payments.approve',
+            ],
+        ],
+        'car_rental_agent' => [
+            'permissions' => [
+                'rental.availability.read',
+                'rental.reservations.create',
+                'rental.reservations.read',
+                'rental.vehicles.read',
+                'rental.calendar.read',
+                'rental.payments.submit',
+            ],
+        ],
+        'car_rental_fleet' => [
+            'permissions' => [
+                'rental.vehicles.read',
+                'rental.vehicles.manage',
+                'rental.calendar.read',
+            ],
+        ],
+    ];
+
     public function __construct(
         private readonly CompanyContext $companyContext,
         private readonly AuditLogger $audit,
@@ -237,6 +274,153 @@ final class SystemConfigurationController extends Controller
         });
     }
 
+    public function companyUsers(Company $company): JsonResponse
+    {
+        return $this->companyContext->within($company->id, function () use ($company): JsonResponse {
+            $accesses = CompanyUserAccess::query()
+                ->where('company_id', $company->id)
+                ->with([
+                    'user',
+                    'siteGrants' => static fn ($siteGrants) => $siteGrants
+                        ->where('is_active', true)
+                        ->with('site')
+                        ->orderBy('site_id'),
+                ])
+                ->get()
+                ->sortBy(static fn (CompanyUserAccess $access): string => Str::lower($access->user?->name ?? ''))
+                ->values();
+
+            return response()->json([
+                'data' => $accesses
+                    ->map(fn (CompanyUserAccess $access): array => $this->companyUserPayload($access))
+                    ->values(),
+            ]);
+        });
+    }
+
+    public function storeCompanyUser(Request $request, Company $company): JsonResponse
+    {
+        $request->merge([
+            'email' => is_string($request->input('email'))
+                ? Str::lower(trim($request->input('email')))
+                : $request->input('email'),
+        ]);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email:rfc', 'max:254'],
+            'password' => ['required', 'string', 'max:4096', 'confirmed'],
+            'role_key' => ['required', Rule::in(array_keys(self::CAR_RENTAL_ROLE_PROFILES))],
+            'site_scope' => ['required', Rule::in(['all', 'selected'])],
+            'site_ids' => ['nullable', 'array', 'max:100'],
+            'site_ids.*' => ['uuid', 'distinct'],
+        ], $this->companyUserValidationMessages());
+
+        $passwordValidation = Validator::make(
+            $request->only(['password', 'password_confirmation']),
+            ['password' => PasswordPolicy::rules()],
+        );
+
+        if ($passwordValidation->fails()) {
+            throw ValidationException::withMessages([
+                'password' => 'Le mot de passe doit contenir au moins 12 caractères, une majuscule, une minuscule, un chiffre et un symbole.',
+            ]);
+        }
+
+        if ($data['site_scope'] === 'selected' && empty($data['site_ids'])) {
+            throw ValidationException::withMessages([
+                'site_ids' => 'Sélectionnez au moins une adresse pour un accès limité.',
+            ]);
+        }
+
+        if (User::query()->where('email', $data['email'])->exists()) {
+            throw ValidationException::withMessages([
+                'email' => 'Cette adresse courriel est déjà associée à un compte. Créez un nouvel utilisateur avec une autre adresse.',
+            ]);
+        }
+
+        $profile = self::CAR_RENTAL_ROLE_PROFILES[$data['role_key']];
+        $owner = $this->owner($request);
+
+        $access = DB::transaction(function () use ($company, $data, $profile, $owner): CompanyUserAccess {
+            $user = User::query()->create([
+                'name' => trim($data['name']),
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'is_active' => true,
+                'system_role' => 'user',
+                'two_factor_email_enabled' => true,
+            ]);
+
+            return $this->companyContext->within($company->id, function () use ($company, $data, $profile, $owner, $user): CompanyUserAccess {
+                $siteIds = collect($data['site_ids'] ?? [])
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                if ($data['site_scope'] === 'selected') {
+                    $activeSiteCount = Site::query()
+                        ->where('company_id', $company->id)
+                        ->where('is_active', true)
+                        ->whereIn('id', $siteIds)
+                        ->count();
+
+                    if ($activeSiteCount !== $siteIds->count()) {
+                        throw ValidationException::withMessages([
+                            'site_ids' => 'Sélectionnez uniquement des adresses actives de cette société.',
+                        ]);
+                    }
+                }
+
+                $access = CompanyUserAccess::query()->create([
+                    'company_id' => $company->id,
+                    'user_id' => $user->id,
+                    'role_key' => $data['role_key'],
+                    'site_scope' => $data['site_scope'],
+                    'permissions' => $profile['permissions'],
+                    'is_active' => true,
+                ]);
+
+                if ($data['site_scope'] === 'selected') {
+                    foreach ($siteIds as $siteId) {
+                        CompanyUserSiteAccess::query()->create([
+                            'company_user_access_id' => $access->id,
+                            'company_id' => $company->id,
+                            'site_id' => $siteId,
+                            'is_active' => true,
+                        ]);
+                    }
+                }
+
+                $this->audit->record(
+                    eventType: 'configuration.company_user_created',
+                    companyId: $company->id,
+                    actorId: $owner->id,
+                    actorType: 'USER',
+                    subjectType: User::class,
+                    subjectId: $user->id,
+                    metadata: [
+                        'role_key' => $access->role_key,
+                        'site_scope' => $access->site_scope,
+                        'site_count' => $siteIds->count(),
+                    ],
+                );
+
+                return $access->load([
+                    'user',
+                    'siteGrants' => static fn ($siteGrants) => $siteGrants
+                        ->where('is_active', true)
+                        ->with('site')
+                        ->orderBy('site_id'),
+                ]);
+            });
+        });
+
+        return response()->json([
+            'data' => $this->companyUserPayload($access),
+        ], 201);
+    }
+
     private function owner(Request $request): User
     {
         $user = $request->user();
@@ -303,6 +487,29 @@ final class SystemConfigurationController extends Controller
         ];
     }
 
+    /** @return array<string, string> */
+    private function companyUserValidationMessages(): array
+    {
+        return [
+            'name.required' => 'Saisissez le nom complet de l’utilisateur.',
+            'name.max' => 'Le nom ne peut pas dépasser 255 caractères.',
+            'email.required' => 'Saisissez le courriel personnel de l’utilisateur.',
+            'email.email' => 'Saisissez un courriel valide.',
+            'email.max' => 'Le courriel ne peut pas dépasser 254 caractères.',
+            'password.required' => 'Saisissez un mot de passe initial.',
+            'password.confirmed' => 'Les deux mots de passe ne correspondent pas.',
+            'password.max' => 'Le mot de passe est trop long.',
+            'role_key.required' => 'Sélectionnez un profil Car Rental.',
+            'role_key.in' => 'Sélectionnez un profil Car Rental valide.',
+            'site_scope.required' => 'Sélectionnez la portée des adresses.',
+            'site_scope.in' => 'Sélectionnez une portée d’adresses valide.',
+            'site_ids.array' => 'Les adresses sélectionnées ne sont pas valides.',
+            'site_ids.max' => 'Trop d’adresses sont sélectionnées.',
+            'site_ids.*.uuid' => 'Une adresse sélectionnée n’est pas valide.',
+            'site_ids.*.distinct' => 'Une adresse ne peut être sélectionnée qu’une fois.',
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function companyPayload(Company $company): array
     {
@@ -349,6 +556,32 @@ final class SystemConfigurationController extends Controller
             'automatic_print_enabled' => $register->automatic_print_enabled,
             'customer_display_enabled' => $register->customer_display_enabled,
             'is_active' => $register->is_active,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function companyUserPayload(CompanyUserAccess $access): array
+    {
+        $user = $access->user;
+
+        return [
+            'id' => $access->id,
+            'user_id' => $access->user_id,
+            'name' => $user?->name,
+            'email' => $user?->email,
+            'role_key' => $access->role_key,
+            'site_scope' => $access->site_scope,
+            'is_active' => $access->is_active,
+            'sites' => $access->relationLoaded('siteGrants')
+                ? $access->siteGrants
+                    ->filter(fn (CompanyUserSiteAccess $grant): bool => $grant->is_active && $grant->site !== null)
+                    ->map(fn (CompanyUserSiteAccess $grant): array => [
+                        'id' => $grant->site->id,
+                        'code' => $grant->site->code,
+                        'name' => $grant->site->name,
+                    ])
+                    ->values()
+                : [],
         ];
     }
 }

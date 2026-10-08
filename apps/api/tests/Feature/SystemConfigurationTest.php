@@ -171,6 +171,99 @@ final class SystemConfigurationTest extends TestCase
             ->assertJsonPath('errors.code.0', 'Saisissez un code de société.');
     }
 
+    public function test_owner_can_create_a_real_car_rental_user_with_a_limited_site_scope(): void
+    {
+        $owner = User::factory()->create([
+            'is_active' => true,
+            'system_role' => 'owner',
+        ]);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $companyId = $this->createCompany($ownerToken, 'RENTAL', 'Clientèle Rent a Car');
+
+        $siteA = $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$companyId}/sites", [
+                'code' => 'CAP-AERO',
+                'name' => 'Bureau aéroport',
+                'address' => 'Cap-Haïtien',
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $siteB = $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$companyId}/sites", [
+                'code' => 'CAP-VILLE',
+                'name' => 'Bureau ville',
+                'address' => 'Cap-Haïtien',
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $created = $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$companyId}/users", [
+                'name' => 'Agent test Car Rental',
+                'email' => 'agent.test.car-rental@example.test',
+                'password' => 'MotDePasse!2026',
+                'password_confirmation' => 'MotDePasse!2026',
+                'role_key' => 'car_rental_agent',
+                'site_scope' => 'selected',
+                'site_ids' => [$siteA],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Agent test Car Rental')
+            ->assertJsonPath('data.email', 'agent.test.car-rental@example.test')
+            ->assertJsonPath('data.role_key', 'car_rental_agent')
+            ->assertJsonPath('data.site_scope', 'selected')
+            ->assertJsonCount(1, 'data.sites')
+            ->assertJsonPath('data.sites.0.id', $siteA)
+            ->json('data');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $created['user_id'],
+            'email' => 'agent.test.car-rental@example.test',
+            'is_active' => true,
+            'system_role' => 'user',
+            'two_factor_email_enabled' => true,
+        ]);
+        $this->assertDatabaseHas('company_user_access', [
+            'id' => $created['id'],
+            'company_id' => $companyId,
+            'user_id' => $created['user_id'],
+            'role_key' => 'car_rental_agent',
+            'site_scope' => 'selected',
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('company_user_site_access', [
+            'company_user_access_id' => $created['id'],
+            'company_id' => $companyId,
+            'site_id' => $siteA,
+            'is_active' => true,
+        ]);
+
+        $this->withToken($ownerToken)
+            ->getJson("/api/v1/system/configuration/companies/{$companyId}/users")
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $created['id'],
+                'email' => 'agent.test.car-rental@example.test',
+            ]);
+
+        $employee = User::query()->findOrFail($created['user_id']);
+        [, $employeeToken] = ApiAccessToken::issueFor($employee, Request::create('/api/v1/auth/login', 'POST'));
+        $this->withToken($employeeToken)
+            ->withHeader('X-Clientele-Company-Id', $companyId)
+            ->getJson('/api/v1/context')
+            ->assertOk()
+            ->assertJsonCount(1, 'sites')
+            ->assertJsonPath('sites.0.id', $siteA)
+            ->assertJsonMissing(['id' => $siteB]);
+
+        $audit = AuditEvent::query()
+            ->where('event_type', 'configuration.company_user_created')
+            ->where('subject_id', $created['user_id'])
+            ->firstOrFail();
+        $this->assertArrayNotHasKey('email', $audit->metadata);
+        $this->assertSame('car_rental_agent', $audit->metadata['role_key']);
+    }
+
     private function createCompany(string $token, string $code, string $name): string
     {
         return $this->withToken($token)

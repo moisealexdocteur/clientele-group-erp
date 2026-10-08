@@ -29,9 +29,9 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 ## Menus
 
 - Un menu ne contient que des fonctions disponibles pour le rôle et réellement actives dans la version livrée.
-- Les libellés suivent le vocabulaire métier : `Réservations`, `Calendrier`, `Véhicules`, `Configuration globale`.
+- Les libellés suivent le vocabulaire métier : `Réservations`, `Calendrier`, `Véhicules`, `Configuration système`.
 - Une fonction inactive est retirée du menu. Elle n’est pas représentée par une page vide ni par des données fictives.
-- Une action réservée au propriétaire est identifiée comme `Configuration globale` et protégée par le serveur, pas seulement masquée dans l’interface.
+- Une action réservée au propriétaire est identifiée comme `Configuration système` et protégée par le serveur, pas seulement masquée dans l’interface.
 
 ## Tactile et mobile d’abord
 
@@ -54,6 +54,9 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Un code interne accepte une saisie lisible : l’application convertit les espaces et accents en un code normalisé avant l’enregistrement.
 - Chaque champ a un libellé associé, un identifiant et un message d’erreur accessible.
 - Les paramètres de matériel ne sont affichés que lorsque leur configuration est disponible. Une caisse ne propose pas une option d’impression ou d’écran client avant l’intégration réelle du dispositif.
+- Un véhicule utilise un seul identifiant visible : sa plaque en cours. L’interface ne demande pas un code interne distinct.
+- Lorsqu’une plaque `Démonstration` est remplacée, le message confirme que l’ancienne plaque reste dans l’historique du véhicule.
+- Le formulaire d’utilisateur affiche la règle complète du mot de passe avant l’enregistrement : au moins 12 caractères, majuscule, minuscule, chiffre et symbole.
 
 ## Contrôle avant livraison
 
