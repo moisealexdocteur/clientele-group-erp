@@ -270,7 +270,8 @@ button {
 .text-button:disabled,
 .company-button:disabled,
 .secondary-button:disabled,
-.refresh-button:disabled {
+.refresh-button:disabled,
+.danger-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -1739,6 +1740,371 @@ h3 {
   margin: 0;
 }
 
+.reservation-management-card,
+.company-user-management-card {
+  display: grid;
+  gap: 18px;
+  margin-top: 16px;
+  border: 1px solid #e0e2e8;
+  border-radius: 18px;
+  background: #f8f8fa;
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.reservation-search-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) repeat(3, minmax(130px, 0.8fr)) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.reservation-search-form label,
+.reservation-action-form label,
+.company-user-management-form label,
+.password-reset-form label,
+.dialog-field {
+  display: grid;
+  gap: 7px;
+  color: #30313a;
+  font-size: 0.79rem;
+  font-weight: 780;
+}
+
+.reservation-search-form input,
+.reservation-search-form select,
+.reservation-action-form input,
+.reservation-action-form select,
+.company-user-management-form input,
+.company-user-management-form select,
+.password-reset-form input,
+.dialog-field input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #d8dbe5;
+  border-radius: 10px;
+  background: #fff;
+  color: #0e0e10;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.reservation-search-form input:focus,
+.reservation-search-form select:focus,
+.reservation-action-form input:focus,
+.reservation-action-form select:focus,
+.company-user-management-form input:focus,
+.company-user-management-form select:focus,
+.password-reset-form input:focus,
+.dialog-field input:focus {
+  border-color: #2222e6;
+  box-shadow: 0 0 0 3px rgba(34, 34, 230, 0.12);
+}
+
+.reservation-search-form input:disabled,
+.reservation-search-form select:disabled,
+.reservation-action-form input:disabled,
+.reservation-action-form select:disabled,
+.company-user-management-form input:disabled,
+.company-user-management-form select:disabled,
+.password-reset-form input:disabled,
+.dialog-field input:disabled {
+  background: #f5f5f7;
+  color: #777985;
+  cursor: not-allowed;
+}
+
+.reservation-search-form [aria-invalid="true"],
+.company-user-management-form [aria-invalid="true"],
+.password-reset-form [aria-invalid="true"] {
+  border-color: #a4262c;
+  box-shadow: 0 0 0 1px #a4262c;
+}
+
+.reservation-search-submit {
+  width: 100%;
+}
+
+.reservation-management-workspace {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.78fr) minmax(0, 1.22fr);
+  gap: 16px;
+}
+
+.reservation-result-list,
+.reservation-action-panel {
+  min-width: 0;
+  border: 1px solid #e1e3ea;
+  border-radius: 14px;
+  background: #fff;
+  padding: 15px;
+}
+
+.reservation-result-grid {
+  display: grid;
+  gap: 9px;
+}
+
+.reservation-result-card {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  border: 1px solid #e1e3ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #30313a;
+  padding: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reservation-result-card.selected,
+.reservation-result-card:not(:disabled):hover,
+.reservation-result-card:not(:disabled):focus-visible {
+  border-color: #2222e6;
+  background: #eef0ff;
+  box-shadow: 0 0 0 2px rgba(34, 34, 230, 0.1);
+}
+
+.reservation-result-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.reservation-result-card strong {
+  color: #252630;
+  font-size: 0.93rem;
+}
+
+.reservation-result-card small {
+  color: #656773;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.reservation-action-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.reservation-action-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reservation-action-heading h4,
+.reservation-action-heading p,
+.reservation-action-form h5 {
+  margin: 0;
+}
+
+.reservation-action-heading h4 {
+  margin-top: 3px;
+  color: #252630;
+  font-size: 1.08rem;
+}
+
+.reservation-action-heading p:last-child {
+  margin-top: 5px;
+  color: #656773;
+  font-size: 0.81rem;
+}
+
+.reservation-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+}
+
+.reservation-facts div {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid #e4e6ed;
+  padding-top: 9px;
+}
+
+.reservation-facts dt {
+  color: #696b75;
+  font-size: 0.71rem;
+  font-weight: 750;
+}
+
+.reservation-facts dd {
+  margin: 0;
+  color: #30313a;
+  font-size: 0.79rem;
+  line-height: 1.38;
+}
+
+.reservation-action-form,
+.company-user-management-form,
+.password-reset-form {
+  display: grid;
+  gap: 12px;
+}
+
+.company-user-management-form .form-field {
+  display: grid;
+  gap: 7px;
+}
+
+.company-user-management-form .site-scope-fields > label,
+.company-user-management-form .site-checkbox-list > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #42434c;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.company-user-management-form .site-scope-fields input[type="radio"],
+.company-user-management-form .site-checkbox-list input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 1px 0 0;
+  accent-color: #2222e6;
+}
+
+.reservation-action-form h5,
+.company-user-management-actions h3 {
+  color: #252630;
+  font-size: 0.96rem;
+}
+
+.reservation-action-buttons,
+.reservation-cancel-row {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reservation-action-buttons > *,
+.reservation-cancel-row > * {
+  flex: 1 1 180px;
+}
+
+.reservation-cancel-row {
+  border-top: 1px solid #e4e6ed;
+  padding-top: 13px;
+}
+
+.danger-button {
+  min-height: 48px;
+  border: 1px solid #a4262c;
+  border-radius: 10px;
+  background: #a4262c;
+  color: #fff;
+  padding: 0 15px;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.danger-button:not(:disabled):hover,
+.danger-button:not(:disabled):focus-visible {
+  border-color: #7c1f23;
+  background: #7c1f23;
+}
+
+.company-user-management-card {
+  background: #fff;
+}
+
+.management-note {
+  margin: 0;
+  border-left: 3px solid #8a6d1b;
+  background: #fff8dc;
+  color: #5c4a0d;
+  padding: 11px 13px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.company-user-management-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.company-user-management-actions > section {
+  display: grid;
+  align-content: start;
+  gap: 11px;
+  border: 1px solid #e1e3ea;
+  border-radius: 14px;
+  background: #f8f8fa;
+  padding: 16px;
+}
+
+.company-user-management-actions h3,
+.company-user-management-actions p {
+  margin: 0;
+}
+
+.company-user-management-actions p {
+  color: #5b5c68;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.company-user-management-actions .danger-zone {
+  border-color: #efc5c7;
+  background: #fff8f8;
+}
+
+.confirmation-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(14, 14, 16, 0.52);
+  padding: 16px;
+}
+
+.confirmation-dialog {
+  display: grid;
+  width: min(100%, 480px);
+  gap: 16px;
+  border-radius: 18px;
+  background: #fff;
+  padding: 24px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+}
+
+.confirmation-dialog h2,
+.confirmation-dialog p {
+  margin: 0;
+}
+
+.confirmation-dialog h2 {
+  color: #252630;
+  font-size: 1.28rem;
+}
+
+.confirmation-dialog p {
+  color: #535560;
+  font-size: 0.91rem;
+  line-height: 1.5;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 @media (max-width: 880px) {
   .reservation-workspace {
     grid-template-columns: 1fr;
@@ -1753,7 +2119,9 @@ h3 {
   }
 
   .configuration-user-workspace,
-  .vehicle-documents-workspace {
+  .vehicle-documents-workspace,
+  .reservation-management-workspace,
+  .company-user-management-actions {
     grid-template-columns: 1fr;
   }
 
@@ -1763,6 +2131,14 @@ h3 {
 
   .vehicle-filter-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reservation-search-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reservation-search-submit {
+    grid-column: 1 / -1;
   }
 
   .vehicle-filter-submit {
@@ -1866,12 +2242,36 @@ h3 {
 
   .configuration-user-workspace,
   .vehicle-documents-workspace,
-  .vehicle-document-statuses {
+  .vehicle-document-statuses,
+  .reservation-management-workspace,
+  .company-user-management-actions,
+  .reservation-search-form,
+  .reservation-facts {
     grid-template-columns: 1fr;
   }
 
   .vehicle-filter-submit {
     grid-column: auto;
+  }
+
+  .reservation-search-submit {
+    grid-column: auto;
+  }
+
+  .reservation-action-buttons,
+  .reservation-cancel-row,
+  .confirmation-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .reservation-action-buttons > *,
+  .reservation-cancel-row > * {
+    width: 100%;
+  }
+
+  .confirmation-dialog {
+    padding: 20px;
   }
 
   .workspace {

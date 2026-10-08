@@ -44,6 +44,14 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.company-users.index');
             Route::post('/companies/{company}/users', [SystemConfigurationController::class, 'storeCompanyUser'])
                 ->name('api.v1.system.configuration.company-users.store');
+            Route::patch('/companies/{company}/users/{companyUserAccess}', [SystemConfigurationController::class, 'updateCompanyUser'])
+                ->name('api.v1.system.configuration.company-users.update');
+            Route::patch('/companies/{company}/users/{companyUserAccess}/status', [SystemConfigurationController::class, 'updateCompanyUserStatus'])
+                ->name('api.v1.system.configuration.company-users.status');
+            Route::post('/companies/{company}/users/{companyUserAccess}/reset-password', [SystemConfigurationController::class, 'resetCompanyUserPassword'])
+                ->name('api.v1.system.configuration.company-users.reset-password');
+            Route::delete('/companies/{company}/users/{companyUserAccess}', [SystemConfigurationController::class, 'destroyCompanyUser'])
+                ->name('api.v1.system.configuration.company-users.destroy');
         });
 
     Route::middleware(['api.token', 'company.context'])->group(function (): void {
@@ -77,9 +85,27 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/reservations', [CarRentalController::class, 'store'])
                 ->middleware('company.permission:rental.reservations.create')
                 ->name('api.v1.car-rental.reservations.store');
+            Route::get('/reservations', [CarRentalController::class, 'reservations'])
+                ->middleware('company.permission:rental.reservations.read')
+                ->name('api.v1.car-rental.reservations.index');
             Route::get('/reservations/{reservation}', [CarRentalController::class, 'show'])
                 ->middleware('company.permission:rental.reservations.read')
                 ->name('api.v1.car-rental.reservations.show');
+            Route::patch('/reservations/{reservation}', [CarRentalController::class, 'updateReservation'])
+                ->middleware('company.permission:rental.reservations.manage')
+                ->name('api.v1.car-rental.reservations.update');
+            Route::post('/reservations/{reservation}/check-out', [CarRentalController::class, 'checkOutReservation'])
+                ->middleware('company.permission:rental.reservations.manage')
+                ->name('api.v1.car-rental.reservations.check-out');
+            Route::post('/reservations/{reservation}/extend', [CarRentalController::class, 'extendReservation'])
+                ->middleware('company.permission:rental.reservations.manage')
+                ->name('api.v1.car-rental.reservations.extend');
+            Route::post('/reservations/{reservation}/return', [CarRentalController::class, 'completeReturn'])
+                ->middleware('company.permission:rental.reservations.manage')
+                ->name('api.v1.car-rental.reservations.return');
+            Route::post('/reservations/{reservation}/cancel', [CarRentalController::class, 'cancelReservation'])
+                ->middleware('company.permission:rental.reservations.manage')
+                ->name('api.v1.car-rental.reservations.cancel');
             Route::post('/reservations/{reservation}/payments', [CarRentalController::class, 'submitPayment'])
                 ->middleware('company.permission:rental.payments.submit')
                 ->name('api.v1.car-rental.payments.store');

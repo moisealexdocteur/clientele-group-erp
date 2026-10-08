@@ -1,19 +1,23 @@
 # Pilote Clientèle Car Rental
 
-## 1. Périmètre alpha.10
+## 1. Périmètre alpha.11
 
-L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. Le périmètre alpha.10, sans donnée réelle, couvre :
+L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. Le périmètre alpha.11, sans donnée réelle, couvre :
 
 - les véhicules `suv`, `mid_suv` et `pickup` ;
 - la création d’un véhicule pour une adresse autorisée, avec plaque en cours, kilométrage, catégorie et état opérationnel ;
 - l’utilisation de la plaque en cours comme identifiant du véhicule, sans code interne distinct ;
-- le remplacement contrôlé d’une plaque `Démonstration` par une plaque `Officielle`, avec conservation de l’ancienne plaque dans l’historique du véhicule ;
+- les types de plaque `Démonstration`, `Location` et `Normale` ;
+- le remplacement contrôlé d’une plaque, avec conservation de l’ancienne plaque dans l’historique du véhicule ;
 - le contrôle de l’unicité de la plaque et du VIN à l’échelle de la société ;
 - le suivi minimal des papiers : référence d’immatriculation, assurance OAVCT et permis de vitres teintées, avec dates d’expiration pour les deux derniers ;
 - la liste de flotte et le changement d’état `disponible`, `préparation`, `lavage`, `garage` ou `en circulation` ;
-- un planning tactile par période : réservations actives, dates de départ et de retour, adresse et état de la flotte ;
+- un planning tactile par période : réservations actives, dates de départ et de retour, adresse et état de la flotte ; le mois en cours est affiché par défaut et les sept premiers jours du mois suivant sont ajoutés pendant les sept derniers jours du mois ;
 - la disponibilité par adresse et la protection contre une double réservation ;
 - la réservation par un préposé, avec numéro de huit chiffres ;
+- la recherche d’une réservation par référence ou par plaque, limitée aux adresses autorisées ;
+- la modification d’une réservation avant la remise du véhicule ;
+- la mise en circulation, la prolongation contrôlée, le retour et l’annulation d’une réservation ;
 - un formulaire PWA qui oblige à sélectionner une société puis son adresse autorisée avant d’afficher les véhicules disponibles ;
 - la prise en charge ou le drop-off au site, à l’Aéroport International du Cap-Haïtien ou à une adresse configurée ;
 - le bureau physique comme lieu de départ par défaut, avec conservation de son libellé et de son adresse dans la réservation ;
@@ -22,7 +26,10 @@ L’alpha.5 reste la référence validée en préproduction pour l’authentific
 - la soumission d’un paiement en espèces ou par virement Sogebank, suivie d’une approbation séparée ;
 - la structure, encore sans workflow actif, des dépôts de garantie en HTG ou USD et de la remise de passeport sans conserver son numéro ;
 - la structure, encore sans workflow actif, des inspections avant/après location : odomètre, carburant, croquis, photos hashées et signatures hashées ;
-- la création, par le propriétaire du système, d’utilisateurs Car Rental avec courriel personnel, mot de passe initial conforme, profil métier et portée d’adresses.
+- la création, par le propriétaire du système, d’utilisateurs Car Rental avec courriel personnel, mot de passe initial conforme, profil métier et portée d’adresses ;
+- la modification, désactivation, réactivation, réinitialisation du mot de passe et suppression définitive d’un utilisateur conforme aux limites de société ;
+- l’envoi d’un courriel de création de compte au nouvel utilisateur ;
+- l’envoi d’un courriel client lorsque la réservation est créée, le véhicule remis, la location prolongée ou le retour enregistré, si un courriel client valide est disponible.
 
 Les véhicules, les réservations et le planning sont limités par société puis par adresse. Le planning ne retourne ni le nom, ni les coordonnées, ni l’identifiant du client.
 
@@ -33,7 +40,7 @@ La disponibilité ne retourne que les véhicules actifs dont l’état opératio
 | Objet | États actuels |
 | --- | --- |
 | Véhicule | Disponible, préparation, lavage, garage, en circulation |
-| Réservation | Brouillon, réservée, sortie, terminée, annulée |
+| Réservation | Brouillon, réservée, en circulation, terminée, annulée |
 | Paiement | Soumis, approuvé, refusé, annulé |
 | Dépôt | Requis, retenu, partiellement appliqué, libéré, confisqué |
 | Inspection | Brouillon, finalisée ; avant ou après location |
@@ -50,6 +57,7 @@ Le calendrier ne repose pas sur une simple étiquette. Pour une même société,
 | `rental.calendar.read` | Consulter le planning des véhicules de ses adresses autorisées |
 | `rental.reservations.create` | Créer une réservation |
 | `rental.reservations.read` | Consulter une réservation de son adresse autorisée |
+| `rental.reservations.manage` | Modifier, mettre en circulation, prolonger, retourner ou annuler une réservation autorisée |
 | `rental.payments.submit` | Déclarer un paiement espèces ou soumettre une preuve Sogebank |
 | `rental.payments.approve` | Approuver un paiement soumis |
 
@@ -64,13 +72,14 @@ Une permission de société sans accès à l’adresse concernée est insuffisan
 
 ## 5. Étapes suivantes du pilote
 
-1. contrat PDF numéroté et QR de vérification ;
-2. workflow check-out avec inspection pré-location et signature ;
-3. workflow retour avec inspection post-location, carburant et kilométrage ;
-4. calcul final, frais de nettoyage de 20 USD si la propreté au retour ne correspond pas à l’inspection de départ, décision sur dépôt, reçu client/administration et impression thermique ;
-5. stockage chiffré des preuves et photos, liens temporaires et antivirus ;
-6. recette sur une imprimante Epson TMIII 80 mm réelle.
+1. contrat PDF numéroté, QR de vérification et signature client ;
+2. workflow check-out avec inspection pré-location, carburant et signature ;
+3. workflow retour avec inspection post-location, kilométrage et décision sur dépôt ;
+4. calcul final, frais de nettoyage de 20 USD si la propreté au retour ne correspond pas à l’inspection de départ, facture, reçu client/administration et impression thermique ;
+5. joindre le contrat signé et la facture PDF aux courriels seulement après leur génération et leur validation ;
+6. stockage chiffré des preuves et photos, liens temporaires et antivirus ;
+7. recette sur une imprimante Epson TMIII 80 mm réelle.
 
-## 6. Hors périmètre alpha.10
+## 6. Hors périmètre alpha.11
 
-Le contrat, les inspections actives, les dépôts de garantie actifs, les reçus, l’impression thermique, le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Ils seront ajoutés dans des lots séparés après validation du flux de location sur données de test.
+Le contrat signé, les inspections actives, les dépôts de garantie actifs, les factures et reçus PDF, l’impression thermique, le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Les courriels de facture et les pièces jointes PDF sont donc préparés par le code mais ne sont pas déclenchés avant ces modules.

@@ -34,6 +34,8 @@ final class CarRentalAvailabilityService
         CarbonImmutable $dueAt,
         ?string $vehicleId,
         ?string $category,
+        ?string $excludingReservationId = null,
+        bool $allowInCirculation = false,
     ): CarRentalVehicle {
         $this->assertValidInterval($pickupAt, $dueAt);
 
@@ -57,7 +59,13 @@ final class CarRentalAvailabilityService
                 ]);
             }
 
-            $this->assertVehicleCanBeReserved($vehicle, $pickupAt, $dueAt);
+            $this->assertVehicleCanBeReserved(
+                $vehicle,
+                $pickupAt,
+                $dueAt,
+                $excludingReservationId,
+                $allowInCirculation,
+            );
 
             return $vehicle;
         }
@@ -82,12 +90,39 @@ final class CarRentalAvailabilityService
         return $vehicle;
     }
 
+    /**
+     * Vérifie un véhicule précis sans choisir automatiquement un véhicule de remplacement.
+     * Utilisé lors de la modification, de la remise du véhicule et de la prolongation.
+     */
+    public function assertVehiclePeriodAvailable(
+        CarRentalVehicle $vehicle,
+        CarbonImmutable $pickupAt,
+        CarbonImmutable $dueAt,
+        ?string $excludingReservationId = null,
+        bool $allowInCirculation = false,
+    ): void {
+        $this->assertValidInterval($pickupAt, $dueAt);
+        $this->assertVehicleCanBeReserved(
+            $vehicle,
+            $pickupAt,
+            $dueAt,
+            $excludingReservationId,
+            $allowInCirculation,
+        );
+    }
+
     private function assertVehicleCanBeReserved(
         CarRentalVehicle $vehicle,
         CarbonImmutable $pickupAt,
         CarbonImmutable $dueAt,
+        ?string $excludingReservationId = null,
+        bool $allowInCirculation = false,
     ): void {
-        if (! $vehicle->is_active || $vehicle->operational_status !== 'available') {
+        $allowedOperationalStatuses = $allowInCirculation
+            ? ['available', 'in_circulation']
+            : ['available'];
+
+        if (! $vehicle->is_active || ! in_array($vehicle->operational_status, $allowedOperationalStatuses, true)) {
             throw ValidationException::withMessages([
                 'vehicle_id' => 'Ce véhicule n’est pas actuellement disponible à la location.',
             ]);
@@ -99,6 +134,10 @@ final class CarRentalAvailabilityService
             ->whereIn('state', CarRentalReservation::ACTIVE_STATES)
             ->where('pickup_at', '<', $dueAt)
             ->where('due_at', '>', $pickupAt)
+            ->when(
+                $excludingReservationId !== null,
+                static fn ($query) => $query->where('id', '!=', $excludingReservationId),
+            )
             ->exists();
 
         if ($overlap) {

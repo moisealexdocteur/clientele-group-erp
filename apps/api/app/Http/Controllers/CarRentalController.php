@@ -15,6 +15,7 @@ use App\Models\CustomerProfile;
 use App\Models\Site;
 use App\Support\AuditLogger;
 use App\Support\CarRentalAvailabilityService;
+use App\Support\CarRentalCustomerNotificationService;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\DocumentNumberService;
 use Carbon\CarbonImmutable;
@@ -30,6 +31,7 @@ final class CarRentalController extends Controller
 
     public function __construct(
         private readonly CarRentalAvailabilityService $availability,
+        private readonly CarRentalCustomerNotificationService $customerNotifications,
         private readonly CompanySiteAuthorizer $siteAuthorizer,
         private readonly DocumentNumberService $documentNumbers,
         private readonly AuditLogger $audit,
@@ -252,7 +254,7 @@ final class CarRentalController extends Controller
         ], $this->vehicleValidationMessages());
 
         $previousNumber = (string) ($model->registration_number ?: $model->code);
-        $previousStatus = $model->registration_status ?: 'official';
+        $previousStatus = $model->registration_status ?: 'normal';
 
         if ($previousNumber !== $data['registration_number'] || $previousStatus !== $data['registration_status']) {
             DB::transaction(function () use ($company, $model, $actor, $data, $previousNumber, $previousStatus): void {
@@ -389,11 +391,13 @@ final class CarRentalController extends Controller
 
         $data = $request->validate([
             'site_id' => ['nullable', 'uuid'],
-            'from' => ['required', 'date'],
-            'to' => ['required', 'date'],
+            'from' => ['nullable', 'date', 'required_with:to'],
+            'to' => ['nullable', 'date', 'required_with:from'],
         ]);
 
-        [$from, $to] = $this->interval($company, $data['from'], $data['to']);
+        [$from, $to] = isset($data['from'], $data['to'])
+            ? $this->calendarInterval($company, $data['from'], $data['to'])
+            : $this->defaultCalendarInterval($company);
         $siteIds = ($data['site_id'] ?? null) === null
             ? $this->siteAuthorizer->activeSiteIdsFor($company, $access)
             : collect([$this->siteAuthorizer->siteFor($company, $access, $data['site_id'])->id]);
@@ -419,6 +423,67 @@ final class CarRentalController extends Controller
         return response()->json([
             'data' => $reservations->map(fn (CarRentalReservation $reservation): array => $this->calendarPayload($reservation)),
             'vehicles' => $vehicles->map(fn (CarRentalVehicle $vehicle): array => $this->vehiclePayload($vehicle)),
+            'period' => [
+                'from' => $from->toIso8601String(),
+                'to' => $to->toIso8601String(),
+                'timezone' => $company->timezone,
+                'timezone_label' => $company->timezone_display_name,
+            ],
+        ]);
+    }
+
+    /**
+     * Liste opérationnelle limitée au périmètre autorisé. La recherche ne
+     * porte pas sur les coordonnées des clients et la réponse ne les expose
+     * jamais.
+     */
+    public function reservations(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+
+        $data = $request->validate([
+            'site_id' => ['nullable', 'uuid'],
+            'state' => ['nullable', Rule::in(CarRentalReservation::STATES)],
+            'query' => ['nullable', 'string', 'max:32'],
+            'from' => ['nullable', 'date', 'required_with:to'],
+            'to' => ['nullable', 'date', 'required_with:from'],
+        ]);
+
+        [$from, $to] = isset($data['from'], $data['to'])
+            ? $this->calendarInterval($company, $data['from'], $data['to'])
+            : $this->defaultCalendarInterval($company);
+        $siteIds = ($data['site_id'] ?? null) === null
+            ? $this->siteAuthorizer->activeSiteIdsFor($company, $access)
+            : collect([$this->siteAuthorizer->siteFor($company, $access, $data['site_id'])->id]);
+        $search = $this->reservationSearchTerm($data['query'] ?? null);
+
+        $reservations = CarRentalReservation::query()
+            ->where('company_id', $company->id)
+            ->whereIn('site_id', $siteIds)
+            ->when($data['state'] ?? null, static fn ($query, string $state) => $query->where('state', $state))
+            ->where('pickup_at', '<', $to)
+            ->where('due_at', '>', $from)
+            ->when($search !== null, function ($query) use ($search): void {
+                $like = '%' . $search . '%';
+
+                $query->where(function ($searchQuery) use ($like): void {
+                    $searchQuery
+                        ->whereRaw('UPPER(reservation_number) LIKE ?', [$like])
+                        ->orWhereHas('vehicle', static function ($vehicleQuery) use ($like): void {
+                            $vehicleQuery->whereRaw('UPPER(code) LIKE ?', [$like]);
+                        });
+                });
+            })
+            ->with(['site', 'vehicle', 'customerProfile'])
+            ->orderByDesc('pickup_at')
+            ->limit(50)
+            ->get();
+
+        return response()->json([
+            'data' => $reservations
+                ->map(fn (CarRentalReservation $reservation): array => $this->reservationListPayload($reservation))
+                ->values(),
             'period' => [
                 'from' => $from->toIso8601String(),
                 'to' => $to->toIso8601String(),
@@ -527,8 +592,15 @@ final class CarRentalController extends Controller
             ],
         );
 
+        $customerNotificationSent = $this->customerNotifications->notify(
+            $company,
+            $reservation,
+            CarRentalCustomerNotificationService::RESERVATION_CREATED,
+        );
+
         return response()->json([
             'data' => $this->reservationPayload($reservation->load(['vehicle', 'customerProfile'])),
+            'customer_notification_sent' => $customerNotificationSent,
         ], 201);
     }
 
@@ -537,14 +609,353 @@ final class CarRentalController extends Controller
         $company = $this->company($request);
         $access = $this->access($request);
 
-        $model = CarRentalReservation::query()
-            ->where('company_id', $company->id)
-            ->whereKey($reservation)
-            ->with(['vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections.photos'])
-            ->first();
+        $model = $this->reservationFor(
+            $company,
+            $access,
+            $reservation,
+            ['vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections.photos'],
+        );
 
-        abort_if($model === null, 404, 'Réservation introuvable.');
-        $this->siteAuthorizer->siteFor($company, $access, $model->site_id);
+        return response()->json([
+            'data' => $this->reservationPayload($model),
+        ]);
+    }
+
+    /**
+     * Modifie uniquement la planification d'une réservation qui n'a pas
+     * encore été remise. Le tarif et les paiements ne sont jamais recalculés
+     * implicitement par cette action.
+     */
+    public function updateReservation(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'vehicle_id' => ['required', 'uuid'],
+            'pickup_at' => ['required', 'date'],
+            'due_at' => ['required', 'date'],
+            'expected_lock_version' => ['required', 'integer', 'min:0'],
+        ]);
+        [$pickupAt, $dueAt] = $this->interval($company, $data['pickup_at'], $data['due_at']);
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $data, $pickupAt, $dueAt): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+
+            if ($model->state !== 'reserved') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Seule une réservation non remise peut être modifiée.',
+                ]);
+            }
+
+            $this->assertLockVersion($model, $data['expected_lock_version']);
+            $vehicle = $this->availability->reserveVehicle(
+                $company->id,
+                $model->site_id,
+                $pickupAt,
+                $dueAt,
+                $data['vehicle_id'],
+                null,
+                $model->id,
+            );
+
+            $model->forceFill([
+                'vehicle_id' => $vehicle->id,
+                'pickup_at' => $pickupAt,
+                'due_at' => $dueAt,
+                'lock_version' => $model->lock_version + 1,
+            ])->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile']);
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.reservation_schedule_updated',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalReservation::class,
+            subjectId: $model->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'site_id' => $model->site_id,
+                'vehicle_id' => $model->vehicle_id,
+            ],
+        );
+
+        return response()->json([
+            'data' => $this->reservationPayload($model),
+        ]);
+    }
+
+    public function checkOutReservation(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'expected_lock_version' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $data): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+
+            if ($model->state !== 'reserved') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Cette réservation ne peut pas être mise en circulation.',
+                ]);
+            }
+
+            $this->assertLockVersion($model, $data['expected_lock_version']);
+            $vehicle = $this->vehicleForReservation($company, $model);
+            $this->availability->assertVehiclePeriodAvailable(
+                $vehicle,
+                CarbonImmutable::instance($model->pickup_at),
+                CarbonImmutable::instance($model->due_at),
+                $model->id,
+            );
+
+            $now = now()->utc();
+            $model->forceFill([
+                'state' => 'checked_out',
+                'checked_out_at' => $now,
+                'lock_version' => $model->lock_version + 1,
+            ])->save();
+            $vehicle->forceFill(['operational_status' => 'in_circulation'])->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile']);
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.reservation_checked_out',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalReservation::class,
+            subjectId: $model->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'site_id' => $model->site_id,
+                'vehicle_id' => $model->vehicle_id,
+            ],
+        );
+
+        $customerNotificationSent = $this->customerNotifications->notify(
+            $company,
+            $model,
+            CarRentalCustomerNotificationService::CHECKED_OUT,
+        );
+
+        return response()->json([
+            'data' => $this->reservationPayload($model),
+            'customer_notification_sent' => $customerNotificationSent,
+        ]);
+    }
+
+    /**
+     * Prolonge une location active sans toucher à une réservation future.
+     * Un conflit est refusé avant toute écriture et ne divulgue aucun client.
+     */
+    public function extendReservation(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'due_at' => ['required', 'date'],
+            'expected_lock_version' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $data): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+
+            if ($model->state !== 'checked_out') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Seule une location en circulation peut être prolongée.',
+                ]);
+            }
+
+            $this->assertLockVersion($model, $data['expected_lock_version']);
+            $dueAt = CarbonImmutable::parse($data['due_at'], $company->timezone)->utc();
+
+            if ($dueAt->lessThanOrEqualTo(CarbonImmutable::instance($model->due_at))) {
+                throw ValidationException::withMessages([
+                    'due_at' => 'La nouvelle date de retour doit être postérieure au retour prévu.',
+                ]);
+            }
+
+            $vehicle = $this->vehicleForReservation($company, $model);
+
+            if ($vehicle->operational_status !== 'in_circulation') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Le véhicule doit être en circulation avant de prolonger la location.',
+                ]);
+            }
+
+            try {
+                $this->availability->assertVehiclePeriodAvailable(
+                    $vehicle,
+                    CarbonImmutable::instance($model->pickup_at),
+                    $dueAt,
+                    $model->id,
+                    true,
+                );
+            } catch (ValidationException) {
+                throw ValidationException::withMessages([
+                    'due_at' => 'La prolongation est impossible : ce véhicule a une réservation à venir. La réservation suivante n’a pas été modifiée.',
+                ]);
+            }
+
+            $model->forceFill([
+                'due_at' => $dueAt,
+                'lock_version' => $model->lock_version + 1,
+            ])->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile']);
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.reservation_extended',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalReservation::class,
+            subjectId: $model->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'site_id' => $model->site_id,
+                'vehicle_id' => $model->vehicle_id,
+                'billing_recalculated' => false,
+            ],
+        );
+
+        $customerNotificationSent = $this->customerNotifications->notify(
+            $company,
+            $model,
+            CarRentalCustomerNotificationService::EXTENDED,
+        );
+
+        return response()->json([
+            'data' => $this->reservationPayload($model),
+            'customer_notification_sent' => $customerNotificationSent,
+        ]);
+    }
+
+    /**
+     * Enregistre le retour réel. Le contrat initial et son tarif restent
+     * inchangés : aucune remise ou aucun remboursement n'est créé ici.
+     */
+    public function completeReturn(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'expected_lock_version' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $data): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+
+            if ($model->state !== 'checked_out') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Seule une location en circulation peut être retournée.',
+                ]);
+            }
+
+            $this->assertLockVersion($model, $data['expected_lock_version']);
+            $vehicle = $this->vehicleForReservation($company, $model);
+
+            $model->forceFill([
+                'state' => 'completed',
+                'returned_at' => now()->utc(),
+                'lock_version' => $model->lock_version + 1,
+            ])->save();
+            $vehicle->forceFill(['operational_status' => 'preparation'])->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile']);
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.reservation_return_recorded',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalReservation::class,
+            subjectId: $model->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'site_id' => $model->site_id,
+                'vehicle_id' => $model->vehicle_id,
+                'billing_recalculated' => false,
+                'vehicle_status' => 'preparation',
+            ],
+        );
+
+        $customerNotificationSent = $this->customerNotifications->notify(
+            $company,
+            $model,
+            CarRentalCustomerNotificationService::RETURN_RECORDED,
+        );
+
+        return response()->json([
+            'data' => $this->reservationPayload($model),
+            'customer_notification_sent' => $customerNotificationSent,
+        ]);
+    }
+
+    public function cancelReservation(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'reason_code' => ['required', Rule::in([
+                'customer_request',
+                'vehicle_unavailable',
+                'business_decision',
+                'other',
+            ])],
+            'expected_lock_version' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $data): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+
+            if ($model->state !== 'reserved') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Seule une réservation non remise peut être annulée.',
+                ]);
+            }
+
+            $this->assertLockVersion($model, $data['expected_lock_version']);
+            $model->forceFill([
+                'state' => 'cancelled',
+                'lock_version' => $model->lock_version + 1,
+            ])->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile']);
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.reservation_cancelled',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalReservation::class,
+            subjectId: $model->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'site_id' => $model->site_id,
+                'reason_code' => $data['reason_code'],
+                'financial_action_created' => false,
+            ],
+        );
 
         return response()->json([
             'data' => $this->reservationPayload($model),
@@ -740,6 +1151,61 @@ final class CarRentalController extends Controller
         return $profile;
     }
 
+    /**
+     * @param array<int, string> $relations
+     */
+    private function reservationFor(
+        Company $company,
+        CompanyUserAccess $access,
+        string $reservation,
+        array $relations = [],
+        bool $forUpdate = false,
+    ): CarRentalReservation {
+        $query = CarRentalReservation::query()
+            ->where('company_id', $company->id)
+            ->whereKey($reservation);
+
+        if ($relations !== []) {
+            $query->with($relations);
+        }
+
+        if ($forUpdate) {
+            $query->lockForUpdate();
+        }
+
+        $model = $query->first();
+        abort_if($model === null, 404, 'Réservation introuvable.');
+        $this->siteAuthorizer->siteFor($company, $access, $model->site_id);
+
+        return $model;
+    }
+
+    private function vehicleForReservation(Company $company, CarRentalReservation $reservation): CarRentalVehicle
+    {
+        $vehicle = CarRentalVehicle::query()
+            ->where('company_id', $company->id)
+            ->whereKey($reservation->vehicle_id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($vehicle === null || $vehicle->site_id !== $reservation->site_id) {
+            throw ValidationException::withMessages([
+                'vehicle_id' => 'Le véhicule de cette réservation est introuvable pour cette adresse.',
+            ]);
+        }
+
+        return $vehicle;
+    }
+
+    private function assertLockVersion(CarRentalReservation $reservation, int $expectedVersion): void
+    {
+        if ($reservation->lock_version !== $expectedVersion) {
+            throw ValidationException::withMessages([
+                'reservation' => 'Cette réservation a été modifiée par un autre utilisateur. Actualisez-la avant de continuer.',
+            ]);
+        }
+    }
+
     /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
     private function interval(Company $company, string $pickupAt, string $dueAt): array
     {
@@ -753,6 +1219,67 @@ final class CarRentalController extends Controller
         }
 
         return [$pickup, $due];
+    }
+
+    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
+    private function calendarInterval(Company $company, string $fromValue, string $toValue): array
+    {
+        $from = CarbonImmutable::parse($fromValue, $company->timezone);
+        $to = CarbonImmutable::parse($toValue, $company->timezone);
+
+        if ($this->isDateOnly($fromValue)) {
+            $from = $from->startOfDay();
+        }
+
+        if ($this->isDateOnly($toValue)) {
+            // Le champ Fin est inclusif dans l'interface : la requête utilise
+            // donc le début du jour suivant comme borne de fin exclusive.
+            $to = $to->addDay()->startOfDay();
+        }
+
+        $from = $from->utc();
+        $to = $to->utc();
+
+        if ($to->lessThanOrEqualTo($from)) {
+            throw ValidationException::withMessages([
+                'to' => 'La date de fin doit être postérieure ou égale à la date de début.',
+            ]);
+        }
+
+        return [$from, $to];
+    }
+
+    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
+    private function defaultCalendarInterval(Company $company): array
+    {
+        $today = CarbonImmutable::now($company->timezone)->startOfDay();
+        $from = $today->startOfMonth();
+        $monthEnd = $today->endOfMonth()->startOfDay();
+        $to = $monthEnd->addDay();
+
+        // Pendant les sept derniers jours, la vue comprend aussi les sept
+        // premiers jours du mois suivant afin d'anticiper les retours.
+        if ($today->greaterThanOrEqualTo($monthEnd->subDays(6))) {
+            $to = $to->addDays(7);
+        }
+
+        return [$from->utc(), $to->utc()];
+    }
+
+    private function isDateOnly(string $value): bool
+    {
+        return preg_match('/\A\d{4}-\d{2}-\d{2}\z/', $value) === 1;
+    }
+
+    private function reservationSearchTerm(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $search = strtoupper((string) preg_replace('/\s+/', '', trim($value)));
+
+        return $search === '' ? null : $search;
     }
 
     private function locationDetail(string $type, ?string $detail, Site $site): ?string
@@ -822,7 +1349,7 @@ final class CarRentalController extends Controller
 
         if ($includeManagementDetails) {
             $payload['registration_number'] = $vehicle->registration_number ?: $vehicle->code;
-            $payload['registration_status'] = $vehicle->registration_status ?: 'official';
+            $payload['registration_status'] = $vehicle->registration_status ?: 'normal';
             $payload['document_statuses'] = $company !== null
                 ? $this->vehicleDocumentStatuses($vehicle, $company)
                 : [];
@@ -911,7 +1438,7 @@ final class CarRentalController extends Controller
             'registration_number.max' => 'La plaque ne peut pas dépasser 32 caractères.',
             'registration_number.unique' => 'Cette plaque est déjà utilisée par un autre véhicule de cette société.',
             'registration_status.required' => 'Sélectionnez le type de plaque.',
-            'registration_status.in' => 'Sélectionnez « Démonstration » ou « Officielle ».',
+            'registration_status.in' => 'Sélectionnez « Démonstration », « Location » ou « Normale ».',
             'vin.max' => 'Le VIN ne peut pas dépasser 64 caractères.',
             'vin.unique' => 'Ce VIN est déjà utilisé par un autre véhicule de cette société.',
             'latest_odometer_km.required' => 'Saisissez le kilométrage actuel.',
@@ -955,6 +1482,29 @@ final class CarRentalController extends Controller
         ];
     }
 
+    /** @return array<string, mixed> */
+    private function reservationListPayload(CarRentalReservation $reservation): array
+    {
+        return [
+            'id' => $reservation->id,
+            'number' => $reservation->formattedNumber(),
+            'state' => $reservation->state,
+            'pickup_at' => $reservation->pickup_at?->toIso8601String(),
+            'due_at' => $reservation->due_at?->toIso8601String(),
+            'site' => $reservation->site === null ? null : [
+                'id' => $reservation->site->id,
+                'code' => $reservation->site->code,
+                'name' => $reservation->site->name,
+            ],
+            'vehicle' => $reservation->vehicle === null ? null : $this->vehiclePayload($reservation->vehicle),
+            'customer' => $reservation->customerProfile === null ? null : [
+                'id' => $reservation->customerProfile->id,
+                'display_name' => $reservation->customerProfile->display_name,
+                'customer_type' => $reservation->customerProfile->customer_type,
+            ],
+        ];
+    }
+
     private function nullableTrimmed(?string $value): ?string
     {
         $value = $value === null ? null : trim($value);
@@ -984,8 +1534,16 @@ final class CarRentalController extends Controller
             'number' => $reservation->formattedNumber(),
             'state' => $reservation->state,
             'site_id' => $reservation->site_id,
+            'site' => $reservation->relationLoaded('site') && $reservation->site !== null ? [
+                'id' => $reservation->site->id,
+                'code' => $reservation->site->code,
+                'name' => $reservation->site->name,
+            ] : null,
             'pickup_at' => $reservation->pickup_at?->toIso8601String(),
             'due_at' => $reservation->due_at?->toIso8601String(),
+            'checked_out_at' => $reservation->checked_out_at?->toIso8601String(),
+            'returned_at' => $reservation->returned_at?->toIso8601String(),
+            'lock_version' => $reservation->lock_version,
             'pickup_location' => [
                 'type' => $reservation->pickup_location_type,
                 'detail' => $reservation->pickup_location_detail,

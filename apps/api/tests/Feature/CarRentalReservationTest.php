@@ -5,13 +5,17 @@ namespace Tests\Feature;
 use App\Models\ApiAccessToken;
 use App\Models\AuditEvent;
 use App\Models\CarRentalVehicle;
+use App\Models\CarRentalReservation;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
 use App\Models\User;
+use App\Mail\CarRentalCustomerNotificationMail;
+use App\Support\CarRentalCustomerNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 final class CarRentalReservationTest extends TestCase
@@ -53,6 +57,112 @@ final class CarRentalReservationTest extends TestCase
         self::assertSame($company->id, $event->company_id);
         self::assertArrayNotHasKey('email', $event->metadata);
         self::assertArrayNotHasKey('phone', $event->metadata);
+    }
+
+    public function test_a_reservation_email_uses_the_customer_notification_template(): void
+    {
+        Mail::fake();
+
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-MAIL', 'suv');
+
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('customer_notification_sent', true);
+
+        Mail::assertSent(CarRentalCustomerNotificationMail::class, function (CarRentalCustomerNotificationMail $mail): bool {
+            return $mail->reservationNumber === '0000 0001'
+                && $mail->subjectLine === 'Votre réservation est confirmée — Clientèle Group'
+                && $mail->pdfAttachments === [];
+        });
+    }
+
+    public function test_an_invoice_notification_requires_a_valid_pdf_before_it_is_sent(): void
+    {
+        Mail::fake();
+
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-INVOICE', 'suv');
+        $reservationId = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->json('data.id');
+
+        Mail::fake();
+        $reservation = CarRentalReservation::query()
+            ->with(['vehicle', 'customerProfile'])
+            ->findOrFail($reservationId);
+        $notifications = app(CarRentalCustomerNotificationService::class);
+
+        self::assertFalse($notifications->notifyInvoice($company, $reservation, []));
+        Mail::assertNothingSent();
+
+        self::assertTrue($notifications->notifyInvoice($company, $reservation, [[
+            'name' => 'facture-0000-0001.pdf',
+            'content' => '%PDF-1.7\nClientèle Group',
+            'mime' => 'application/pdf',
+        ]]));
+
+        Mail::assertSent(CarRentalCustomerNotificationMail::class, function (CarRentalCustomerNotificationMail $mail): bool {
+            return $mail->subjectLine === 'Votre facture est disponible — Clientèle Group'
+                && count($mail->pdfAttachments) === 1
+                && $mail->pdfAttachments[0]['name'] === 'facture-0000-0001.pdf';
+        });
+
+        $audit = AuditEvent::query()
+            ->where('event_type', 'car_rental.customer_notification_skipped_no_pdf')
+            ->firstOrFail();
+        self::assertArrayNotHasKey('email', $audit->metadata);
+        self::assertArrayNotHasKey('phone', $audit->metadata);
+    }
+
+    public function test_a_signed_contract_notification_requires_a_valid_pdf_before_it_is_sent(): void
+    {
+        Mail::fake();
+
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-CONTRACT', 'suv');
+        $reservationId = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->json('data.id');
+
+        Mail::fake();
+        $reservation = CarRentalReservation::query()
+            ->with(['vehicle', 'customerProfile'])
+            ->findOrFail($reservationId);
+        $notifications = app(CarRentalCustomerNotificationService::class);
+
+        self::assertFalse($notifications->notifySignedContract($company, $reservation, []));
+        Mail::assertNothingSent();
+
+        self::assertTrue($notifications->notifySignedContract($company, $reservation, [[
+            'name' => 'contrat-signe-0000-0001.pdf',
+            'content' => '%PDF-1.7\nClientèle Group',
+            'mime' => 'application/pdf',
+        ]]));
+
+        Mail::assertSent(CarRentalCustomerNotificationMail::class, function (CarRentalCustomerNotificationMail $mail): bool {
+            return $mail->subjectLine === 'Votre contrat de location signé est disponible — Clientèle Group'
+                && count($mail->pdfAttachments) === 1
+                && $mail->pdfAttachments[0]['name'] === 'contrat-signe-0000-0001.pdf';
+        });
     }
 
     public function test_an_overlapping_reservation_is_refused_and_the_vehicle_can_be_selected_by_category(): void

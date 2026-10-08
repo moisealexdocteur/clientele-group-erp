@@ -35,14 +35,14 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
                 'model' => 'RAV4',
                 'model_year' => 2024,
                 'registration_number' => 'AA-12345',
-                'registration_status' => 'official',
+                'registration_status' => 'normal',
                 'vin' => '1TESTVIN000000017',
                 'latest_odometer_km' => 12600,
             ])
             ->assertCreated()
             ->assertJsonPath('data.code', 'AA-12345')
             ->assertJsonPath('data.registration_number', 'AA-12345')
-            ->assertJsonPath('data.registration_status', 'official')
+            ->assertJsonPath('data.registration_status', 'normal')
             ->assertJsonPath('data.operational_status', 'available')
             ->json('data');
 
@@ -151,7 +151,7 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             'site_id' => $site->id,
             'category' => 'suv',
             'registration_number' => 'aa-00991',
-            'registration_status' => 'official',
+            'registration_status' => 'normal',
             'vin' => '1testvin000000021',
             'latest_odometer_km' => 100,
         ];
@@ -185,7 +185,7 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             ->assertCreated();
     }
 
-    public function test_a_demonstration_plate_can_be_replaced_and_remains_in_the_vehicle_history(): void
+    public function test_a_demonstration_plate_can_be_replaced_by_a_rental_plate_and_remains_in_the_vehicle_history(): void
     {
         [, $company, $site, $token] = $this->context(['rental.vehicles.manage']);
 
@@ -204,26 +204,26 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
 
         $this->requestFor($token, $company)
             ->patchJson("/api/v1/car-rental/vehicles/{$vehicle['id']}/registration", [
-                'registration_number' => 'AA-44556',
-                'registration_status' => 'official',
+                'registration_number' => 'LO-44556',
+                'registration_status' => 'location',
             ])
             ->assertOk()
-            ->assertJsonPath('data.code', 'AA-44556')
-            ->assertJsonPath('data.registration_number', 'AA-44556')
-            ->assertJsonPath('data.registration_status', 'official');
+            ->assertJsonPath('data.code', 'LO-44556')
+            ->assertJsonPath('data.registration_number', 'LO-44556')
+            ->assertJsonPath('data.registration_status', 'location');
 
         $this->assertDatabaseHas('car_rental_vehicles', [
             'id' => $vehicle['id'],
-            'code' => 'AA-44556',
-            'registration_number' => 'AA-44556',
-            'registration_status' => 'official',
+            'code' => 'LO-44556',
+            'registration_number' => 'LO-44556',
+            'registration_status' => 'location',
         ]);
         $this->assertDatabaseHas('car_rental_vehicle_registration_events', [
             'vehicle_id' => $vehicle['id'],
             'previous_registration_number' => 'DEMONSTRATION-01',
-            'current_registration_number' => 'AA-44556',
+            'current_registration_number' => 'LO-44556',
             'previous_registration_status' => 'demonstration',
-            'current_registration_status' => 'official',
+            'current_registration_status' => 'location',
         ]);
         $this->assertDatabaseHas('audit_events', [
             'event_type' => 'car_rental.vehicle_registration_changed',
@@ -350,7 +350,7 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             'make' => 'Toyota',
             'model' => 'Test',
             'registration_number' => $code,
-            'registration_status' => 'official',
+            'registration_status' => 'normal',
             'latest_odometer_km' => 100,
             'is_active' => true,
         ]);

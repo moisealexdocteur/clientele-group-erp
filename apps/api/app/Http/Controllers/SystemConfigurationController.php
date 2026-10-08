@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashRegister;
+use App\Models\ApiAccessToken;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
 use App\Models\User;
+use App\Mail\AccountCreatedMail;
 use App\Support\AuditLogger;
 use App\Support\CompanyContext;
 use App\Support\PasswordPolicy;
@@ -15,10 +17,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Réglages réservés au propriétaire du système. Aucune société, adresse ou
@@ -34,6 +38,7 @@ final class SystemConfigurationController extends Controller
                 'rental.availability.read',
                 'rental.reservations.create',
                 'rental.reservations.read',
+                'rental.reservations.manage',
                 'rental.vehicles.read',
                 'rental.vehicles.manage',
                 'rental.calendar.read',
@@ -46,6 +51,7 @@ final class SystemConfigurationController extends Controller
                 'rental.availability.read',
                 'rental.reservations.create',
                 'rental.reservations.read',
+                'rental.reservations.manage',
                 'rental.vehicles.read',
                 'rental.calendar.read',
                 'rental.payments.submit',
@@ -416,9 +422,438 @@ final class SystemConfigurationController extends Controller
             });
         });
 
+        $notificationSent = $this->sendAccountCreatedNotification($access, $company, $owner);
+
         return response()->json([
             'data' => $this->companyUserPayload($access),
+            'notification' => [
+                'sent' => $notificationSent,
+            ],
         ], 201);
+    }
+
+    /**
+     * Met à jour l'accès de l'utilisateur dans la société courante. Les
+     * données personnelles globales ne sont modifiables ici que si le compte
+     * n'est pas actif dans une autre société ; cela évite une modification
+     * indirecte d'un autre périmètre.
+     */
+    public function updateCompanyUser(Request $request, Company $company, string $companyUserAccess): JsonResponse
+    {
+        $request->merge([
+            'email' => is_string($request->input('email'))
+                ? Str::lower(trim($request->input('email')))
+                : $request->input('email'),
+        ]);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email:rfc', 'max:254'],
+            'role_key' => ['required', Rule::in(array_keys(self::CAR_RENTAL_ROLE_PROFILES))],
+            'site_scope' => ['required', Rule::in(['all', 'selected'])],
+            'site_ids' => ['nullable', 'array', 'max:100'],
+            'site_ids.*' => ['uuid', 'distinct'],
+        ], $this->companyUserValidationMessages());
+
+        if ($data['site_scope'] === 'selected' && empty($data['site_ids'])) {
+            throw ValidationException::withMessages([
+                'site_ids' => 'Sélectionnez au moins une adresse pour un accès limité.',
+            ]);
+        }
+
+        $owner = $this->owner($request);
+
+        return $this->companyContext->within($company->id, function () use ($company, $companyUserAccess, $data, $owner): JsonResponse {
+            $access = $this->companyUserAccessFor($company, $companyUserAccess);
+            $targetUser = $access->user;
+
+            abort_unless($targetUser instanceof User, 404, 'Utilisateur introuvable.');
+
+            if ($access->role_key === 'owner') {
+                throw ValidationException::withMessages([
+                    'user' => 'Le compte propriétaire ne peut pas être modifié depuis la gestion des utilisateurs de cette société.',
+                ]);
+            }
+
+            $profile = self::CAR_RENTAL_ROLE_PROFILES[$data['role_key']];
+            $name = trim($data['name']);
+            $personalDataChanged = $targetUser->name !== $name || $targetUser->email !== $data['email'];
+
+            if ($personalDataChanged && $this->userHasOtherActiveCompanyAccess($targetUser, $company)) {
+                throw ValidationException::withMessages([
+                    'email' => 'Les données personnelles ne peuvent pas être modifiées ici car ce compte est également actif dans une autre société.',
+                ]);
+            }
+
+            if ($targetUser->email !== $data['email'] && User::query()
+                ->where('email', $data['email'])
+                ->where('id', '!=', $targetUser->id)
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => 'Cette adresse courriel est déjà associée à un autre compte.',
+                ]);
+            }
+
+            $siteIds = collect($data['site_ids'] ?? [])
+                ->filter()
+                ->unique()
+                ->values();
+            $this->assertSelectedSitesBelongToCompany($company, $data['site_scope'], $siteIds->all());
+
+            $targetUser->forceFill([
+                'name' => $name,
+                'email' => $data['email'],
+            ])->save();
+
+            $access->forceFill([
+                'role_key' => $data['role_key'],
+                'site_scope' => $data['site_scope'],
+                'permissions' => $profile['permissions'],
+            ])->save();
+
+            $this->syncCompanyUserSiteAccess($company, $access, $data['site_scope'], $siteIds->all());
+
+            $access = $this->companyUserAccessFor($company, $access->id);
+            $this->audit->record(
+                eventType: 'configuration.company_user_updated',
+                companyId: $company->id,
+                actorId: $owner->id,
+                actorType: 'USER',
+                subjectType: User::class,
+                subjectId: $targetUser->id,
+                metadata: [
+                    'role_key' => $access->role_key,
+                    'site_scope' => $access->site_scope,
+                    'site_count' => $access->siteGrants->where('is_active', true)->count(),
+                    'personal_data_changed' => $personalDataChanged,
+                ],
+            );
+
+            return response()->json([
+                'data' => $this->companyUserPayload($access),
+            ]);
+        });
+    }
+
+    /**
+     * Désactive ou réactive l'accès pour cette société uniquement. Aucun
+     * compte ni événement d'audit n'est supprimé.
+     */
+    public function updateCompanyUserStatus(Request $request, Company $company, string $companyUserAccess): JsonResponse
+    {
+        $data = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+        $owner = $this->owner($request);
+
+        return $this->companyContext->within($company->id, function () use ($company, $companyUserAccess, $data, $owner): JsonResponse {
+            $access = $this->companyUserAccessFor($company, $companyUserAccess);
+
+            if ($access->role_key === 'owner') {
+                throw ValidationException::withMessages([
+                    'user' => 'Le compte propriétaire ne peut pas être désactivé depuis cette page.',
+                ]);
+            }
+
+            $changed = $access->is_active !== (bool) $data['is_active'];
+            $access->forceFill(['is_active' => (bool) $data['is_active']])->save();
+            $access = $this->companyUserAccessFor($company, $access->id);
+
+            if ($changed) {
+                $this->audit->record(
+                    eventType: $access->is_active
+                        ? 'configuration.company_user_reactivated'
+                        : 'configuration.company_user_deactivated',
+                    companyId: $company->id,
+                    actorId: $owner->id,
+                    actorType: 'USER',
+                    subjectType: User::class,
+                    subjectId: $access->user_id,
+                    metadata: [
+                        'role_key' => $access->role_key,
+                        'site_scope' => $access->site_scope,
+                    ],
+                );
+            }
+
+            return response()->json([
+                'data' => $this->companyUserPayload($access),
+            ]);
+        });
+    }
+
+    /**
+     * Le propriétaire peut définir un nouveau mot de passe uniquement pour un
+     * compte rattaché à cette seule société. Le propriétaire ne voit jamais
+     * l'ancien mot de passe et les sessions existantes sont révoquées.
+     */
+    public function resetCompanyUserPassword(Request $request, Company $company, string $companyUserAccess): JsonResponse
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'max:4096', 'confirmed'],
+        ], $this->companyUserValidationMessages());
+        $passwordValidation = Validator::make(
+            $request->only(['password', 'password_confirmation']),
+            ['password' => PasswordPolicy::rules()],
+        );
+
+        if ($passwordValidation->fails()) {
+            throw ValidationException::withMessages([
+                'password' => 'Le mot de passe doit contenir au moins 12 caractères, une majuscule, une minuscule, un chiffre et un symbole.',
+            ]);
+        }
+
+        $owner = $this->owner($request);
+
+        return $this->companyContext->within($company->id, function () use ($company, $companyUserAccess, $data, $owner): JsonResponse {
+            $access = $this->companyUserAccessFor($company, $companyUserAccess);
+            $targetUser = $access->user;
+
+            abort_unless($targetUser instanceof User, 404, 'Utilisateur introuvable.');
+
+            if ($access->role_key === 'owner') {
+                throw ValidationException::withMessages([
+                    'user' => 'Utilisez la réinitialisation personnelle du compte propriétaire.',
+                ]);
+            }
+
+            if ($this->userHasOtherActiveCompanyAccess($targetUser, $company)) {
+                throw ValidationException::withMessages([
+                    'password' => 'La réinitialisation par une société n’est pas disponible pour un compte actif dans une autre société. L’utilisateur doit utiliser la réinitialisation personnelle.',
+                ]);
+            }
+
+            $targetUser->forceFill([
+                'password' => Hash::make($data['password']),
+                'two_factor_email_enabled' => true,
+                'two_factor_email_verified_at' => null,
+            ])->save();
+            ApiAccessToken::revokeAllFor($targetUser);
+
+            $this->audit->record(
+                eventType: 'configuration.company_user_password_reset',
+                companyId: $company->id,
+                actorId: $owner->id,
+                actorType: 'USER',
+                subjectType: User::class,
+                subjectId: $targetUser->id,
+                metadata: [
+                    'role_key' => $access->role_key,
+                ],
+            );
+
+            return response()->json([
+                'message' => 'Mot de passe réinitialisé. Les sessions existantes ont été fermées. Un code par courriel sera demandé à la prochaine connexion.',
+            ]);
+        });
+    }
+
+    /**
+     * Supprime le compte et son accès de manière définitive, sans effacer les
+     * opérations ni le journal d'audit. Cette action est réservée à un compte
+     * qui n'appartient à aucune autre société.
+     */
+    public function destroyCompanyUser(Request $request, Company $company, string $companyUserAccess): JsonResponse
+    {
+        $request->merge([
+            'confirmation_email' => is_string($request->input('confirmation_email'))
+                ? Str::lower(trim($request->input('confirmation_email')))
+                : $request->input('confirmation_email'),
+        ]);
+        $data = $request->validate([
+            'confirmation_email' => ['required', 'email:rfc', 'max:254'],
+        ]);
+        $owner = $this->owner($request);
+
+        return $this->companyContext->within($company->id, function () use ($company, $companyUserAccess, $data, $owner): JsonResponse {
+            $access = $this->companyUserAccessFor($company, $companyUserAccess);
+            $targetUser = $access->user;
+
+            abort_unless($targetUser instanceof User, 404, 'Utilisateur introuvable.');
+
+            if ($access->role_key === 'owner' || $targetUser->system_role === 'owner') {
+                throw ValidationException::withMessages([
+                    'user' => 'Le compte propriétaire ne peut pas être supprimé depuis cette page.',
+                ]);
+            }
+
+            if ($this->userHasAnyOtherCompanyAccess($targetUser, $company)) {
+                throw ValidationException::withMessages([
+                    'user' => 'La suppression définitive n’est pas disponible pour un compte rattaché à une autre société.',
+                ]);
+            }
+
+            if (! hash_equals($targetUser->email, $data['confirmation_email'])) {
+                throw ValidationException::withMessages([
+                    'confirmation_email' => 'Saisissez exactement le courriel de l’utilisateur à supprimer.',
+                ]);
+            }
+
+            $this->audit->record(
+                eventType: 'configuration.company_user_deleted',
+                companyId: $company->id,
+                actorId: $owner->id,
+                actorType: 'USER',
+                subjectType: User::class,
+                subjectId: $targetUser->id,
+                metadata: [
+                    'role_key' => $access->role_key,
+                    'site_scope' => $access->site_scope,
+                    'deletion' => 'permanent',
+                ],
+            );
+
+            $targetUser->delete();
+
+            return response()->json([], 204);
+        });
+    }
+
+    private function companyUserAccessFor(Company $company, string $companyUserAccess): CompanyUserAccess
+    {
+        $access = CompanyUserAccess::query()
+            ->where('company_id', $company->id)
+            ->whereKey($companyUserAccess)
+            ->with([
+                'user',
+                'siteGrants' => static fn ($siteGrants) => $siteGrants
+                    ->where('is_active', true)
+                    ->with('site')
+                    ->orderBy('site_id'),
+            ])
+            ->first();
+
+        abort_if($access === null, 404, 'Utilisateur introuvable pour cette société.');
+
+        return $access;
+    }
+
+    private function userHasOtherActiveCompanyAccess(User $user, Company|string $company): bool
+    {
+        $companyId = $company instanceof Company ? $company->id : $company;
+
+        return CompanyUserAccess::query()
+            ->where('user_id', $user->id)
+            ->where('company_id', '!=', $companyId)
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    private function userHasAnyOtherCompanyAccess(User $user, Company|string $company): bool
+    {
+        $companyId = $company instanceof Company ? $company->id : $company;
+
+        return CompanyUserAccess::query()
+            ->where('user_id', $user->id)
+            ->where('company_id', '!=', $companyId)
+            ->exists();
+    }
+
+    private function sendAccountCreatedNotification(
+        CompanyUserAccess $access,
+        Company $company,
+        User $owner,
+    ): bool {
+        $recipient = $access->user;
+
+        if (! $recipient instanceof User) {
+            return false;
+        }
+
+        try {
+            Mail::to($recipient->email, $recipient->name)->send(new AccountCreatedMail(
+                $recipient->name,
+                $company->display_name,
+                $this->companyUserRoleLabel($access->role_key),
+            ));
+        } catch (Throwable) {
+            $this->audit->record(
+                eventType: 'configuration.company_user_creation_notification_failed',
+                companyId: $company->id,
+                actorId: $owner->id,
+                actorType: 'USER',
+                subjectType: User::class,
+                subjectId: $recipient->id,
+                metadata: ['role_key' => $access->role_key],
+            );
+
+            return false;
+        }
+
+        $this->audit->record(
+            eventType: 'configuration.company_user_creation_notification_sent',
+            companyId: $company->id,
+            actorId: $owner->id,
+            actorType: 'USER',
+            subjectType: User::class,
+            subjectId: $recipient->id,
+            metadata: ['role_key' => $access->role_key],
+        );
+
+        return true;
+    }
+
+    private function companyUserRoleLabel(string $roleKey): string
+    {
+        return match ($roleKey) {
+            'car_rental_administrator' => 'Administrateur Car Rental',
+            'car_rental_agent' => 'Agent de location',
+            'car_rental_fleet' => 'Gestionnaire de flotte',
+            default => 'Utilisateur Clientèle Group ERP',
+        };
+    }
+
+    /** @param array<int, string> $siteIds */
+    private function assertSelectedSitesBelongToCompany(Company $company, string $siteScope, array $siteIds): void
+    {
+        if ($siteScope !== 'selected') {
+            return;
+        }
+
+        $activeSiteCount = Site::query()
+            ->where('company_id', $company->id)
+            ->where('is_active', true)
+            ->whereIn('id', $siteIds)
+            ->count();
+
+        if ($activeSiteCount !== count($siteIds)) {
+            throw ValidationException::withMessages([
+                'site_ids' => 'Sélectionnez uniquement des adresses actives de cette société.',
+            ]);
+        }
+    }
+
+    /** @param array<int, string> $siteIds */
+    private function syncCompanyUserSiteAccess(
+        Company $company,
+        CompanyUserAccess $access,
+        string $siteScope,
+        array $siteIds,
+    ): void {
+        $query = CompanyUserSiteAccess::query()
+            ->where('company_user_access_id', $access->id)
+            ->where('company_id', $company->id);
+
+        if ($siteScope !== 'selected') {
+            $query->update(['is_active' => false]);
+
+            return;
+        }
+
+        $query->whereNotIn('site_id', $siteIds)->update(['is_active' => false]);
+
+        foreach ($siteIds as $siteId) {
+            CompanyUserSiteAccess::query()->updateOrCreate(
+                [
+                    'company_user_access_id' => $access->id,
+                    'site_id' => $siteId,
+                ],
+                [
+                    'company_id' => $company->id,
+                    'is_active' => true,
+                ],
+            );
+        }
     }
 
     private function owner(Request $request): User
@@ -572,6 +1007,14 @@ final class SystemConfigurationController extends Controller
             'role_key' => $access->role_key,
             'site_scope' => $access->site_scope,
             'is_active' => $access->is_active,
+            'is_system_owner' => $access->role_key === 'owner',
+            'can_edit_personal_profile' => $user instanceof User
+                && $access->role_key !== 'owner'
+                && ! $this->userHasOtherActiveCompanyAccess($user, $access->company_id),
+            'can_delete_permanently' => $user instanceof User
+                && $access->role_key !== 'owner'
+                && $user->system_role !== 'owner'
+                && ! $this->userHasAnyOtherCompanyAccess($user, $access->company_id),
             'sites' => $access->relationLoaded('siteGrants')
                 ? $access->siteGrants
                     ->filter(fn (CompanyUserSiteAccess $grant): bool => $grant->is_active && $grant->site !== null)
