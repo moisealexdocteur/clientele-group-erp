@@ -38,6 +38,8 @@ final class CarRentalReservationTest extends TestCase
             ->assertJsonPath('data.number', '0000 0001')
             ->assertJsonPath('data.state', 'reserved')
             ->assertJsonPath('data.vehicle.code', 'SUV-01')
+            ->assertJsonPath('data.pickup_location.detail', 'Bureau Cap-Haïtien · Cap-Haïtien')
+            ->assertJsonPath('data.dropoff_location.detail', 'Aéroport International du Cap-Haïtien')
             ->assertJsonPath('data.customer.display_name', 'Jean Pierre');
 
         $this->assertDatabaseHas('car_rental_reservations', [
@@ -86,6 +88,45 @@ final class CarRentalReservationTest extends TestCase
             ]))
             ->assertOk()
             ->assertJsonCount(0, 'data');
+    }
+
+    public function test_an_agent_can_apply_optional_airport_service_fees_in_usd(): void
+    {
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-AIRPORT', 'suv');
+
+        $reservation = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+                'pickup_location_type' => 'cap_haitien_airport',
+                'dropoff_location_type' => 'cap_haitien_airport',
+                'apply_airport_pickup_fee' => true,
+                'apply_airport_dropoff_fee' => true,
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('data.airport_pickup_fee_usd', '20.00')
+            ->assertJsonPath('data.airport_dropoff_fee_usd', '20.00')
+            ->assertJsonPath('data.airport_fees_total_usd', '40.00')
+            ->json('data');
+
+        $this->assertDatabaseHas('car_rental_reservations', [
+            'id' => $reservation['id'],
+            'airport_pickup_fee_usd' => '20.00',
+            'airport_dropoff_fee_usd' => '20.00',
+        ]);
+
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+                'pickup_location_type' => 'site',
+                'apply_airport_pickup_fee' => true,
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('apply_airport_pickup_fee');
     }
 
     public function test_a_selected_site_scope_cannot_read_or_create_outside_its_grant(): void

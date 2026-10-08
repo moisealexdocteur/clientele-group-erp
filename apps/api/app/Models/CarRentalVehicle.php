@@ -21,6 +21,11 @@ final class CarRentalVehicle extends Model
         'in_circulation',
     ];
 
+    public const REGISTRATION_STATUSES = [
+        'demonstration',
+        'official',
+    ];
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -35,6 +40,7 @@ final class CarRentalVehicle extends Model
         'model',
         'model_year',
         'registration_number',
+        'registration_status',
         'vin',
         'latest_odometer_km',
         'is_active',
@@ -62,5 +68,15 @@ final class CarRentalVehicle extends Model
     public function reservations(): HasMany
     {
         return $this->hasMany(CarRentalReservation::class, 'vehicle_id');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(CarRentalVehicleDocument::class, 'vehicle_id');
+    }
+
+    public function registrationEvents(): HasMany
+    {
+        return $this->hasMany(CarRentalVehicleRegistrationEvent::class, 'vehicle_id');
     }
 }

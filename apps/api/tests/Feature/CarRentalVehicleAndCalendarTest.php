@@ -30,17 +30,19 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
         $vehicle = $this->requestFor($token, $company)
             ->postJson('/api/v1/car-rental/vehicles', [
                 'site_id' => $site->id,
-                'code' => 'suv-17',
                 'category' => 'suv',
                 'make' => 'Toyota',
                 'model' => 'RAV4',
                 'model_year' => 2024,
                 'registration_number' => 'AA-12345',
+                'registration_status' => 'official',
                 'vin' => '1TESTVIN000000017',
                 'latest_odometer_km' => 12600,
             ])
             ->assertCreated()
-            ->assertJsonPath('data.code', 'SUV-17')
+            ->assertJsonPath('data.code', 'AA-12345')
+            ->assertJsonPath('data.registration_number', 'AA-12345')
+            ->assertJsonPath('data.registration_status', 'official')
             ->assertJsonPath('data.operational_status', 'available')
             ->json('data');
 
@@ -147,9 +149,9 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
 
         $payload = [
             'site_id' => $site->id,
-            'code' => 'suv-21',
             'category' => 'suv',
             'registration_number' => 'aa-00991',
+            'registration_status' => 'official',
             'vin' => '1testvin000000021',
             'latest_odometer_km' => 100,
         ];
@@ -157,7 +159,7 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
         $this->requestFor($token, $company)
             ->postJson('/api/v1/car-rental/vehicles', $payload)
             ->assertCreated()
-            ->assertJsonPath('data.code', 'SUV-21');
+            ->assertJsonPath('data.code', 'AA-00991');
 
         $this->assertDatabaseHas('car_rental_vehicles', [
             'company_id' => $company->id,
@@ -168,7 +170,6 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
         $this->requestFor($token, $company)
             ->postJson('/api/v1/car-rental/vehicles', [
                 ...$payload,
-                'code' => 'SUV-22',
                 'registration_number' => 'AA-00991',
                 'vin' => '1TESTVIN000000021',
             ])
@@ -182,6 +183,104 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
                 'site_id' => $otherSite->id,
             ])
             ->assertCreated();
+    }
+
+    public function test_a_demonstration_plate_can_be_replaced_and_remains_in_the_vehicle_history(): void
+    {
+        [, $company, $site, $token] = $this->context(['rental.vehicles.manage']);
+
+        $vehicle = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/vehicles', [
+                'site_id' => $site->id,
+                'category' => 'pickup',
+                'registration_number' => 'DEMONSTRATION-01',
+                'registration_status' => 'demonstration',
+                'latest_odometer_km' => 0,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.code', 'DEMONSTRATION-01')
+            ->assertJsonPath('data.registration_status', 'demonstration')
+            ->json('data');
+
+        $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/vehicles/{$vehicle['id']}/registration", [
+                'registration_number' => 'AA-44556',
+                'registration_status' => 'official',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.code', 'AA-44556')
+            ->assertJsonPath('data.registration_number', 'AA-44556')
+            ->assertJsonPath('data.registration_status', 'official');
+
+        $this->assertDatabaseHas('car_rental_vehicles', [
+            'id' => $vehicle['id'],
+            'code' => 'AA-44556',
+            'registration_number' => 'AA-44556',
+            'registration_status' => 'official',
+        ]);
+        $this->assertDatabaseHas('car_rental_vehicle_registration_events', [
+            'vehicle_id' => $vehicle['id'],
+            'previous_registration_number' => 'DEMONSTRATION-01',
+            'current_registration_number' => 'AA-44556',
+            'previous_registration_status' => 'demonstration',
+            'current_registration_status' => 'official',
+        ]);
+        $this->assertDatabaseHas('audit_events', [
+            'event_type' => 'car_rental.vehicle_registration_changed',
+            'company_id' => $company->id,
+        ]);
+    }
+
+    public function test_a_manager_can_record_oavct_and_tint_permit_expiration_dates(): void
+    {
+        [, $company, $site, $token] = $this->context(['rental.vehicles.manage']);
+        $vehicle = $this->vehicle($company, $site, 'AA-00220', 'suv');
+        $expiresAt = now($company->timezone)->addDays(45)->format('Y-m-d');
+
+        $this->requestFor($token, $company)
+            ->putJson("/api/v1/car-rental/vehicles/{$vehicle->id}/documents", [
+                'documents' => [
+                    [
+                        'type' => 'registration',
+                        'document_number' => 'IMM-220',
+                        'issued_at' => '2026-01-01',
+                    ],
+                    [
+                        'type' => 'oavct_insurance',
+                        'document_number' => 'OAVCT-220',
+                        'expires_at' => $expiresAt,
+                    ],
+                    [
+                        'type' => 'tint_permit',
+                        'document_number' => 'TEINTE-220',
+                        'expires_at' => $expiresAt,
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonFragment([
+                'type' => 'oavct_insurance',
+                'status' => 'current',
+            ]);
+
+        $this->assertDatabaseHas('car_rental_vehicle_documents', [
+            'company_id' => $company->id,
+            'vehicle_id' => $vehicle->id,
+            'document_type' => 'oavct_insurance',
+            'document_number' => 'OAVCT-220',
+            'expires_at' => $expiresAt,
+        ]);
+
+        $this->requestFor($token, $company)
+            ->putJson("/api/v1/car-rental/vehicles/{$vehicle->id}/documents", [
+                'documents' => [[
+                    'type' => 'oavct_insurance',
+                    'document_number' => 'OAVCT-220',
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('documents');
     }
 
     public function test_calendar_ignores_cancelled_or_non_overlapping_reservations(): void
@@ -250,6 +349,8 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             'operational_status' => 'available',
             'make' => 'Toyota',
             'model' => 'Test',
+            'registration_number' => $code,
+            'registration_status' => 'official',
             'latest_odometer_km' => 100,
             'is_active' => true,
         ]);
