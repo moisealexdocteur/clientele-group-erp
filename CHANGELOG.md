@@ -18,6 +18,11 @@ Toutes les modifications notables de ce projet sont documentées ici.
 - L’écran de connexion mobile présente le formulaire avant le contenu descriptif et utilise des commandes tactiles d’au moins 48 px.
 - Les textes de connexion et de vérification utilisent un vocabulaire direct et explicite en français.
 
+### Corrigé
+
+- Les fichiers de déploiement utilisent des noms Traefik statiques et distincts pour la production et la préproduction.
+- Les services applicatifs disposent d’un réseau de sortie séparé pour le DNS et le SMTP, sans port entrant publié.
+
 ### Limites connues
 
 - Le planning est une vue opérationnelle par période. Le contrat, le check-out, les inspections, le dépôt, le retour, les reçus et l’impression thermique restent à réaliser.
