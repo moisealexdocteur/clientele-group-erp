@@ -390,9 +390,25 @@ button {
   gap: 20px;
 }
 
+.configuration-form-card h2 {
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.configuration-form-card .section-intro > p:not(.eyebrow) {
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .configuration-form {
   display: grid;
   gap: 13px;
+}
+
+.configuration-form .form-field {
+  display: grid;
+  gap: 7px;
 }
 
 .configuration-form label {
@@ -439,24 +455,20 @@ button {
   cursor: not-allowed;
 }
 
-.configuration-form .toggle-field {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #e0e2e8;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 0.82rem;
-  line-height: 1.35;
+.configuration-form [aria-invalid="true"] {
+  border-color: #a4262c;
+  box-shadow: 0 0 0 1px #a4262c;
 }
 
-.configuration-form .toggle-field input {
-  width: 20px;
-  min-width: 20px;
-  min-height: 20px;
+.configuration-form .field-help {
   margin: 0;
-  accent-color: #2222e6;
+}
+
+.field-error {
+  color: #a4262c;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .configuration-list-card {
@@ -547,13 +559,6 @@ button {
 
 .configuration-site-card ul li strong {
   font-size: 0.82rem;
-}
-
-.configuration-site-card ul li small {
-  grid-column: 1 / -1;
-  color: #656773;
-  font-size: 0.73rem;
-  line-height: 1.35;
 }
 
 .configuration-empty,

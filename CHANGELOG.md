@@ -2,6 +2,21 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.9 - 2026-10-08
+
+### Corrigé
+
+- La création d’une société accepte une saisie lisible dans le code interne : `Clientèle Rent a Car` est normalisé en `CLIENTELE-RENT-A-CAR` avant validation.
+- Les codes de société, d’adresse et de caisse sont également normalisés par l’API ; les appels hors interface suivent donc la même règle.
+- Les réponses de validation sont affichées en français près du champ concerné. La clé technique `validation.regex` n’est plus présentée à l’utilisateur.
+
+### Interface
+
+- La configuration système utilise des actions courtes et explicites : ajouter une société, une adresse ou une caisse.
+- Les champs de configuration ont désormais un libellé associé, un identifiant, une aide ciblée et un état d’erreur accessible.
+- Les options d’impression automatique et d’écran client sont retirées du formulaire de caisse tant que les dispositifs ne sont pas intégrés.
+- Les titres des cartes de configuration sont réduits pour conserver la priorité sur les champs et les actions, sur ordinateur comme sur mobile.
+
 ## 0.2.0-alpha.8 - 2026-10-08
 
 ### Corrigé
