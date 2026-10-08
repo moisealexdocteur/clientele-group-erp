@@ -34,13 +34,13 @@ final class SystemConfigurationTest extends TestCase
 
         $response = $this->withToken($ownerToken)
             ->postJson('/api/v1/system/configuration/companies', [
-                'code' => 'rent',
+                'code' => 'Clientèle Rent a Car',
                 'legal_name' => 'Clientèle Rent a Car S.A.',
                 'display_name' => 'Clientèle Rent a Car',
                 'base_currency' => 'USD',
             ])
             ->assertCreated()
-            ->assertJsonPath('data.code', 'RENT')
+            ->assertJsonPath('data.code', 'CLIENTELE-RENT-A-CAR')
             ->assertJsonPath('data.timezone', 'America/Port-au-Prince')
             ->assertJsonPath('data.timezone_label', 'Cap-Haïtien, Haïti')
             ->assertJsonCount(0, 'data.sites');
@@ -149,6 +149,26 @@ final class SystemConfigurationTest extends TestCase
             ->firstOrFail();
 
         $this->assertArrayNotHasKey('address', $siteAudit->metadata);
+    }
+
+    public function test_company_validation_returns_an_actionable_french_message(): void
+    {
+        $owner = User::factory()->create([
+            'is_active' => true,
+            'system_role' => 'owner',
+        ]);
+        [, $token] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+
+        $this->withToken($token)
+            ->postJson('/api/v1/system/configuration/companies', [
+                'code' => '---',
+                'legal_name' => 'Clientèle Test S.A.',
+                'display_name' => 'Clientèle Test',
+                'base_currency' => 'HTG',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('code')
+            ->assertJsonPath('errors.code.0', 'Saisissez un code de société.');
     }
 
     private function createCompany(string $token, string $code, string $name): string

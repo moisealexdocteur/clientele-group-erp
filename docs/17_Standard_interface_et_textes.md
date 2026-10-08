@@ -12,8 +12,8 @@ L’interface Clientèle Group ERP utilise des conventions de produits professio
 | Bouton principal | Verbe d’action précis | `Enregistrer le véhicule` |
 | Bouton secondaire | Action courte | `Annuler`, `Retour`, `Actualiser` |
 | Champ | Nom explicite, sans jargon interne non expliqué | `Adresse complète` |
-| Aide | Une phrase, uniquement si elle évite une erreur | `Utilisez un code interne unique.` |
-| Succès | Résultat confirmé et prochaine action utile | `La société a été créée. Ajoutez maintenant son adresse opérationnelle.` |
+| Aide | Une phrase, uniquement si elle évite une erreur | `Les espaces et accents sont convertis automatiquement.` |
+| Succès | Résultat confirmé et prochaine action utile | `Société créée. Vous pouvez maintenant ajouter une adresse.` |
 | Erreur | Cause concrète et action possible | `Sélectionnez une adresse active de cette société.` |
 | Fonction non livrée | État réel, sans promesse | `Cette fonction n’est pas activée dans cette version.` |
 
@@ -24,6 +24,7 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Un titre de tâche reste lisible sans dominer l’écran : 32 à 46 px sur grand écran, 30 à 38 px sur téléphone.
 - Le premier écran mobile affiche le formulaire ou l’action principale avant tout contenu de contexte.
 - Une description ne répète pas le titre ; elle explique uniquement la prochaine décision ou une règle importante.
+- Les formulaires de configuration utilisent des titres courts : `Ajouter une société`, `Ajouter une adresse`, `Ajouter une caisse`.
 
 ## Menus
 
@@ -45,7 +46,14 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Un dialogue doit indiquer le résultat attendu, les conséquences importantes et l’action principale.
 - Aucun dialogue ne doit demander une information déjà connue par le système.
 - Les erreurs de validation restent près du champ ou expliquent précisément le champ concerné.
+- Une erreur technique ou une clé interne telle que `validation.regex` ne doit jamais être affichée à l’utilisateur.
 - Les informations sensibles ne sont jamais affichées dans un message, un journal ou une notification.
+
+## Formulaires de configuration
+
+- Un code interne accepte une saisie lisible : l’application convertit les espaces et accents en un code normalisé avant l’enregistrement.
+- Chaque champ a un libellé associé, un identifiant et un message d’erreur accessible.
+- Les paramètres de matériel ne sont affichés que lorsque leur configuration est disponible. Une caisse ne propose pas une option d’impression ou d’écran client avant l’intégration réelle du dispositif.
 
 ## Contrôle avant livraison
 

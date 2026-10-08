@@ -76,7 +76,7 @@ final class SystemConfigurationController extends Controller
             'legal_name' => ['required', 'string', 'max:255'],
             'display_name' => ['required', 'string', 'max:255'],
             'base_currency' => ['required', Rule::in(['HTG', 'USD'])],
-        ]);
+        ], $this->companyValidationMessages());
 
         $owner = $this->owner($request);
 
@@ -142,7 +142,7 @@ final class SystemConfigurationController extends Controller
                 ],
                 'name' => ['required', 'string', 'max:255'],
                 'address' => ['required', 'string', 'max:1000'],
-            ]);
+            ], $this->siteValidationMessages());
 
             $site = Site::query()->create([
                 'company_id' => $company->id,
@@ -191,7 +191,7 @@ final class SystemConfigurationController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'automatic_print_enabled' => ['sometimes', 'boolean'],
                 'customer_display_enabled' => ['sometimes', 'boolean'],
-            ]);
+            ], $this->cashRegisterValidationMessages());
 
             $site = Site::query()
                 ->where('company_id', $company->id)
@@ -251,9 +251,56 @@ final class SystemConfigurationController extends Controller
             return $value;
         }
 
-        $code = Str::upper(trim($value));
+        $code = Str::upper(Str::slug(trim($value), '-'));
 
         return $code === '' ? null : $code;
+    }
+
+    /** @return array<string, string> */
+    private function companyValidationMessages(): array
+    {
+        return [
+            'code.required' => 'Saisissez un code de société.',
+            'code.max' => 'Le code de société ne peut pas dépasser 32 caractères.',
+            'code.regex' => 'Utilisez au moins 2 caractères : lettres, chiffres, tirets ou traits de soulignement.',
+            'code.unique' => 'Ce code de société est déjà utilisé. Choisissez un autre code.',
+            'legal_name.required' => 'Saisissez la dénomination légale.',
+            'legal_name.max' => 'La dénomination légale ne peut pas dépasser 255 caractères.',
+            'display_name.required' => 'Saisissez le nom affiché.',
+            'display_name.max' => 'Le nom affiché ne peut pas dépasser 255 caractères.',
+            'base_currency.required' => 'Sélectionnez la devise de base.',
+            'base_currency.in' => 'Sélectionnez HTG ou USD comme devise de base.',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function siteValidationMessages(): array
+    {
+        return [
+            'code.required' => 'Saisissez un code d’adresse.',
+            'code.max' => 'Le code d’adresse ne peut pas dépasser 32 caractères.',
+            'code.regex' => 'Utilisez au moins 2 caractères : lettres, chiffres, tirets ou traits de soulignement.',
+            'code.unique' => 'Ce code d’adresse est déjà utilisé pour cette société.',
+            'name.required' => 'Saisissez le nom de l’adresse.',
+            'name.max' => 'Le nom de l’adresse ne peut pas dépasser 255 caractères.',
+            'address.required' => 'Saisissez l’adresse complète.',
+            'address.max' => 'L’adresse complète ne peut pas dépasser 1 000 caractères.',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function cashRegisterValidationMessages(): array
+    {
+        return [
+            'site_id.required' => 'Sélectionnez une adresse.',
+            'site_id.uuid' => 'Sélectionnez une adresse valide.',
+            'code.required' => 'Saisissez un code de caisse.',
+            'code.max' => 'Le code de caisse ne peut pas dépasser 32 caractères.',
+            'code.regex' => 'Utilisez au moins 2 caractères : lettres, chiffres, tirets ou traits de soulignement.',
+            'code.unique' => 'Ce code de caisse est déjà utilisé pour cette société.',
+            'name.required' => 'Saisissez le nom de la caisse.',
+            'name.max' => 'Le nom de la caisse ne peut pas dépasser 255 caractères.',
+        ];
     }
 
     /** @return array<string, mixed> */

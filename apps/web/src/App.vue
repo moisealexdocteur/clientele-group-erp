@@ -169,10 +169,13 @@ interface SystemCompany {
   sites: SystemSite[]
 }
 
+type ApiValidationErrors = Record<string, string[]>
+
 class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly errors: ApiValidationErrors = {},
   ) {
     super(message)
   }
@@ -215,6 +218,9 @@ const configurationMessage = ref('')
 const configurationError = ref(false)
 const configurationCompanies = ref<SystemCompany[]>([])
 const configurationCompanyId = ref('')
+const companyConfigurationErrors = ref<Record<string, string>>({})
+const siteConfigurationErrors = ref<Record<string, string>>({})
+const cashRegisterConfigurationErrors = ref<Record<string, string>>({})
 let clockTimer: number | undefined
 
 const reservationForm = reactive({
@@ -279,8 +285,6 @@ const cashRegisterConfigurationForm = reactive({
   site_id: '',
   code: '',
   name: '',
-  automatic_print_enabled: false,
-  customer_display_enabled: false,
 })
 
 const sections = [
@@ -371,10 +375,22 @@ async function requestApi<T>(path: string, options: RequestInit = {}): Promise<T
   }
 
   const response = await fetch(path, { ...options, headers })
-  const payload = (await response.json().catch(() => ({}))) as { message?: string }
+  const payload = (await response.json().catch(() => ({}))) as {
+    message?: string
+    errors?: ApiValidationErrors
+  }
 
   if (!response.ok) {
-    throw new ApiError(payload.message ?? 'La demande ne peut pas être traitée.', response.status)
+    const errors = payload.errors ?? {}
+    const firstValidationMessage = Object.values(errors)
+      .flat()
+      .find((message) => message.length > 0)
+
+    throw new ApiError(
+      firstValidationMessage ?? payload.message ?? 'La demande ne peut pas être traitée.',
+      response.status,
+      errors,
+    )
   }
 
   return payload as T
@@ -562,6 +578,7 @@ async function openSystemConfiguration(): Promise<void> {
   showSystemConfiguration.value = true
   configurationMessage.value = ''
   configurationError.value = false
+  clearConfigurationValidationErrors()
   await loadSystemConfiguration()
 }
 
@@ -569,10 +586,90 @@ function closeSystemConfiguration(): void {
   showSystemConfiguration.value = false
   configurationMessage.value = ''
   configurationError.value = false
+  clearConfigurationValidationErrors()
 }
 
 function selectConfigurationCompany(): void {
   cashRegisterConfigurationForm.site_id = selectedConfigurationCompany.value?.sites[0]?.id ?? ''
+  clearConfigurationFieldError(cashRegisterConfigurationErrors, 'site_id')
+}
+
+function clearConfigurationValidationErrors(): void {
+  companyConfigurationErrors.value = {}
+  siteConfigurationErrors.value = {}
+  cashRegisterConfigurationErrors.value = {}
+}
+
+function clearConfigurationFieldError(
+  errors: typeof companyConfigurationErrors,
+  field: string,
+): void {
+  if (!(field in errors.value)) {
+    return
+  }
+
+  const nextErrors = { ...errors.value }
+  delete nextErrors[field]
+  errors.value = nextErrors
+}
+
+function clearConfigurationFormFieldError(
+  form: 'company' | 'site' | 'cash-register',
+  field: string,
+): void {
+  const errors = form === 'company'
+    ? companyConfigurationErrors
+    : form === 'site'
+      ? siteConfigurationErrors
+      : cashRegisterConfigurationErrors
+
+  clearConfigurationFieldError(errors, field)
+}
+
+function validationErrorsFrom(error: unknown): Record<string, string> {
+  if (!(error instanceof ApiError)) {
+    return {}
+  }
+
+  return Object.fromEntries(
+    Object.entries(error.errors)
+      .filter(([, messages]) => messages.length > 0)
+      .map(([field, messages]) => [field, messages[0]]),
+  )
+}
+
+function showConfigurationRequestError(
+  error: unknown,
+  errors: typeof companyConfigurationErrors,
+): void {
+  errors.value = validationErrorsFrom(error)
+  configurationError.value = true
+  configurationMessage.value = Object.keys(errors.value).length > 0
+    ? 'Vérifiez les champs signalés.'
+    : messageFrom(error)
+}
+
+function normalizeConfigurationCode(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/[-_]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase()
+}
+
+function normalizeCompanyConfigurationCode(): void {
+  companyConfigurationForm.code = normalizeConfigurationCode(companyConfigurationForm.code)
+}
+
+function normalizeSiteConfigurationCode(): void {
+  siteConfigurationForm.code = normalizeConfigurationCode(siteConfigurationForm.code)
+}
+
+function normalizeCashRegisterConfigurationCode(): void {
+  cashRegisterConfigurationForm.code = normalizeConfigurationCode(cashRegisterConfigurationForm.code)
 }
 
 async function loadSystemConfiguration(): Promise<void> {
@@ -606,6 +703,8 @@ async function createSystemCompany(): Promise<void> {
   configurationBusy.value = true
   configurationMessage.value = ''
   configurationError.value = false
+  companyConfigurationErrors.value = {}
+  normalizeCompanyConfigurationCode()
 
   try {
     const result = await requestApi<{ data: SystemCompany }>('/api/v1/system/configuration/companies', {
@@ -621,10 +720,9 @@ async function createSystemCompany(): Promise<void> {
       base_currency: 'HTG',
     })
     await Promise.all([loadSystemConfiguration(), loadCompanyChoices()])
-    configurationMessage.value = 'La société a été créée. Ajoutez maintenant son adresse opérationnelle.'
+    configurationMessage.value = 'Société créée. Vous pouvez maintenant ajouter une adresse.'
   } catch (error) {
-    configurationError.value = true
-    configurationMessage.value = messageFrom(error)
+    showConfigurationRequestError(error, companyConfigurationErrors)
   } finally {
     configurationBusy.value = false
   }
@@ -641,6 +739,8 @@ async function createSystemSite(): Promise<void> {
   configurationBusy.value = true
   configurationMessage.value = ''
   configurationError.value = false
+  siteConfigurationErrors.value = {}
+  normalizeSiteConfigurationCode()
 
   try {
     const result = await requestApi<{ data: SystemSite }>(`/api/v1/system/configuration/companies/${companyId}/sites`, {
@@ -651,10 +751,9 @@ async function createSystemSite(): Promise<void> {
     Object.assign(siteConfigurationForm, { code: '', name: '', address: '' })
     cashRegisterConfigurationForm.site_id = result.data.id
     await loadSystemConfiguration()
-    configurationMessage.value = 'L’adresse opérationnelle a été créée.'
+    configurationMessage.value = 'Adresse créée.'
   } catch (error) {
-    configurationError.value = true
-    configurationMessage.value = messageFrom(error)
+    showConfigurationRequestError(error, siteConfigurationErrors)
   } finally {
     configurationBusy.value = false
   }
@@ -671,6 +770,8 @@ async function createSystemCashRegister(): Promise<void> {
   configurationBusy.value = true
   configurationMessage.value = ''
   configurationError.value = false
+  cashRegisterConfigurationErrors.value = {}
+  normalizeCashRegisterConfigurationCode()
 
   try {
     await requestApi<{ data: SystemCashRegister }>(`/api/v1/system/configuration/companies/${companyId}/cash-registers`, {
@@ -682,14 +783,11 @@ async function createSystemCashRegister(): Promise<void> {
       site_id: cashRegisterConfigurationForm.site_id,
       code: '',
       name: '',
-      automatic_print_enabled: false,
-      customer_display_enabled: false,
     })
     await loadSystemConfiguration()
-    configurationMessage.value = 'La caisse a été créée.'
+    configurationMessage.value = 'Caisse créée.'
   } catch (error) {
-    configurationError.value = true
-    configurationMessage.value = messageFrom(error)
+    showConfigurationRequestError(error, cashRegisterConfigurationErrors)
   } finally {
     configurationBusy.value = false
   }
@@ -1155,6 +1253,10 @@ function kioskLabel(): string {
 
 function messageFrom(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.message.startsWith('validation.')) {
+      return 'Vérifiez les champs signalés.'
+    }
+
     return error.message
   }
 
@@ -1314,7 +1416,7 @@ onBeforeUnmount(() => {
       <section v-if="showSystemConfiguration" class="configuration-page" aria-labelledby="configuration-title">
         <section class="session-strip" aria-label="Session propriétaire">
           <span class="avatar" aria-hidden="true">{{ userInitial }}</span>
-          <span><strong>{{ user?.name }}</strong> · Configuration globale</span>
+          <span><strong>{{ user?.name }}</strong> · Configuration système</span>
           <button class="text-button change-company" type="button" :disabled="configurationBusy" @click="closeSystemConfiguration">
             Retour aux sociétés
           </button>
@@ -1322,43 +1424,48 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="configuration-header">
-          <p class="eyebrow">Réglages globaux · propriétaire du système</p>
-          <h1 id="configuration-title">Configuration globale</h1>
-          <p>Créez les sociétés, les adresses et les caisses. Chaque action est journalisée.</p>
+          <p class="eyebrow">Configuration système</p>
+          <h1 id="configuration-title">Sociétés, adresses et caisses</h1>
+          <p>Ajoutez les éléments nécessaires à l’exploitation. Les modifications sont journalisées.</p>
         </section>
 
-        <p v-if="configurationMessage" class="configuration-message" :class="{ error: configurationError }">
+        <p v-if="configurationMessage" class="configuration-message" :class="{ error: configurationError }" :role="configurationError ? 'alert' : 'status'" aria-live="polite">
           {{ configurationMessage }}
         </p>
 
         <div class="configuration-workspace">
           <section class="configuration-form-card">
             <div class="section-intro">
-              <p class="eyebrow">Étape 1</p>
-              <h2>Créer une société</h2>
-              <p>Utilisez un code interne unique.</p>
+              <p class="eyebrow">Société</p>
+              <h2>Ajouter une société</h2>
+              <p>Saisissez les informations légales et la devise de base.</p>
             </div>
 
             <form class="configuration-form" @submit.prevent="createSystemCompany">
-              <label>
-                Code de société
-                <input v-model.trim="companyConfigurationForm.code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. CARRENTAL" required :disabled="configurationBusy" />
-              </label>
-              <label>
-                Dénomination légale
-                <input v-model.trim="companyConfigurationForm.legal_name" type="text" maxlength="255" required :disabled="configurationBusy" />
-              </label>
-              <label>
-                Nom affiché dans l’application
-                <input v-model.trim="companyConfigurationForm.display_name" type="text" maxlength="255" required :disabled="configurationBusy" />
-              </label>
-              <label>
-                Devise de base
-                <select v-model="companyConfigurationForm.base_currency" :disabled="configurationBusy">
+              <div class="form-field">
+                <label for="company-code">Code interne</label>
+                <input id="company-code" v-model.trim="companyConfigurationForm.code" name="code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. CLIENTELE-RENT-A-CAR" required :disabled="configurationBusy" :aria-invalid="Boolean(companyConfigurationErrors.code)" :aria-describedby="companyConfigurationErrors.code ? 'company-code-help company-code-error' : 'company-code-help'" @blur="normalizeCompanyConfigurationCode" @input="clearConfigurationFormFieldError('company', 'code')" />
+                <span id="company-code-help" class="field-help">Vous pouvez saisir un nom. Les espaces et accents sont convertis automatiquement.</span>
+                <span v-if="companyConfigurationErrors.code" id="company-code-error" class="field-error" role="alert">{{ companyConfigurationErrors.code }}</span>
+              </div>
+              <div class="form-field">
+                <label for="company-legal-name">Dénomination légale</label>
+                <input id="company-legal-name" v-model.trim="companyConfigurationForm.legal_name" name="legal_name" type="text" maxlength="255" required :disabled="configurationBusy" :aria-invalid="Boolean(companyConfigurationErrors.legal_name)" :aria-describedby="companyConfigurationErrors.legal_name ? 'company-legal-name-error' : undefined" @input="clearConfigurationFormFieldError('company', 'legal_name')" />
+                <span v-if="companyConfigurationErrors.legal_name" id="company-legal-name-error" class="field-error" role="alert">{{ companyConfigurationErrors.legal_name }}</span>
+              </div>
+              <div class="form-field">
+                <label for="company-display-name">Nom affiché</label>
+                <input id="company-display-name" v-model.trim="companyConfigurationForm.display_name" name="display_name" type="text" maxlength="255" required :disabled="configurationBusy" :aria-invalid="Boolean(companyConfigurationErrors.display_name)" :aria-describedby="companyConfigurationErrors.display_name ? 'company-display-name-error' : undefined" @input="clearConfigurationFormFieldError('company', 'display_name')" />
+                <span v-if="companyConfigurationErrors.display_name" id="company-display-name-error" class="field-error" role="alert">{{ companyConfigurationErrors.display_name }}</span>
+              </div>
+              <div class="form-field">
+                <label for="company-base-currency">Devise de base</label>
+                <select id="company-base-currency" v-model="companyConfigurationForm.base_currency" name="base_currency" :disabled="configurationBusy" :aria-invalid="Boolean(companyConfigurationErrors.base_currency)" :aria-describedby="companyConfigurationErrors.base_currency ? 'company-base-currency-error' : undefined" @change="clearConfigurationFormFieldError('company', 'base_currency')">
                   <option value="HTG">HTG</option>
                   <option value="USD">USD</option>
                 </select>
-              </label>
+                <span v-if="companyConfigurationErrors.base_currency" id="company-base-currency-error" class="field-error" role="alert">{{ companyConfigurationErrors.base_currency }}</span>
+              </div>
               <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online'">
                 {{ configurationBusy ? 'Enregistrement…' : 'Créer la société' }}
               </button>
@@ -1367,33 +1474,37 @@ onBeforeUnmount(() => {
 
           <section class="configuration-form-card">
             <div class="section-intro">
-              <p class="eyebrow">Étape 2</p>
-              <h2>Créer une adresse</h2>
-              <p>Ajoutez un lieu opérationnel réel.</p>
+              <p class="eyebrow">Adresse</p>
+              <h2>Ajouter une adresse</h2>
+              <p>Sélectionnez la société concernée.</p>
             </div>
 
             <form class="configuration-form" @submit.prevent="createSystemSite">
-              <label>
-                Société
-                <select v-model="configurationCompanyId" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
+              <div class="form-field">
+                <label for="site-company-id">Société</label>
+                <select id="site-company-id" v-model="configurationCompanyId" name="company_id" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
                   <option value="" disabled>Sélectionnez une société</option>
                   <option v-for="company in configurationCompanies" :key="company.id" :value="company.id">
                     {{ company.display_name }} · {{ company.code }}
                   </option>
                 </select>
-              </label>
-              <label>
-                Code d’adresse
-                <input v-model.trim="siteConfigurationForm.code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. CAP-01" required :disabled="configurationBusy || !configurationCompanyId" />
-              </label>
-              <label>
-                Nom de l’adresse
-                <input v-model.trim="siteConfigurationForm.name" type="text" maxlength="255" required :disabled="configurationBusy || !configurationCompanyId" />
-              </label>
-              <label>
-                Adresse complète
-                <textarea v-model.trim="siteConfigurationForm.address" rows="3" maxlength="1000" required :disabled="configurationBusy || !configurationCompanyId"></textarea>
-              </label>
+              </div>
+              <div class="form-field">
+                <label for="site-code">Code d’adresse</label>
+                <input id="site-code" v-model.trim="siteConfigurationForm.code" name="code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. CAP-01" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(siteConfigurationErrors.code)" :aria-describedby="siteConfigurationErrors.code ? 'site-code-help site-code-error' : 'site-code-help'" @blur="normalizeSiteConfigurationCode" @input="clearConfigurationFormFieldError('site', 'code')" />
+                <span id="site-code-help" class="field-help">Les espaces et accents sont convertis automatiquement.</span>
+                <span v-if="siteConfigurationErrors.code" id="site-code-error" class="field-error" role="alert">{{ siteConfigurationErrors.code }}</span>
+              </div>
+              <div class="form-field">
+                <label for="site-name">Nom de l’adresse</label>
+                <input id="site-name" v-model.trim="siteConfigurationForm.name" name="name" type="text" maxlength="255" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(siteConfigurationErrors.name)" :aria-describedby="siteConfigurationErrors.name ? 'site-name-error' : undefined" @input="clearConfigurationFormFieldError('site', 'name')" />
+                <span v-if="siteConfigurationErrors.name" id="site-name-error" class="field-error" role="alert">{{ siteConfigurationErrors.name }}</span>
+              </div>
+              <div class="form-field">
+                <label for="site-address">Adresse complète</label>
+                <textarea id="site-address" v-model.trim="siteConfigurationForm.address" name="address" rows="3" maxlength="1000" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(siteConfigurationErrors.address)" :aria-describedby="siteConfigurationErrors.address ? 'site-address-error' : undefined" @input="clearConfigurationFormFieldError('site', 'address')"></textarea>
+                <span v-if="siteConfigurationErrors.address" id="site-address-error" class="field-error" role="alert">{{ siteConfigurationErrors.address }}</span>
+              </div>
               <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online' || !configurationCompanyId">
                 {{ configurationBusy ? 'Enregistrement…' : 'Créer l’adresse' }}
               </button>
@@ -1402,46 +1513,42 @@ onBeforeUnmount(() => {
 
           <section class="configuration-form-card">
             <div class="section-intro">
-              <p class="eyebrow">Étape 3</p>
-              <h2>Créer une caisse</h2>
-              <p>Associez la caisse à une seule adresse.</p>
+              <p class="eyebrow">Caisse</p>
+              <h2>Ajouter une caisse</h2>
+              <p>Sélectionnez l’adresse où la caisse sera utilisée.</p>
             </div>
 
             <form class="configuration-form" @submit.prevent="createSystemCashRegister">
-              <label>
-                Société
-                <select v-model="configurationCompanyId" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
+              <div class="form-field">
+                <label for="cash-register-company-id">Société</label>
+                <select id="cash-register-company-id" v-model="configurationCompanyId" name="company_id" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
                   <option value="" disabled>Sélectionnez une société</option>
                   <option v-for="company in configurationCompanies" :key="company.id" :value="company.id">
                     {{ company.display_name }} · {{ company.code }}
                   </option>
                 </select>
-              </label>
-              <label>
-                Adresse
-                <select v-model="cashRegisterConfigurationForm.site_id" :disabled="configurationBusy || !selectedConfigurationCompany?.sites.length">
+              </div>
+              <div class="form-field">
+                <label for="cash-register-site-id">Adresse</label>
+                <select id="cash-register-site-id" v-model="cashRegisterConfigurationForm.site_id" name="site_id" :disabled="configurationBusy || !selectedConfigurationCompany?.sites.length" :aria-invalid="Boolean(cashRegisterConfigurationErrors.site_id)" :aria-describedby="cashRegisterConfigurationErrors.site_id ? 'cash-register-site-id-error' : undefined" @change="clearConfigurationFormFieldError('cash-register', 'site_id')">
                   <option value="" disabled>Sélectionnez une adresse</option>
                   <option v-for="site in selectedConfigurationCompany?.sites ?? []" :key="site.id" :value="site.id">
                     {{ site.name }} · {{ site.code }}
                   </option>
                 </select>
-              </label>
-              <label>
-                Code de caisse
-                <input v-model.trim="cashRegisterConfigurationForm.code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. POS-01" required :disabled="configurationBusy || !cashRegisterConfigurationForm.site_id" />
-              </label>
-              <label>
-                Nom de la caisse
-                <input v-model.trim="cashRegisterConfigurationForm.name" type="text" maxlength="255" required :disabled="configurationBusy || !cashRegisterConfigurationForm.site_id" />
-              </label>
-              <label class="toggle-field">
-                <input v-model="cashRegisterConfigurationForm.automatic_print_enabled" type="checkbox" :disabled="configurationBusy" />
-                <span>Préparer l’impression automatique des reçus</span>
-              </label>
-              <label class="toggle-field">
-                <input v-model="cashRegisterConfigurationForm.customer_display_enabled" type="checkbox" :disabled="configurationBusy" />
-                <span>Préparer l’écran client</span>
-              </label>
+                <span v-if="cashRegisterConfigurationErrors.site_id" id="cash-register-site-id-error" class="field-error" role="alert">{{ cashRegisterConfigurationErrors.site_id }}</span>
+              </div>
+              <div class="form-field">
+                <label for="cash-register-code">Code de caisse</label>
+                <input id="cash-register-code" v-model.trim="cashRegisterConfigurationForm.code" name="code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. POS-01" required :disabled="configurationBusy || !cashRegisterConfigurationForm.site_id" :aria-invalid="Boolean(cashRegisterConfigurationErrors.code)" :aria-describedby="cashRegisterConfigurationErrors.code ? 'cash-register-code-help cash-register-code-error' : 'cash-register-code-help'" @blur="normalizeCashRegisterConfigurationCode" @input="clearConfigurationFormFieldError('cash-register', 'code')" />
+                <span id="cash-register-code-help" class="field-help">Les espaces et accents sont convertis automatiquement.</span>
+                <span v-if="cashRegisterConfigurationErrors.code" id="cash-register-code-error" class="field-error" role="alert">{{ cashRegisterConfigurationErrors.code }}</span>
+              </div>
+              <div class="form-field">
+                <label for="cash-register-name">Nom de la caisse</label>
+                <input id="cash-register-name" v-model.trim="cashRegisterConfigurationForm.name" name="name" type="text" maxlength="255" required :disabled="configurationBusy || !cashRegisterConfigurationForm.site_id" :aria-invalid="Boolean(cashRegisterConfigurationErrors.name)" :aria-describedby="cashRegisterConfigurationErrors.name ? 'cash-register-name-error' : undefined" @input="clearConfigurationFormFieldError('cash-register', 'name')" />
+                <span v-if="cashRegisterConfigurationErrors.name" id="cash-register-name-error" class="field-error" role="alert">{{ cashRegisterConfigurationErrors.name }}</span>
+              </div>
               <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online' || !cashRegisterConfigurationForm.site_id">
                 {{ configurationBusy ? 'Enregistrement…' : 'Créer la caisse' }}
               </button>
@@ -1453,7 +1560,7 @@ onBeforeUnmount(() => {
           <div class="workspace-heading">
             <div>
               <p class="eyebrow">Configuration enregistrée</p>
-              <h2>Sociétés et adresses</h2>
+              <h2>Sociétés, adresses et caisses</h2>
             </div>
             <button class="refresh-button" type="button" :disabled="configurationBusy" @click="loadSystemConfiguration">
               Actualiser
@@ -1485,10 +1592,6 @@ onBeforeUnmount(() => {
                     <li v-for="register in site.cash_registers" :key="register.id">
                       <strong>{{ register.name }}</strong>
                       <span>{{ register.code }}</span>
-                      <small>
-                        {{ register.automatic_print_enabled ? 'Impression à préparer' : 'Impression non configurée' }} ·
-                        {{ register.customer_display_enabled ? 'Écran client à préparer' : 'Écran client non configuré' }}
-                      </small>
                     </li>
                   </ul>
                   <p v-else class="configuration-empty">Aucune caisse créée pour cette adresse.</p>
