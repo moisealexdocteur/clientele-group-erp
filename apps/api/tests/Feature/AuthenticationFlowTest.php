@@ -134,6 +134,14 @@ final class AuthenticationFlowTest extends TestCase
 
     public function test_access_code_email_template_renders_for_each_supported_purpose(): void
     {
+        $compiledViewsPath = storage_path('framework/views');
+
+        if (! is_dir($compiledViewsPath)) {
+            mkdir($compiledViewsPath, 0777, true);
+        }
+
+        config()->set('view.compiled', $compiledViewsPath);
+
         foreach ([
             'login' => 'ouvrir votre session',
             'password_reset' => 'réinitialiser votre mot de passe',
