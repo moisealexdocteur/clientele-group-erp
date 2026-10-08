@@ -13,6 +13,7 @@ use Throwable;
 final class CarRentalCustomerNotificationService
 {
     public const RESERVATION_CREATED = 'reservation_created';
+    public const RESERVATION_UPDATED = 'reservation_updated';
     public const CHECKED_OUT = 'checked_out';
     public const EXTENDED = 'extended';
     public const RETURN_RECORDED = 'return_recorded';
@@ -39,6 +40,7 @@ final class CarRentalCustomerNotificationService
     ): bool {
         if (! in_array($event, [
             self::RESERVATION_CREATED,
+            self::RESERVATION_UPDATED,
             self::CHECKED_OUT,
             self::EXTENDED,
             self::RETURN_RECORDED,
@@ -149,6 +151,11 @@ final class CarRentalCustomerNotificationService
             : 'Image indicative du véhicule de location';
 
         $content = match ($event) {
+            self::RESERVATION_UPDATED => [
+                'subject' => 'Votre réservation a été mise à jour - Clientèle Group',
+                'heading' => 'Votre réservation a été mise à jour',
+                'intro' => 'Voici les informations à jour de votre réservation.',
+            ],
             self::CHECKED_OUT => [
                 'subject' => 'Votre location est en circulation - Clientèle Group',
                 'heading' => 'Votre location est en circulation',

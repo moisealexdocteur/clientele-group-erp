@@ -167,6 +167,8 @@ services:
       clientele-internal: {}
       clientele-egress:
         gw_priority: 1
+    # Fichiers privés (reçus, photos, contrats) conservés entre deux déploiements.
+    volumes: [clientele-documents:/var/www/api/storage/app/private]
     healthcheck:
       test: ["CMD", "php", "artisan", "health:check"]
       interval: 30s
@@ -206,6 +208,7 @@ networks:
 volumes:
   clientele-postgres:
   clientele-redis:
+  clientele-documents:
 YAML
 
 compose() {

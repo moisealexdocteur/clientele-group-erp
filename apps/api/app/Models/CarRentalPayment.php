@@ -11,7 +11,8 @@ final class CarRentalPayment extends Model
 {
     use HasUuids;
 
-    public const METHODS = ['cash', 'bank_transfer'];
+    /** Le crédit est réservé à l'administration (permission rental.payments.credit). */
+    public const METHODS = ['cash', 'bank_transfer', 'credit'];
 
     public const STATUSES = ['submitted', 'approved', 'rejected', 'reversed'];
 
@@ -35,6 +36,7 @@ final class CarRentalPayment extends Model
         'bank_reference',
         'proof_storage_key',
         'proof_sha256',
+        'proof_file_id',
         'submitted_at',
         'approved_at',
     ];

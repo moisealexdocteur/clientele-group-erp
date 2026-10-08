@@ -14,11 +14,13 @@ use App\Models\CompanyUserAccess;
 use App\Models\CustomerIdentity;
 use App\Models\CustomerProfile;
 use App\Models\Site;
+use App\Models\StoredFile;
 use App\Support\AuditLogger;
 use App\Support\CarRentalAvailabilityService;
 use App\Support\CarRentalCustomerNotificationService;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\DocumentNumberService;
+use App\Support\FileVault;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +38,7 @@ final class CarRentalController extends Controller
         private readonly CompanySiteAuthorizer $siteAuthorizer,
         private readonly DocumentNumberService $documentNumbers,
         private readonly AuditLogger $audit,
+        private readonly FileVault $files,
     ) {
     }
 
@@ -149,6 +152,7 @@ final class CarRentalController extends Controller
             'latest_odometer_km' => ['required', 'integer', 'min:0'],
             'daily_rate_usd' => ['required', 'numeric', 'gt:0'],
             'minimum_security_deposit_usd' => ['required', 'numeric', 'gte:0'],
+            ...$this->vehicleContractRules(),
         ], $this->vehicleValidationMessages());
 
         $site = $this->siteAuthorizer->siteFor($company, $access, $data['site_id']);
@@ -168,6 +172,7 @@ final class CarRentalController extends Controller
             'latest_odometer_km' => $data['latest_odometer_km'],
             'daily_rate_usd' => $data['daily_rate_usd'],
             'minimum_security_deposit_usd' => $data['minimum_security_deposit_usd'],
+            ...$this->vehicleContractAttributes($data),
             'is_active' => true,
         ]);
 
@@ -341,6 +346,143 @@ final class CarRentalController extends Controller
                 ],
             );
         }
+
+        return response()->json([
+            'data' => $this->vehiclePayload($model->load(['site', 'documents']), true, $company),
+        ]);
+    }
+
+    /** Identité du véhicule imprimée sur le contrat : marque, modèle, couleur, motorisation. */
+    public function updateVehicleDetails(Request $request, string $vehicle): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+        $model = $this->vehicleFor($company, $access, $vehicle);
+
+        $request->merge(['vin' => $this->canonicalVehicleIdentifier($request->input('vin'))]);
+        $data = $request->validate([
+            'category' => ['required', Rule::in(CarRentalVehicle::CATEGORIES)],
+            'make' => ['nullable', 'string', 'max:64'],
+            'model' => ['nullable', 'string', 'max:64'],
+            'model_year' => ['nullable', 'integer', 'between:1900,2100'],
+            'vin' => [
+                'nullable',
+                'string',
+                'max:64',
+                Rule::unique('car_rental_vehicles', 'vin')
+                    ->ignore($model->id)
+                    ->where(fn ($query) => $query->where('company_id', $company->id)),
+            ],
+            'latest_odometer_km' => ['required', 'integer', 'min:0'],
+            ...$this->vehicleContractRules(),
+        ], $this->vehicleValidationMessages());
+
+        $model->forceFill([
+            'category' => $data['category'],
+            'make' => $this->nullableTrimmed($data['make'] ?? null),
+            'model' => $this->nullableTrimmed($data['model'] ?? null),
+            'model_year' => $data['model_year'] ?? null,
+            'vin' => $this->nullableTrimmed($data['vin'] ?? null),
+            'latest_odometer_km' => $data['latest_odometer_km'],
+            ...$this->vehicleContractAttributes($data),
+        ]);
+        $changed = array_keys($model->getDirty());
+        $model->save();
+
+        if ($changed !== []) {
+            $this->audit->record(
+                eventType: 'car_rental.vehicle_details_updated',
+                companyId: $company->id,
+                actorId: $actor?->id,
+                actorType: $actor === null ? 'SYSTEM' : 'USER',
+                subjectType: CarRentalVehicle::class,
+                subjectId: $model->id,
+                metadata: ['site_id' => $model->site_id, 'changed' => $changed],
+            );
+        }
+
+        return response()->json([
+            'data' => $this->vehiclePayload($model->load(['site', 'documents']), true, $company),
+        ]);
+    }
+
+    /**
+     * Met un véhicule hors flotte ou l'y remet. Un véhicule qui a une
+     * réservation à venir ou une location en cours ne peut pas être désactivé.
+     */
+    public function updateVehicleActive(Request $request, string $vehicle): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+        $model = $this->vehicleFor($company, $access, $vehicle);
+
+        $data = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+        $active = (bool) $data['is_active'];
+
+        if (! $active) {
+            $open = CarRentalReservation::query()
+                ->where('company_id', $company->id)
+                ->where('vehicle_id', $model->id)
+                ->whereIn('state', ['reserved', 'checked_out'])
+                ->count();
+
+            if ($open > 0) {
+                throw ValidationException::withMessages([
+                    'is_active' => $open > 1
+                        ? "Ce véhicule a {$open} réservations ou locations en cours. Modifiez-les avant de le désactiver."
+                        : 'Ce véhicule a une réservation ou une location en cours. Modifiez-la avant de le désactiver.',
+                ]);
+            }
+        }
+
+        if ($model->is_active !== $active) {
+            $model->forceFill(['is_active' => $active])->save();
+            $this->audit->record(
+                eventType: $active ? 'car_rental.vehicle_activated' : 'car_rental.vehicle_deactivated',
+                companyId: $company->id,
+                actorId: $actor?->id,
+                actorType: $actor === null ? 'SYSTEM' : 'USER',
+                subjectType: CarRentalVehicle::class,
+                subjectId: $model->id,
+                metadata: ['site_id' => $model->site_id],
+            );
+        }
+
+        return response()->json([
+            'data' => $this->vehiclePayload($model->load(['site', 'documents']), true, $company),
+        ]);
+    }
+
+    /** Associe une photo réelle, déjà téléversée, à la fiche véhicule. */
+    public function updateVehiclePhoto(Request $request, string $vehicle): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+        $model = $this->vehicleFor($company, $access, $vehicle);
+
+        $data = $request->validate([
+            'file_id' => ['nullable', 'uuid'],
+        ]);
+
+        $photo = ($data['file_id'] ?? null) === null
+            ? null
+            : $this->files->find($company, $data['file_id'], StoredFile::PURPOSE_VEHICLE_PHOTO, 'file_id');
+
+        $model->forceFill(['photo_file_id' => $photo?->id])->save();
+        $this->audit->record(
+            eventType: $photo === null ? 'car_rental.vehicle_photo_removed' : 'car_rental.vehicle_photo_updated',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalVehicle::class,
+            subjectId: $model->id,
+            metadata: ['site_id' => $model->site_id],
+        );
 
         return response()->json([
             'data' => $this->vehiclePayload($model->load(['site', 'documents']), true, $company),
@@ -573,7 +715,8 @@ final class CarRentalController extends Controller
             'daily_rate' => ['required', 'numeric', 'min:0'],
             'kilometer_plan' => ['required', Rule::in(CarRentalReservation::KILOMETER_PLANS)],
             'included_km' => ['nullable', 'integer', 'min:0', 'required_if:kilometer_plan,limited'],
-            'additional_km_rate' => ['nullable', 'numeric', 'min:0', 'required_if:kilometer_plan,limited'],
+            // Le contrat papier laisse ce prix à compléter : il reste facultatif.
+            'additional_km_rate' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $site = $this->siteAuthorizer->siteFor($company, $access, $data['site_id']);
@@ -589,7 +732,7 @@ final class CarRentalController extends Controller
             'apply_airport_dropoff_fee',
         );
 
-        $reservation = DB::transaction(function () use ($company, $site, $data, $pickupAt, $dueAt, $airportPickupFee, $airportDropoffFee): CarRentalReservation {
+        $reservation = DB::transaction(function () use ($company, $access, $site, $data, $pickupAt, $dueAt, $airportPickupFee, $airportDropoffFee): CarRentalReservation {
             $vehicle = $this->availability->reserveVehicle(
                 $company->id,
                 $site->id,
@@ -599,6 +742,7 @@ final class CarRentalController extends Controller
                 $data['category'] ?? null,
             );
             $this->assertVehicleCommercialTermsConfigured($vehicle);
+            $rateOverridden = $this->assertRateAllowed($access, $vehicle, $data['currency'], (string) $data['daily_rate']);
 
             $customer = $this->resolveCustomer($company, $data);
             $number = $this->documentNumbers->next($company->id, 'car_rental_reservation');
@@ -621,10 +765,11 @@ final class CarRentalController extends Controller
                 'airport_dropoff_fee_usd' => $airportDropoffFee,
                 'currency' => $data['currency'],
                 'daily_rate' => $data['daily_rate'],
+                'rate_overridden' => $rateOverridden,
                 'minimum_security_deposit_usd' => $vehicle->minimum_security_deposit_usd,
                 'kilometer_plan' => $data['kilometer_plan'],
                 'included_km' => $data['kilometer_plan'] === 'limited' ? $data['included_km'] : null,
-                'additional_km_rate' => $data['kilometer_plan'] === 'limited' ? $data['additional_km_rate'] : null,
+                'additional_km_rate' => $data['kilometer_plan'] === 'limited' ? ($data['additional_km_rate'] ?? null) : null,
             ]);
         });
 
@@ -641,6 +786,7 @@ final class CarRentalController extends Controller
                 'site_id' => $reservation->site_id,
                 'vehicle_id' => $reservation->vehicle_id,
                 'currency' => $reservation->currency,
+                'rate_overridden' => $reservation->rate_overridden,
                 'airport_pickup_service' => $airportPickupFee !== '0.00',
                 'airport_dropoff_service' => $airportDropoffFee !== '0.00',
             ],
@@ -653,7 +799,7 @@ final class CarRentalController extends Controller
         );
 
         return response()->json([
-            'data' => $this->reservationPayload($reservation->load(['vehicle', 'customerProfile'])),
+            'data' => $this->reservationPayload($reservation->load(['vehicle', 'customerProfile']), $access),
             'customer_notification_sent' => $customerNotificationSent,
         ], 201);
     }
@@ -671,14 +817,18 @@ final class CarRentalController extends Controller
         );
 
         return response()->json([
-            'data' => $this->reservationPayload($model),
+            'data' => $this->reservationPayload($model, $access),
         ]);
     }
 
     /**
-     * Modifie uniquement la planification d'une réservation qui n'a pas
-     * encore été remise. Le tarif et les paiements ne sont jamais recalculés
-     * implicitement par cette action.
+     * Modifie une réservation qui n'a pas encore été remise : client,
+     * coordonnées, véhicule (toute catégorie), dates, lieux et conditions.
+     *
+     * Le tarif suit la fiche du véhicule. Un changement de véhicule applique
+     * le tarif et le dépôt minimum du nouveau véhicule. Seul un rôle autorisé
+     * peut fixer un autre tarif. Les paiements existants ne sont jamais
+     * modifiés par cette action.
      */
     public function updateReservation(Request $request, string $reservation): JsonResponse
     {
@@ -691,11 +841,31 @@ final class CarRentalController extends Controller
             'pickup_at' => ['required', 'date'],
             'due_at' => ['required', 'date'],
             'expected_lock_version' => ['required', 'integer', 'min:0'],
+            'customer' => ['sometimes', 'array'],
+            'customer.customer_type' => ['sometimes', Rule::in(['individual', 'institution'])],
+            'customer.display_name' => ['required_with:customer', 'string', 'max:160'],
+            'customer.email' => ['nullable', 'email:rfc', 'max:254'],
+            'customer.phone' => ['nullable', 'string', 'max:64'],
+            'pickup_location_type' => ['sometimes', Rule::in(CarRentalReservation::LOCATION_TYPES)],
+            'pickup_location_detail' => ['nullable', 'string', 'max:1000', 'required_if:pickup_location_type,custom'],
+            'dropoff_location_type' => ['sometimes', Rule::in(CarRentalReservation::LOCATION_TYPES)],
+            'dropoff_location_detail' => ['nullable', 'string', 'max:1000', 'required_if:dropoff_location_type,custom'],
+            'apply_airport_pickup_fee' => ['nullable', 'boolean'],
+            'apply_airport_dropoff_fee' => ['nullable', 'boolean'],
+            'currency' => ['sometimes', Rule::in(['HTG', 'USD'])],
+            'daily_rate' => ['sometimes', 'numeric', 'gt:0'],
+            'kilometer_plan' => ['sometimes', Rule::in(CarRentalReservation::KILOMETER_PLANS)],
+            'included_km' => ['nullable', 'integer', 'min:0'],
+            'additional_km_rate' => ['nullable', 'numeric', 'min:0'],
+            'notify_customer' => ['nullable', 'boolean'],
         ]);
         [$pickupAt, $dueAt] = $this->interval($company, $data['pickup_at'], $data['due_at']);
 
-        $model = DB::transaction(function () use ($company, $access, $reservation, $data, $pickupAt, $dueAt): CarRentalReservation {
-            $model = $this->reservationFor($company, $access, $reservation, [], true);
+        /** @var array<int, string> $changes */
+        $changes = [];
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $data, $pickupAt, $dueAt, &$changes): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, ['site', 'customerProfile'], true);
 
             if ($model->state !== 'reserved') {
                 throw ValidationException::withMessages([
@@ -713,19 +883,110 @@ final class CarRentalController extends Controller
                 null,
                 $model->id,
             );
+            $vehicleChanged = $vehicle->id !== $model->vehicle_id;
 
-            $model->forceFill([
+            if ($vehicleChanged) {
+                $this->assertVehicleCommercialTermsConfigured($vehicle);
+                $changes[] = 'vehicle';
+            }
+
+            if (! $pickupAt->equalTo($model->pickup_at) || ! $dueAt->equalTo($model->due_at)) {
+                $changes[] = 'schedule';
+            }
+
+            // Tarif : celui du véhicule par défaut, un autre seulement avec la permission.
+            $currency = $data['currency'] ?? $model->currency;
+            $dailyRate = array_key_exists('daily_rate', $data) ? (string) $data['daily_rate'] : (string) $model->daily_rate;
+            $rateUnchanged = $currency === $model->currency
+                && (int) round((float) $dailyRate * 100) === (int) round((float) $model->daily_rate * 100);
+
+            if ($vehicleChanged && ! $access->allows('rental.reservations.override_rate')) {
+                $currency = 'USD';
+                $dailyRate = (string) $vehicle->daily_rate_usd;
+                $rateOverridden = false;
+            } elseif ($rateUnchanged && ! $vehicleChanged) {
+                $rateOverridden = (bool) $model->rate_overridden;
+            } else {
+                $rateOverridden = $this->assertRateAllowed($access, $vehicle, $currency, $dailyRate);
+            }
+
+            if (! $rateUnchanged || $vehicleChanged) {
+                $changes[] = 'rate';
+            }
+
+            $site = $model->site;
+            $pickupType = $data['pickup_location_type'] ?? $model->pickup_location_type;
+            $dropoffType = $data['dropoff_location_type'] ?? $model->dropoff_location_type;
+            $attributes = [
                 'vehicle_id' => $vehicle->id,
                 'pickup_at' => $pickupAt,
                 'due_at' => $dueAt,
+                'currency' => $currency,
+                'daily_rate' => $dailyRate,
+                'rate_overridden' => $rateOverridden,
                 'lock_version' => $model->lock_version + 1,
-            ])->save();
+            ];
 
-            return $model->load(['site', 'vehicle', 'customerProfile']);
+            if ($vehicleChanged) {
+                $attributes['minimum_security_deposit_usd'] = $vehicle->minimum_security_deposit_usd;
+            }
+
+            if (array_key_exists('pickup_location_type', $data) || array_key_exists('dropoff_location_type', $data)) {
+                $attributes['pickup_location_type'] = $pickupType;
+                $attributes['pickup_location_detail'] = $this->locationDetail($pickupType, $data['pickup_location_detail'] ?? null, $site);
+                $attributes['dropoff_location_type'] = $dropoffType;
+                $attributes['dropoff_location_detail'] = $this->locationDetail($dropoffType, $data['dropoff_location_detail'] ?? null, $site);
+                $attributes['airport_pickup_fee_usd'] = $this->airportServiceFee(
+                    $pickupType,
+                    (bool) ($data['apply_airport_pickup_fee'] ?? false),
+                    'apply_airport_pickup_fee',
+                );
+                $attributes['airport_dropoff_fee_usd'] = $this->airportServiceFee(
+                    $dropoffType,
+                    (bool) ($data['apply_airport_dropoff_fee'] ?? false),
+                    'apply_airport_dropoff_fee',
+                );
+                $changes[] = 'locations';
+            }
+
+            if (array_key_exists('kilometer_plan', $data)) {
+                $limited = $data['kilometer_plan'] === 'limited';
+
+                if ($limited && ! isset($data['included_km'])) {
+                    throw ValidationException::withMessages([
+                        'included_km' => 'Indiquez le nombre de kilomètres inclus.',
+                    ]);
+                }
+
+                $attributes['kilometer_plan'] = $data['kilometer_plan'];
+                $attributes['included_km'] = $limited ? $data['included_km'] : null;
+                $attributes['additional_km_rate'] = $limited ? ($data['additional_km_rate'] ?? null) : null;
+                $changes[] = 'kilometers';
+            }
+
+            if (isset($data['customer'])) {
+                $profile = $model->customerProfile;
+                abort_if($profile === null, 409, 'Le client de cette réservation est introuvable.');
+                $profile->forceFill([
+                    'customer_type' => $data['customer']['customer_type'] ?? $profile->customer_type,
+                    'display_name' => trim($data['customer']['display_name']),
+                ]);
+                $profile->assignContact($data['customer']['email'] ?? null, $data['customer']['phone'] ?? null);
+
+                if ($profile->isDirty()) {
+                    $changes[] = 'customer';
+                }
+
+                $profile->save();
+            }
+
+            $model->forceFill($attributes)->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile', 'payments', 'securityDeposits']);
         });
 
         $this->audit->record(
-            eventType: 'car_rental.reservation_schedule_updated',
+            eventType: 'car_rental.reservation_updated',
             companyId: $company->id,
             actorId: $actor?->id,
             actorType: $actor === null ? 'SYSTEM' : 'USER',
@@ -735,12 +996,53 @@ final class CarRentalController extends Controller
                 'reservation_number' => $model->formattedNumber(),
                 'site_id' => $model->site_id,
                 'vehicle_id' => $model->vehicle_id,
+                'changed' => array_values(array_unique($changes)),
+                'rate_overridden' => $model->rate_overridden,
+                'payments_modified' => false,
             ],
         );
 
+        $notificationSent = (bool) ($data['notify_customer'] ?? false)
+            ? $this->customerNotifications->notify($company, $model, CarRentalCustomerNotificationService::RESERVATION_UPDATED)
+            : false;
+
         return response()->json([
-            'data' => $this->reservationPayload($model),
+            'data' => $this->reservationPayload($model, $access),
+            'customer_notification_sent' => $notificationSent,
         ]);
+    }
+
+    /** Renvoie au client la confirmation à jour de sa réservation. */
+    public function notifyReservation(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $model = $this->reservationFor($company, $access, $reservation, ['site', 'vehicle', 'customerProfile']);
+
+        if (! in_array($model->state, ['reserved', 'checked_out'], true)) {
+            throw ValidationException::withMessages([
+                'reservation' => 'Cette réservation est terminée ou annulée : aucune confirmation n’est renvoyée.',
+            ]);
+        }
+
+        if (empty($model->customerProfile?->email)) {
+            throw ValidationException::withMessages([
+                'customer.email' => 'Ajoutez le courriel du client avant de renvoyer la confirmation.',
+            ]);
+        }
+
+        $sent = $this->customerNotifications->notify(
+            $company,
+            $model,
+            CarRentalCustomerNotificationService::RESERVATION_UPDATED,
+        );
+
+        return response()->json([
+            'customer_notification_sent' => $sent,
+            'message' => $sent
+                ? 'La confirmation a été envoyée au client.'
+                : 'La confirmation n’a pas pu être envoyée. Vérifiez le courriel du client et le serveur de courriel.',
+        ], $sent ? 200 : 502);
     }
 
     public function checkOutReservation(Request $request, string $reservation): JsonResponse
@@ -865,7 +1167,7 @@ final class CarRentalController extends Controller
         );
 
         return response()->json([
-            'data' => $this->reservationPayload($model),
+            'data' => $this->reservationPayload($model, $access),
             'customer_notification_sent' => $customerNotificationSent,
         ]);
     }
@@ -955,7 +1257,7 @@ final class CarRentalController extends Controller
         );
 
         return response()->json([
-            'data' => $this->reservationPayload($model),
+            'data' => $this->reservationPayload($model, $access),
             'customer_notification_sent' => $customerNotificationSent,
         ]);
     }
@@ -1019,7 +1321,7 @@ final class CarRentalController extends Controller
         );
 
         return response()->json([
-            'data' => $this->reservationPayload($model),
+            'data' => $this->reservationPayload($model, $access),
             'customer_notification_sent' => $customerNotificationSent,
         ]);
     }
@@ -1074,7 +1376,7 @@ final class CarRentalController extends Controller
         );
 
         return response()->json([
-            'data' => $this->reservationPayload($model),
+            'data' => $this->reservationPayload($model, $access),
         ]);
     }
 
@@ -1098,16 +1400,32 @@ final class CarRentalController extends Controller
             'currency' => ['required', Rule::in(['HTG', 'USD'])],
             'amount' => ['required', 'numeric', 'gt:0'],
             'cash_register_id' => ['nullable', 'uuid', 'required_if:method,cash'],
-            'bank_name' => ['nullable', 'string', 'max:64', 'required_if:method,bank_transfer'],
-            'bank_reference' => ['nullable', 'string', 'max:128', 'required_if:method,bank_transfer'],
-            'proof_storage_key' => ['nullable', 'string', 'max:512', 'required_if:method,bank_transfer'],
-            'proof_sha256' => ['nullable', 'regex:/\\A[a-fA-F0-9]{64}\\z/', 'required_if:method,bank_transfer'],
+            'bank_name' => ['nullable', 'string', 'max:64'],
+            'bank_reference' => ['nullable', 'string', 'max:128'],
+            'proof_file_id' => ['nullable', 'uuid', 'required_if:method,bank_transfer'],
+        ], [
+            'cash_register_id.required_if' => 'Sélectionnez la caisse qui reçoit le paiement en espèces.',
+            'proof_file_id.required_if' => 'Ajoutez la photo ou le fichier du reçu de virement Sogebank.',
         ]);
 
-        if ($data['method'] === 'bank_transfer' && strcasecmp((string) $data['bank_name'], 'Sogebank') !== 0) {
+        if ($data['method'] === 'bank_transfer' && filled($data['bank_name'] ?? null) && strcasecmp((string) $data['bank_name'], 'Sogebank') !== 0) {
             throw ValidationException::withMessages([
                 'bank_name' => 'Les virements Car Rental doivent être déposés à la Sogebank.',
             ]);
+        }
+
+        if ($data['method'] === 'credit') {
+            if (! $access->allows('rental.payments.credit')) {
+                return response()->json([
+                    'message' => 'Seul un administrateur ou le propriétaire peut accorder un crédit.',
+                ], 403);
+            }
+
+            if ($data['payment_kind'] !== 'rental') {
+                throw ValidationException::withMessages([
+                    'method' => 'Le dépôt de garantie ne peut pas être accordé à crédit.',
+                ]);
+            }
         }
 
         if ($data['payment_kind'] === 'security_deposit' && $data['currency'] !== 'USD') {
@@ -1116,8 +1434,18 @@ final class CarRentalController extends Controller
             ]);
         }
 
-        $payment = DB::transaction(function () use ($company, $model, $data): CarRentalPayment {
-            $cashRegisterId = $data['cash_register_id'] ?? null;
+        $proof = $data['method'] === 'bank_transfer'
+            ? $this->files->find($company, $data['proof_file_id'] ?? null, StoredFile::PURPOSE_PAYMENT_PROOF, 'proof_file_id')
+            : null;
+
+        if ($proof !== null && $proof->site_id !== $model->site_id) {
+            throw ValidationException::withMessages([
+                'proof_file_id' => 'Le reçu doit être ajouté depuis l’adresse de la réservation.',
+            ]);
+        }
+
+        $payment = DB::transaction(function () use ($company, $model, $data, $proof, $actor): CarRentalPayment {
+            $cashRegisterId = $data['method'] === 'cash' ? ($data['cash_register_id'] ?? null) : null;
 
             if ($cashRegisterId !== null) {
                 $registerExists = CashRegister::query()
@@ -1134,20 +1462,25 @@ final class CarRentalController extends Controller
                 }
             }
 
+            // Un crédit n'encaisse rien : il est accordé et approuvé par la même personne autorisée.
+            $isCredit = $data['method'] === 'credit';
             $payment = new CarRentalPayment([
                 'company_id' => $company->id,
                 'reservation_id' => $model->id,
                 'cash_register_id' => $cashRegisterId,
                 'payment_kind' => $data['payment_kind'],
                 'method' => $data['method'],
-                'status' => 'submitted',
+                'status' => $isCredit ? 'approved' : 'submitted',
                 'currency' => $data['currency'],
                 'amount' => $data['amount'],
                 'bank_name' => $data['method'] === 'bank_transfer' ? 'Sogebank' : null,
-                'proof_storage_key' => $data['proof_storage_key'] ?? null,
-                'proof_sha256' => $data['proof_sha256'] ?? null,
+                'proof_file_id' => $proof?->id,
+                'proof_storage_key' => $proof?->path,
+                'proof_sha256' => $proof?->sha256,
+                'approved_by' => $isCredit ? $actor?->id : null,
+                'approved_at' => $isCredit ? now()->utc() : null,
             ]);
-            $payment->setBankReference($data['bank_reference'] ?? null);
+            $payment->setBankReference($data['method'] === 'bank_transfer' ? ($data['bank_reference'] ?? null) : null);
             $payment->save();
 
             return $payment;
@@ -1488,6 +1821,15 @@ final class CarRentalController extends Controller
             'daily_rate_usd' => $vehicle->daily_rate_usd,
             'minimum_security_deposit_usd' => $vehicle->minimum_security_deposit_usd,
             'is_active' => $vehicle->is_active,
+            'color' => $vehicle->color,
+            'fuel_type' => $vehicle->fuel_type,
+            'transmission' => $vehicle->transmission,
+            'engine_displacement_cc' => $vehicle->engine_displacement_cc,
+            'doors' => $vehicle->doors,
+            'photo' => $vehicle->photo_file_id === null ? null : [
+                'id' => $vehicle->photo_file_id,
+                'url' => '/api/v1/car-rental/files/' . $vehicle->photo_file_id,
+            ],
         ];
 
         if ($includeManagementDetails) {
@@ -1514,6 +1856,63 @@ final class CarRentalController extends Controller
                 'vehicle_id' => 'Le dépôt minimum en USD doit être configuré pour ce véhicule avant toute réservation.',
             ]);
         }
+    }
+
+    /** @return array<string, array<int, mixed>> */
+    private function vehicleContractRules(): array
+    {
+        return [
+            'color' => ['nullable', 'string', 'max:48'],
+            'fuel_type' => ['nullable', Rule::in(CarRentalVehicle::FUEL_TYPES)],
+            'transmission' => ['nullable', Rule::in(CarRentalVehicle::TRANSMISSIONS)],
+            'engine_displacement_cc' => ['nullable', 'integer', 'between:50,10000'],
+            'doors' => ['nullable', 'integer', 'between:2,6'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function vehicleContractAttributes(array $data): array
+    {
+        return [
+            'color' => $this->nullableTrimmed($data['color'] ?? null),
+            'fuel_type' => $data['fuel_type'] ?? null,
+            'transmission' => $data['transmission'] ?? null,
+            'engine_displacement_cc' => $data['engine_displacement_cc'] ?? null,
+            'doors' => $data['doors'] ?? null,
+        ];
+    }
+
+    /**
+     * Le tarif vient de la fiche véhicule. Seul un rôle autorisé
+     * (rental.reservations.override_rate) peut appliquer un autre montant ou
+     * une autre devise. Retourne vrai lorsqu'un tarif particulier est appliqué.
+     */
+    private function assertRateAllowed(
+        CompanyUserAccess $access,
+        CarRentalVehicle $vehicle,
+        string $currency,
+        string $dailyRate,
+    ): bool {
+        $matchesVehicle = $currency === 'USD'
+            && (int) round((float) $dailyRate * 100) === (int) round((float) $vehicle->daily_rate_usd * 100);
+
+        if ($matchesVehicle) {
+            return false;
+        }
+
+        if (! $access->allows('rental.reservations.override_rate')) {
+            throw ValidationException::withMessages([
+                'daily_rate' => sprintf(
+                    'Le tarif de la fiche véhicule s’applique : USD %s par jour. Seul un administrateur peut appliquer un autre tarif.',
+                    number_format((float) $vehicle->daily_rate_usd, 2, '.', ''),
+                ),
+            ]);
+        }
+
+        return true;
     }
 
     private function vehicleFor(Company $company, CompanyUserAccess $access, string $vehicle): CarRentalVehicle
@@ -1606,6 +2005,10 @@ final class CarRentalController extends Controller
             'daily_rate_usd.required' => 'Saisissez le tarif quotidien en USD.',
             'daily_rate_usd.numeric' => 'Le tarif quotidien doit être un montant valide.',
             'daily_rate_usd.gt' => 'Le tarif quotidien doit être supérieur à zéro.',
+            'fuel_type.in' => 'Choisissez Essence ou Diesel.',
+            'transmission.in' => 'Choisissez Manuelle ou Automatique.',
+            'engine_displacement_cc.between' => 'Indiquez une cylindrée en cm³ entre 50 et 10 000.',
+            'doors.between' => 'Indiquez un nombre de portes entre 2 et 6.',
             'minimum_security_deposit_usd.required' => 'Saisissez le dépôt minimum en USD.',
             'minimum_security_deposit_usd.numeric' => 'Le dépôt minimum doit être un montant valide.',
             'minimum_security_deposit_usd.gte' => 'Le dépôt minimum ne peut pas être négatif.',
@@ -1689,8 +2092,11 @@ final class CarRentalController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function reservationPayload(CarRentalReservation $reservation): array
+    private function reservationPayload(CarRentalReservation $reservation, ?CompanyUserAccess $access = null): array
     {
+        // Les coordonnées du client ne sont renvoyées qu'aux rôles qui gèrent la réservation.
+        $includeContact = $access?->allows('rental.reservations.manage') ?? false;
+
         $airportPickupFee = (float) $reservation->airport_pickup_fee_usd;
         $airportDropoffFee = (float) $reservation->airport_dropoff_fee_usd;
 
@@ -1722,6 +2128,7 @@ final class CarRentalController extends Controller
             'airport_fees_total_usd' => number_format($airportPickupFee + $airportDropoffFee, 2, '.', ''),
             'currency' => $reservation->currency,
             'daily_rate' => $reservation->daily_rate,
+            'rate_overridden' => (bool) $reservation->rate_overridden,
             'minimum_security_deposit_usd' => $reservation->minimum_security_deposit_usd,
             'kilometer_plan' => $reservation->kilometer_plan,
             'included_km' => $reservation->included_km,
@@ -1734,6 +2141,10 @@ final class CarRentalController extends Controller
                 'id' => $reservation->customerProfile->id,
                 'display_name' => $reservation->customerProfile->display_name,
                 'customer_type' => $reservation->customerProfile->customer_type,
+                ...($includeContact ? [
+                    'email' => $reservation->customerProfile->email,
+                    'phone' => $reservation->customerProfile->phone,
+                ] : []),
             ],
             'payments' => $reservation->relationLoaded('payments')
                 ? $reservation->payments->map(fn (CarRentalPayment $payment): array => $this->paymentPayload($payment))
@@ -1755,6 +2166,7 @@ final class CarRentalController extends Controller
             'status' => $payment->status,
             'currency' => $payment->currency,
             'amount' => $payment->amount,
+            'proof_file_url' => $payment->proof_file_id === null ? null : '/api/v1/car-rental/files/' . $payment->proof_file_id,
             'submitted_at' => $payment->submitted_at?->toIso8601String(),
             'approved_at' => $payment->approved_at?->toIso8601String(),
         ];

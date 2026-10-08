@@ -14,6 +14,8 @@ use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 final class CarRentalVehicleAndCalendarTest extends TestCase
@@ -377,6 +379,76 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
      * @param array<int, string> $permissions
      * @return array{0: User, 1: Company, 2: Site, 3: string, 4: CompanyUserAccess}
      */
+    public function test_a_manager_can_record_the_contract_details_photo_and_active_state_of_a_vehicle(): void
+    {
+        Storage::fake('local');
+
+        [, $company, $site, $token] = $this->context([
+            'rental.vehicles.read',
+            'rental.vehicles.manage',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'LO-01725', 'suv');
+
+        $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/vehicles/{$vehicle->id}/details", [
+                'category' => 'suv',
+                'make' => 'Suzuki',
+                'model' => 'Jimny',
+                'model_year' => 2024,
+                'latest_odometer_km' => 15851,
+                'color' => 'Blanche',
+                'fuel_type' => 'gasoline',
+                'transmission' => 'manual',
+                'engine_displacement_cc' => 1500,
+                'doors' => 4,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.color', 'Blanche')
+            ->assertJsonPath('data.fuel_type', 'gasoline')
+            ->assertJsonPath('data.engine_displacement_cc', 1500)
+            ->assertJsonPath('data.doors', 4)
+            ->assertJsonPath('data.latest_odometer_km', 15851);
+
+        $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/vehicles/{$vehicle->id}/details", [
+                'category' => 'suv',
+                'latest_odometer_km' => 15851,
+                'fuel_type' => 'kerosene',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('fuel_type');
+
+        $photo = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'vehicle_photo',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('jimny.png', (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')),
+            ])
+            ->assertCreated()
+            ->json('data');
+
+        $this->requestFor($token, $company)
+            ->putJson("/api/v1/car-rental/vehicles/{$vehicle->id}/photo", ['file_id' => $photo['id']])
+            ->assertOk()
+            ->assertJsonPath('data.photo.url', '/api/v1/car-rental/files/' . $photo['id']);
+
+        $this->reservation($company, $site, $vehicle, '00000001', 'reserved');
+
+        $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/vehicles/{$vehicle->id}/active", ['is_active' => false])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('is_active');
+
+        CarRentalReservation::query()->where('vehicle_id', $vehicle->id)->update(['state' => 'cancelled']);
+
+        $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/vehicles/{$vehicle->id}/active", ['is_active' => false])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        self::assertTrue(AuditEvent::query()->where('event_type', 'car_rental.vehicle_deactivated')->exists());
+    }
+
     private function context(array $permissions, string $siteScope = 'all', string $companyCode = 'RENT'): array
     {
         $user = User::factory()->create(['is_active' => true]);

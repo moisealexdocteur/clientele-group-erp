@@ -349,6 +349,36 @@ final class SystemConfigurationTest extends TestCase
         ]);
     }
 
+    public function test_the_owner_records_the_legal_identity_printed_on_rental_contracts(): void
+    {
+        $owner = User::factory()->create(['is_active' => true, 'system_role' => 'owner']);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $companyId = $this->createCompany($ownerToken, 'RENT-LEGAL', 'Clientèle Rent a Car');
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}", [
+                'legal_name' => 'Clientèle Rent A Car',
+                'display_name' => 'Clientèle Rent a Car',
+                'legal_representative' => 'Représentant de test',
+                'tax_identification_number' => '000-000-000-0',
+                'legal_address' => 'Adresse de test, Route Nationale 6',
+                'phone_numbers' => '(+509) 0000-0000',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.legal_representative', 'Représentant de test')
+            ->assertJsonPath('data.tax_identification_number', '000-000-000-0');
+
+        $this->withToken($ownerToken)
+            ->withHeader('X-Clientele-Company-Id', $companyId)
+            ->getJson('/api/v1/context')
+            ->assertOk()
+            ->assertJsonPath('company.legal.representative', 'Représentant de test')
+            ->assertJsonPath('company.legal.address', 'Adresse de test, Route Nationale 6');
+
+        $event = AuditEvent::query()->where('event_type', 'configuration.company_updated')->firstOrFail();
+        self::assertContains('tax_identification_number', $event->metadata['changed']);
+    }
+
     private function createCompany(string $token, string $code, string $name): string
     {
         return $this->withToken($token)

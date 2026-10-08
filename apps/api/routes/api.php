@@ -3,6 +3,7 @@
 use App\Http\Controllers\BootstrapController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CarRentalController;
+use App\Http\Controllers\CarRentalFileController;
 use App\Http\Controllers\CompanyContextController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\SystemConfigurationController;
@@ -36,6 +37,8 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.companies.index');
             Route::post('/companies', [SystemConfigurationController::class, 'storeCompany'])
                 ->name('api.v1.system.configuration.companies.store');
+            Route::patch('/companies/{company}', [SystemConfigurationController::class, 'updateCompany'])
+                ->name('api.v1.system.configuration.companies.update');
             Route::post('/companies/{company}/sites', [SystemConfigurationController::class, 'storeSite'])
                 ->name('api.v1.system.configuration.sites.store');
             Route::post('/companies/{company}/cash-registers', [SystemConfigurationController::class, 'storeCashRegister'])
@@ -73,6 +76,15 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/vehicles/{vehicle}/commercial-terms', [CarRentalController::class, 'updateVehicleCommercialTerms'])
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.commercial-terms');
+            Route::patch('/vehicles/{vehicle}/details', [CarRentalController::class, 'updateVehicleDetails'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.details');
+            Route::patch('/vehicles/{vehicle}/active', [CarRentalController::class, 'updateVehicleActive'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.active');
+            Route::put('/vehicles/{vehicle}/photo', [CarRentalController::class, 'updateVehiclePhoto'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.photo');
             Route::get('/vehicles/{vehicle}/documents', [CarRentalController::class, 'vehicleDocuments'])
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.documents.index');
@@ -97,6 +109,9 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/reservations/{reservation}', [CarRentalController::class, 'updateReservation'])
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.update');
+            Route::post('/reservations/{reservation}/notify', [CarRentalController::class, 'notifyReservation'])
+                ->middleware('company.permission:rental.reservations.manage')
+                ->name('api.v1.car-rental.reservations.notify');
             Route::post('/reservations/{reservation}/check-out', [CarRentalController::class, 'checkOutReservation'])
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.check-out');
@@ -112,6 +127,10 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/reservations/{reservation}/payments', [CarRentalController::class, 'submitPayment'])
                 ->middleware('company.permission:rental.payments.submit')
                 ->name('api.v1.car-rental.payments.store');
+            Route::post('/files', [CarRentalFileController::class, 'store'])
+                ->name('api.v1.car-rental.files.store');
+            Route::get('/files/{file}', [CarRentalFileController::class, 'show'])
+                ->name('api.v1.car-rental.files.show');
             Route::post('/reservations/{reservation}/payments/{payment}/approve', [CarRentalController::class, 'approvePayment'])
                 ->middleware('company.permission:rental.payments.approve')
                 ->name('api.v1.car-rental.payments.approve');

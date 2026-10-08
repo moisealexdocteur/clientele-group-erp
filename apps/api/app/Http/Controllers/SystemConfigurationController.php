@@ -44,6 +44,9 @@ final class SystemConfigurationController extends Controller
                 'rental.calendar.read',
                 'rental.payments.submit',
                 'rental.payments.approve',
+                'rental.reservations.override_rate',
+                'rental.payments.credit',
+                'rental.documents.sensitive',
             ],
         ],
         'car_rental_agent' => [
@@ -165,6 +168,61 @@ final class SystemConfigurationController extends Controller
         return response()->json([
             'data' => $this->companyPayload($company->setRelation('sites', collect())),
         ], 201);
+    }
+
+    /**
+     * Identité légale du loueur, imprimée sur les contrats : nom affiché,
+     * représentant, NIF, adresse et téléphones. Ces données sont saisies par
+     * le propriétaire et ne sont jamais versionnées dans le dépôt.
+     */
+    public function updateCompany(Request $request, Company $company): JsonResponse
+    {
+        $data = $request->validate([
+            'legal_name' => ['required', 'string', 'max:255'],
+            'display_name' => ['required', 'string', 'max:255'],
+            'legal_representative' => ['nullable', 'string', 'max:160'],
+            'tax_identification_number' => ['nullable', 'string', 'max:64'],
+            'legal_address' => ['nullable', 'string', 'max:1000'],
+            'phone_numbers' => ['nullable', 'string', 'max:160'],
+        ], $this->companyValidationMessages());
+
+        $owner = $this->owner($request);
+
+        return $this->companyContext->within($company->id, function () use ($company, $data, $owner): JsonResponse {
+            $company->forceFill([
+                'legal_name' => trim($data['legal_name']),
+                'display_name' => trim($data['display_name']),
+                'legal_representative' => $this->trimmedOrNull($data['legal_representative'] ?? null),
+                'tax_identification_number' => $this->trimmedOrNull($data['tax_identification_number'] ?? null),
+                'legal_address' => $this->trimmedOrNull($data['legal_address'] ?? null),
+                'phone_numbers' => $this->trimmedOrNull($data['phone_numbers'] ?? null),
+            ]);
+            $changed = array_keys($company->getDirty());
+            $company->save();
+
+            if ($changed !== []) {
+                $this->audit->record(
+                    eventType: 'configuration.company_updated',
+                    companyId: $company->id,
+                    actorId: $owner->id,
+                    actorType: 'USER',
+                    subjectType: Company::class,
+                    subjectId: $company->id,
+                    metadata: ['changed' => $changed],
+                );
+            }
+
+            return response()->json([
+                'data' => $this->companyPayload($company->load('sites.cashRegisters')),
+            ]);
+        });
+    }
+
+    private function trimmedOrNull(?string $value): ?string
+    {
+        $value = $value === null ? null : trim($value);
+
+        return $value === '' ? null : $value;
     }
 
     public function storeSite(Request $request, Company $company): JsonResponse
@@ -957,6 +1015,10 @@ final class SystemConfigurationController extends Controller
             'timezone' => $company->timezone,
             'timezone_label' => $company->timezone_display_name,
             'is_active' => $company->is_active,
+            'legal_representative' => $company->legal_representative,
+            'tax_identification_number' => $company->tax_identification_number,
+            'legal_address' => $company->legal_address,
+            'phone_numbers' => $company->phone_numbers,
             'sites' => $company->relationLoaded('sites')
                 ? $company->sites->map(fn (Site $site): array => $this->sitePayload($site))->values()
                 : [],
