@@ -79,7 +79,9 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - clientele-internal
+      clientele-internal: {}
+      clientele-egress:
+        gw_priority: 1
     healthcheck:
       test: ["CMD", "php", "artisan", "health:check"]
       interval: 30s
@@ -135,7 +137,9 @@ services:
       app:
         condition: service_healthy
     networks:
-      - clientele-internal
+      clientele-internal: {}
+      clientele-egress:
+        gw_priority: 1
 
   scheduler:
     image: ghcr.io/moisealexdocteur/clientele-group-erp-app:${APP_IMAGE_TAG:-edge}
@@ -186,7 +190,9 @@ services:
       app:
         condition: service_healthy
     networks:
-      - clientele-internal
+      clientele-internal: {}
+      clientele-egress:
+        gw_priority: 1
 
   postgres:
     image: postgres:16-alpine
@@ -224,6 +230,7 @@ networks:
     external: true
   clientele-internal:
     internal: true
+  clientele-egress: {}
 
 volumes:
   clientele-postgres:

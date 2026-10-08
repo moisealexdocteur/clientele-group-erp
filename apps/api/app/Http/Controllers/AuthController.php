@@ -64,7 +64,7 @@ final class AuthController extends Controller
             );
 
             return response()->json([
-                'message' => 'Les identifiants sont invalides ou le compte est inactif.',
+                'message' => 'Adresse courriel ou mot de passe incorrect.',
             ], 401);
         }
 

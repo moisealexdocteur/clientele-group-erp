@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 type ApiStatus = 'checking' | 'online' | 'offline'
 type AuthView = 'sign-in' | 'verify' | 'reset-request' | 'reset-confirm' | 'authenticated'
+type AuthMessageKind = 'info' | 'error' | 'success'
 
 interface BootstrapResponse {
   application: {
@@ -119,10 +120,13 @@ const bootstrap = ref<BootstrapResponse | null>(null)
 const currentTime = ref(new Date())
 const authView = ref<AuthView>('sign-in')
 const authMessage = ref('')
+const authMessageKind = ref<AuthMessageKind>('info')
 const authBusy = ref(false)
 const email = ref('')
 const password = ref('')
 const passwordConfirmation = ref('')
+const passwordVisible = ref(false)
+const passwordConfirmationVisible = ref(false)
 const emailCode = ref('')
 const challengeId = ref('')
 const sessionToken = ref(sessionStorage.getItem('clientele.erp.session') ?? '')
@@ -188,7 +192,7 @@ const formattedCapHaitienTime = computed(() => {
     hour12: true,
   }).format(date)
 
-  return `${datePart} · ${timePart} · heure de Cap-Haïtien`
+  return `${datePart} · ${timePart} (Cap-Haïtien, Haïti)`
 })
 
 const statusLabel = computed(() => {
@@ -257,6 +261,7 @@ async function verifyApi(): Promise<void> {
 
 async function signIn(): Promise<void> {
   authMessage.value = ''
+  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -276,6 +281,7 @@ async function signIn(): Promise<void> {
     authMessage.value = 'Un code à six chiffres a été envoyé à votre adresse personnelle.'
   } catch (error) {
     authMessage.value = messageFrom(error)
+    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -283,6 +289,7 @@ async function signIn(): Promise<void> {
 
 async function verifyEmailCode(): Promise<void> {
   authMessage.value = ''
+  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -302,6 +309,7 @@ async function verifyEmailCode(): Promise<void> {
     await loadSession()
   } catch (error) {
     authMessage.value = messageFrom(error)
+    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -309,6 +317,7 @@ async function verifyEmailCode(): Promise<void> {
 
 async function requestPasswordReset(): Promise<void> {
   authMessage.value = ''
+  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -325,6 +334,7 @@ async function requestPasswordReset(): Promise<void> {
     authMessage.value = result.message
   } catch (error) {
     authMessage.value = messageFrom(error)
+    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -332,6 +342,7 @@ async function requestPasswordReset(): Promise<void> {
 
 async function resetPassword(): Promise<void> {
   authMessage.value = ''
+  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -350,8 +361,10 @@ async function resetPassword(): Promise<void> {
     emailCode.value = ''
     authView.value = 'sign-in'
     authMessage.value = result.message
+    authMessageKind.value = 'success'
   } catch (error) {
     authMessage.value = messageFrom(error)
+    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -374,11 +387,13 @@ async function loadSession(): Promise<void> {
   } catch {
     clearSession()
     authMessage.value = 'Votre session a expiré. Connectez-vous de nouveau.'
+    authMessageKind.value = 'error'
   }
 }
 
 async function selectCompany(companyId: string): Promise<void> {
   authMessage.value = ''
+  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -390,6 +405,7 @@ async function selectCompany(companyId: string): Promise<void> {
     resetRentalForm(context.sites[0]?.id ?? '')
   } catch (error) {
     authMessage.value = messageFrom(error)
+    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -412,8 +428,19 @@ function clearSession(): void {
   companies.value = []
   activeContext.value = null
   authView.value = 'sign-in'
+  authMessageKind.value = 'info'
+  passwordVisible.value = false
+  passwordConfirmationVisible.value = false
   activeSection.value = 'Accueil'
   resetRentalForm()
+}
+
+function showAuthView(view: Exclude<AuthView, 'authenticated'>): void {
+  authView.value = view
+  authMessage.value = ''
+  authMessageKind.value = 'info'
+  passwordVisible.value = false
+  passwordConfirmationVisible.value = false
 }
 
 function contextHeaders(): HeadersInit {
@@ -584,7 +611,7 @@ function messageFrom(error: unknown): string {
     return error.message
   }
 
-  return 'La connexion au serveur a échoué. Vérifiez Internet puis réessayez.'
+  return 'Impossible de joindre le serveur. Vérifiez votre connexion Internet, puis réessayez.'
 }
 
 function onOnline(): void {
@@ -624,121 +651,163 @@ onBeforeUnmount(() => {
         <span>ERP</span>
       </a>
 
-      <div class="status-group">
+      <div v-if="authView === 'authenticated'" class="status-group">
         <span class="city">Cap-Haïtien, Haïti</span>
         <span class="timestamp">{{ formattedCapHaitienTime }}</span>
         <span class="connection" :class="apiStatus">
           <i aria-hidden="true"></i>{{ statusLabel }}
         </span>
       </div>
+      <span v-else class="environment-label">
+        {{ bootstrap?.application.environment === 'staging' ? 'Préproduction' : 'Clientèle Group ERP' }}
+      </span>
     </header>
 
     <div v-if="isOffline" class="offline-notice" role="status">
-      Le mode hors ligne est détecté. La connexion et les opérations non synchronisées restent bloquées dans cette version.
+La connexion Internet est requise pour ouvrir une session.
     </div>
 
-    <section v-if="authView !== 'authenticated'" class="access-layout" aria-labelledby="access-title">
-      <div class="access-intro">
-        <p class="eyebrow">Connexion requise</p>
-        <h1 id="access-title">Connexion sécurisée</h1>
-        <p>
-          Les sociétés, sites et données clients sont accessibles après la connexion.
-          Un code de vérification envoyé à votre adresse personnelle est requis pour ouvrir la session.
-        </p>
-        <ul class="access-points">
-          <li><span>01</span> Adresse courriel et mot de passe</li>
-          <li><span>02</span> Code de vérification</li>
-          <li><span>03</span> Accès selon vos autorisations</li>
-        </ul>
-      </div>
-
-      <section class="access-card" aria-live="polite">
+    <section v-if="authView !== 'authenticated'" class="auth-page" aria-labelledby="auth-title">
+      <section class="auth-card" aria-live="polite">
         <template v-if="authView === 'sign-in'">
-          <p class="eyebrow">Connexion</p>
-          <h2>Se connecter</h2>
-          <p class="access-description">Saisissez votre adresse courriel personnelle et votre mot de passe.</p>
+          <header class="auth-header">
+            <p class="auth-kicker">Connexion</p>
+            <h1 id="auth-title">Se connecter</h1>
+            <p>Saisissez votre adresse courriel et votre mot de passe.</p>
+          </header>
 
-          <form class="access-form" @submit.prevent="signIn">
-            <label>
-              Adresse courriel personnelle
-              <input v-model.trim="email" type="email" autocomplete="username" required :disabled="authBusy" />
-            </label>
-            <label>
-              Mot de passe
-              <input v-model="password" type="password" autocomplete="current-password" required :disabled="authBusy" />
-            </label>
-            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
-            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-              {{ authBusy ? 'Vérification…' : 'Continuer' }}
-            </button>
-            <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'reset-request'; authMessage = ''">
-              J’ai oublié mon mot de passe
-            </button>
+          <form class="auth-form" @submit.prevent="signIn">
+            <div class="auth-field">
+              <label for="sign-in-email">Adresse courriel</label>
+              <input id="sign-in-email" v-model.trim="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required :disabled="authBusy" />
+            </div>
+
+            <div class="auth-field">
+              <label for="sign-in-password">Mot de passe</label>
+              <div class="auth-password">
+                <input id="sign-in-password" v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="current-password" required :disabled="authBusy" />
+                <button type="button" class="password-toggle" :disabled="authBusy" @click="passwordVisible = !passwordVisible">
+                  {{ passwordVisible ? 'Masquer' : 'Afficher' }}
+                </button>
+              </div>
+            </div>
+
+            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
+              {{ authMessage }}
+            </p>
+
+            <div class="auth-actions">
+              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+                {{ authBusy ? 'Connexion en cours…' : 'Se connecter' }}
+              </button>
+              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('reset-request')">
+                Mot de passe oublié ?
+              </button>
+            </div>
           </form>
         </template>
 
         <template v-else-if="authView === 'verify'">
-          <p class="eyebrow">Vérification en deux étapes</p>
-          <h2>Entrez le code reçu</h2>
-          <p class="access-description">Le code est lié à {{ email }} et expire rapidement.</p>
+          <header class="auth-header">
+            <p class="auth-kicker">Vérification</p>
+            <h1 id="auth-title">Confirmer votre identité</h1>
+            <p>Saisissez le code à six chiffres envoyé par courriel.</p>
+          </header>
 
-          <form class="access-form" @submit.prevent="verifyEmailCode">
-            <label>
-              Code à six chiffres
-              <input v-model.trim="emailCode" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
-            </label>
-            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
-            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-              {{ authBusy ? 'Ouverture…' : 'Se connecter' }}
-            </button>
-            <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'sign-in'; authMessage = ''">
-              Revenir à la connexion
-            </button>
+          <form class="auth-form" @submit.prevent="verifyEmailCode">
+            <div class="auth-field">
+              <label for="email-code">Code de vérification</label>
+              <input id="email-code" v-model.trim="emailCode" class="auth-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
+            </div>
+
+            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
+              {{ authMessage }}
+            </p>
+
+            <div class="auth-actions">
+              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+                {{ authBusy ? 'Vérification en cours…' : 'Valider le code' }}
+              </button>
+              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('sign-in')">
+                Retour à la connexion
+              </button>
+            </div>
           </form>
         </template>
 
         <template v-else-if="authView === 'reset-request'">
-          <p class="eyebrow">Réinitialisation</p>
-          <h2>Recevoir un code</h2>
-          <p class="access-description">Un code sera envoyé si cette adresse correspond à un compte actif.</p>
+          <header class="auth-header">
+            <p class="auth-kicker">Mot de passe oublié</p>
+            <h1 id="auth-title">Réinitialiser le mot de passe</h1>
+            <p>Un code est envoyé si cette adresse correspond à un compte actif.</p>
+          </header>
 
-          <form class="access-form" @submit.prevent="requestPasswordReset">
-            <label>
-              Adresse courriel personnelle
-              <input v-model.trim="email" type="email" autocomplete="username" required :disabled="authBusy" />
-            </label>
-            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
-            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-              {{ authBusy ? 'Envoi…' : 'Envoyer le code' }}
-            </button>
-            <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'sign-in'; authMessage = ''">
-              Revenir à la connexion
-            </button>
+          <form class="auth-form" @submit.prevent="requestPasswordReset">
+            <div class="auth-field">
+              <label for="reset-email">Adresse courriel</label>
+              <input id="reset-email" v-model.trim="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required :disabled="authBusy" />
+            </div>
+
+            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
+              {{ authMessage }}
+            </p>
+
+            <div class="auth-actions">
+              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+                {{ authBusy ? 'Envoi en cours…' : 'Envoyer le code' }}
+              </button>
+              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('sign-in')">
+                Retour à la connexion
+              </button>
+            </div>
           </form>
         </template>
 
         <template v-else-if="authView === 'reset-confirm'">
-          <p class="eyebrow">Nouveau mot de passe</p>
-          <h2>Confirmer le code</h2>
-          <p class="access-description">Choisissez un mot de passe de 12 caractères ou plus, avec majuscule, chiffre et symbole.</p>
+          <header class="auth-header">
+            <p class="auth-kicker">Nouveau mot de passe</p>
+            <h1 id="auth-title">Définir un nouveau mot de passe</h1>
+            <p>Utilisez au moins 12 caractères, avec majuscule, minuscule, chiffre et symbole.</p>
+          </header>
 
-          <form class="access-form" @submit.prevent="resetPassword">
-            <label>
-              Code à six chiffres
-              <input v-model.trim="emailCode" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
-            </label>
-            <label>
-              Nouveau mot de passe
-              <input v-model="password" type="password" autocomplete="new-password" required :disabled="authBusy" />
-            </label>
-            <label>
-              Confirmer le nouveau mot de passe
-              <input v-model="passwordConfirmation" type="password" autocomplete="new-password" required :disabled="authBusy" />
-            </label>
-            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
-            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-              {{ authBusy ? 'Enregistrement…' : 'Réinitialiser le mot de passe' }}
-            </button>
+          <form class="auth-form" @submit.prevent="resetPassword">
+            <div class="auth-field">
+              <label for="reset-code">Code de vérification</label>
+              <input id="reset-code" v-model.trim="emailCode" class="auth-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
+            </div>
+
+            <div class="auth-field">
+              <label for="new-password">Nouveau mot de passe</label>
+              <div class="auth-password">
+                <input id="new-password" v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="new-password" required :disabled="authBusy" />
+                <button type="button" class="password-toggle" :disabled="authBusy" @click="passwordVisible = !passwordVisible">
+                  {{ passwordVisible ? 'Masquer' : 'Afficher' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="auth-field">
+              <label for="password-confirmation">Confirmer le mot de passe</label>
+              <div class="auth-password">
+                <input id="password-confirmation" v-model="passwordConfirmation" :type="passwordConfirmationVisible ? 'text' : 'password'" autocomplete="new-password" required :disabled="authBusy" />
+                <button type="button" class="password-toggle" :disabled="authBusy" @click="passwordConfirmationVisible = !passwordConfirmationVisible">
+                  {{ passwordConfirmationVisible ? 'Masquer' : 'Afficher' }}
+                </button>
+              </div>
+            </div>
+
+            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
+              {{ authMessage }}
+            </p>
+
+            <div class="auth-actions">
+              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+                {{ authBusy ? 'Enregistrement en cours…' : 'Enregistrer le mot de passe' }}
+              </button>
+              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('sign-in')">
+                Retour à la connexion
+              </button>
+            </div>
           </form>
         </template>
       </section>
@@ -1057,7 +1126,7 @@ onBeforeUnmount(() => {
       </template>
     </template>
 
-    <footer class="application-footer">
+    <footer v-if="authView === 'authenticated'" class="application-footer">
       <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.4' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>

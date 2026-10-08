@@ -60,7 +60,7 @@ final class ProvisionOwnerCommand extends Command
         ]);
 
         if ($passwordValidation->fails()) {
-            $this->error($passwordValidation->errors()->first());
+            $this->error('Mot de passe non conforme. Utilisez au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un symbole. Les deux saisies doivent être identiques.');
 
             return self::FAILURE;
         }

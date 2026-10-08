@@ -165,7 +165,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [clientele-internal]
+    networks:
+      clientele-internal: {}
+      clientele-egress:
+        gw_priority: 1
     healthcheck:
       test: ["CMD", "php", "artisan", "health:check"]
       interval: 30s
@@ -201,6 +204,7 @@ networks:
     external: true
   clientele-internal:
     internal: true
+  clientele-egress: {}
 volumes:
   clientele-postgres:
   clientele-redis:
