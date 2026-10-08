@@ -11,18 +11,18 @@ services:
       - traefik-public
       - clientele-internal
     labels:
-      # La syntaxe liste est indispensable : Docker Compose n'interpole pas
-      # les variables dans les clés YAML des labels.
+      # Les noms de routeur et de service sont fixes pour cette cible de production.
+      # La préproduction utilise son propre fichier et le nom clientele-erp-preprod.
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-public"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.rule=Host(`${APP_DOMAIN}`)"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.entrypoints=websecure"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.tls=true"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.middlewares=clientele-security@file"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.priority=${TRAEFIK_ROUTER_PRIORITY:-1000}"
-      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-clientele-erp}.service=${TRAEFIK_ROUTER_NAME:-clientele-erp}"
-      - "traefik.http.services.${TRAEFIK_ROUTER_NAME:-clientele-erp}.loadbalancer.server.port=8080"
+      - "traefik.http.routers.clientele-erp.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.clientele-erp.entrypoints=websecure"
+      - "traefik.http.routers.clientele-erp.tls=true"
+      - "traefik.http.routers.clientele-erp.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.clientele-erp.middlewares=clientele-security@file"
+      - "traefik.http.routers.clientele-erp.priority=1000"
+      - "traefik.http.routers.clientele-erp.service=clientele-erp"
+      - "traefik.http.services.clientele-erp.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s
@@ -137,9 +137,8 @@ services:
       app:
         condition: service_healthy
     networks:
-      clientele-internal: {}
-      clientele-egress:
-        gw_priority: 1
+      - clientele-internal
+      - clientele-egress
 
   scheduler:
     image: ghcr.io/moisealexdocteur/clientele-group-erp-app:${APP_IMAGE_TAG:-edge}
@@ -190,9 +189,8 @@ services:
       app:
         condition: service_healthy
     networks:
-      clientele-internal: {}
-      clientele-egress:
-        gw_priority: 1
+      - clientele-internal
+      - clientele-egress
 
   postgres:
     image: postgres:16-alpine
