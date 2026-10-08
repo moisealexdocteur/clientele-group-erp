@@ -130,6 +130,16 @@ export const useSessionStore = defineStore('session', () => {
     officeSiteId.value = result.sites.some((site) => site.id === saved) ? saved : (result.sites[0]?.id ?? '')
   }
 
+  /**
+   * Relit le contexte de la société active (identité légale, conditions du
+   * contrat, droits) sans changer le bureau choisi. Utile quand la
+   * configuration a été modifiée après la connexion.
+   */
+  async function refreshContext(): Promise<void> {
+    if (!context.value) return
+    context.value = await api<CompanyContext>('/api/v1/context', { companyId: context.value.company.id })
+  }
+
   function leaveCompany(): void {
     context.value = null
     officeSiteId.value = ''
@@ -192,6 +202,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   return {
+    refreshContext,
     token,
     user,
     companies,
