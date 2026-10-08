@@ -2,6 +2,29 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.5 - 2026-10-08
+
+### Corrigé
+
+- L’écran de connexion n’utilise plus de contenu promotionnel ni de mise en page à deux colonnes.
+- Les erreurs d’identifiant sont formulées de manière standard : « Adresse courriel ou mot de passe incorrect. ».
+- La commande de création du premier propriétaire indique maintenant toutes les exigences du mot de passe avant qu’un compte soit créé.
+
+### Ajouté
+
+- Écran de connexion, vérification et réinitialisation mobile-first : une colonne, commandes tactiles de 54 à 56 px, boutons explicites et affichage/masquage du mot de passe.
+- Commande `php artisan system:test-smtp adresse@example.com` pour valider le courriel transactionnel sans exposer le secret SMTP.
+- Procédure documentée de création du compte propriétaire, test SMTP et dépannage dans `docs/13_Acces_initial_et_courriel.md`.
+
+### Sécurité
+
+- Le test SMTP affiche seulement l’état de la configuration et masque le secret dans le détail d’erreur.
+- Le code de sécurité demeure envoyé uniquement par un transport de courriel déclaré sûr.
+
+### Limites connues
+
+- L’envoi réel dépend de la résolution DNS et de la configuration SMTP du VPS de préproduction. Il doit être validé avant toute recette de connexion humaine.
+
 ## 0.2.0-alpha.4 - 2026-10-07
 
 ### Ajouté
