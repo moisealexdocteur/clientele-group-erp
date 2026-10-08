@@ -132,6 +132,24 @@ final class AuthenticationFlowTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_access_code_email_template_renders_for_each_supported_purpose(): void
+    {
+        foreach ([
+            'login' => 'ouvrir votre session',
+            'password_reset' => 'réinitialiser votre mot de passe',
+        ] as $purpose => $expectedLabel) {
+            $html = (new AccessCodeMail(
+                'Moise Alex Docteur',
+                '123456',
+                $purpose,
+                now()->utc()->addMinutes(10),
+            ))->render();
+
+            $this->assertStringContainsString($expectedLabel, $html);
+            $this->assertStringContainsString('123456', $html);
+        }
+    }
+
     private function extractLastEmailCode(): string
     {
         $code = null;
