@@ -32,3 +32,11 @@ export function formatMoney(
 export function sumAmounts(values: Array<string | number | null | undefined>): number {
   return Math.round(values.reduce<number>((total, value) => total + (toAmount(value) ?? 0), 0) * 100) / 100
 }
+
+/** « 1 USD = 130,50 HTG » : jusqu'à quatre décimales, sans zéros inutiles. */
+export function formatRate(value: string | number | null | undefined): string {
+  const amount = toAmount(value)
+  if (amount === null) return 'Taux non défini'
+  const text = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(amount)
+  return `1 USD = ${text} HTG`
+}

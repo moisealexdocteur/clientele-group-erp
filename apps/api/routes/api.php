@@ -5,6 +5,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CarRentalController;
 use App\Http\Controllers\CarRentalFileController;
 use App\Http\Controllers\CompanyContextController;
+use App\Http\Controllers\ExchangeRateController;
+use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\SystemConfigurationController;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +19,13 @@ Route::prefix('v1')->group(function (): void {
      * Elle permet uniquement à la PWA de vérifier la compatibilité du socle.
      */
     Route::get('/bootstrap', BootstrapController::class)->name('api.v1.bootstrap');
+
+    /*
+     * Vérification publique du QR d'un reçu : montant, date et état
+     * seulement, jamais de donnée client. Limitée par adresse IP.
+     */
+    Route::get('/public/receipts/{companyCode}/{number}', [ReceiptController::class, 'verify'])
+        ->name('api.v1.public.receipts.verify');
 
     Route::prefix('auth')->group(function (): void {
         Route::post('/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
@@ -60,7 +69,18 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware(['api.token', 'company.context'])->group(function (): void {
         Route::get('/context', CompanyContextController::class)->name('api.v1.context');
 
+        Route::get('/exchange-rates', [ExchangeRateController::class, 'index'])->name('api.v1.exchange-rates.index');
+        Route::post('/exchange-rates', [ExchangeRateController::class, 'store'])
+            ->middleware('company.permission:finance.rates.manage')
+            ->name('api.v1.exchange-rates.store');
+
         Route::prefix('car-rental')->group(function (): void {
+            Route::get('/payments/{payment}/receipt', [ReceiptController::class, 'show'])
+                ->middleware('company.permission:rental.reservations.read')
+                ->name('api.v1.car-rental.receipts.show');
+            Route::post('/payments/{payment}/receipt/prints', [ReceiptController::class, 'recordPrint'])
+                ->middleware('company.permission:rental.reservations.read')
+                ->name('api.v1.car-rental.receipts.prints');
             Route::get('/vehicles', [CarRentalController::class, 'vehicles'])
                 ->middleware('company.permission:rental.vehicles.read')
                 ->name('api.v1.car-rental.vehicles.index');

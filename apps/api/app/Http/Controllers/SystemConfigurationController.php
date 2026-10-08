@@ -49,6 +49,7 @@ final class SystemConfigurationController extends Controller
                 'rental.documents.sensitive',
                 'rental.deposits.settle',
                 'rental.invoices.issue',
+                'finance.rates.manage',
             ],
         ],
         'car_rental_agent' => [

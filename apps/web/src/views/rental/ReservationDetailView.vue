@@ -22,7 +22,7 @@ import {
   reservationStateLabels,
   reservationStateTones,
 } from '../../lib/labels'
-import { formatMoney } from '../../lib/money'
+import { formatMoney, formatRate } from '../../lib/money'
 import { formatDate, formatDateTime, toDateTimeInput } from '../../lib/time'
 import FileCapture from '../../components/ui/FileCapture.vue'
 import { vehicleName, vehiclePlate } from '../../lib/text'
@@ -155,12 +155,24 @@ function setPaymentMethod(method: PaymentMethod): void {
   action.reset()
 }
 
+/* Paiement dans l'autre devise : équivalent au taux en vigueur. */
+const conversion = computed(() => {
+  const value = reservation.value
+  if (!value || paymentForm.currency === value.currency) return null
+  const rate = session.context?.exchange_rate?.rate_htg_per_usd
+  if (!rate) return { rate: null, amount: 0 }
+  const amount = Number(paymentForm.amount) || 0
+  const converted = paymentForm.currency === 'HTG' ? amount / Number(rate) : amount * Number(rate)
+  return { rate, amount: Math.round(converted * 100) / 100 }
+})
+
 /* Ce qu'il manque pour enregistrer le paiement, affiché avant l'envoi. */
 const paymentMissing = computed(() => {
   const items: string[] = []
   if (!paymentForm.amount || Number(paymentForm.amount) <= 0) items.push('Le montant')
   if (paymentForm.method === 'cash' && !paymentForm.cash_register_id) items.push('La caisse')
   if (paymentForm.method === 'bank_transfer' && !paymentForm.proof_file_id) items.push('La photo ou le fichier du reçu Sogebank')
+  if (conversion.value && !conversion.value.rate) items.push('Un taux HTG/USD défini par un administrateur')
   return items
 })
 
@@ -431,12 +443,14 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
                 <strong>{{ payment.kind === 'rental' ? 'Location' : 'Dépôt de garantie' }}</strong>
                 <span class="text-muted text-small">
                   {{ paymentMethodLabels[payment.method] }}<template v-if="payment.submitted_at"> - {{ formatDateTime(payment.submitted_at) }}</template>
+                  <template v-if="payment.exchange_rate_htg_per_usd && payment.currency !== reservation.currency"> - {{ formatMoney(payment.amount_in_reservation_currency, reservation.currency) }} au taux {{ formatRate(payment.exchange_rate_htg_per_usd) }}</template>
                 </span>
               </span>
               <span class="payment-end">
                 <strong class="display display-sm">{{ formatMoney(payment.amount, payment.currency) }}</strong>
                 <StatusPill :tone="payment.status === 'approved' ? 'success' : payment.status === 'submitted' ? 'warning' : 'neutral'" :label="paymentStatusLabels[payment.status]" />
-                <button v-if="payment.proof_file_url" class="btn btn-ghost" type="button" @click="openProof(payment)">Voir le reçu</button>
+                <button v-if="payment.proof_file_url" class="btn btn-ghost" type="button" @click="openProof(payment)">Reçu Sogebank</button>
+                <RouterLink v-if="payment.receipt_number" class="btn btn-ghost" :to="{ name: 'receipt', params: { paymentId: payment.id } }">Reçu {{ payment.receipt_number }}</RouterLink>
                 <button
                   v-if="payment.status === 'submitted' && canApprovePayment"
                   class="btn btn-secondary"
@@ -755,6 +769,11 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
           <input v-model="paymentForm.amount" v-bind="field.attrs" class="input input-amount" type="number" inputmode="decimal" min="0.01" step="0.01" required />
         </FormField>
       </div>
+
+      <p v-if="conversion" class="text-small" :class="conversion.rate ? 'text-secondary' : 'alert alert-warning'">
+        <template v-if="conversion.rate">Équivalent : {{ formatMoney(conversion.amount, reservation.currency) }} au taux {{ formatRate(conversion.rate) }}.</template>
+        <template v-else>Aucun taux HTG/USD n’est défini : un administrateur doit le saisir avant un paiement en {{ paymentForm.currency }}.</template>
+      </p>
 
       <template v-if="paymentForm.method === 'cash'">
         <FormField label="Caisse" required :error="action.fieldErrors.value.cash_register_id" v-slot="field">

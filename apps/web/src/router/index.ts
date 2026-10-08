@@ -79,11 +79,27 @@ const routes: RouteRecordRaw[] = [
       { path: 'reservations/:reservationId/retour', name: 'rental.reservation.return', component: () => import('../views/rental/ReturnView.vue'), props: true, meta: { title: 'Retour du véhicule', permission: 'rental.reservations.manage', navMatch: 'rental.reservations' } },
       { path: 'reservations/:reservationId/modifier', name: 'rental.reservation.edit', component: () => import('../views/rental/ReservationEditView.vue'), props: true, meta: { title: 'Modifier la réservation', permission: 'rental.reservations.manage', navMatch: 'rental.reservations' } },
       { path: 'reservations/:reservationId', name: 'rental.reservation', component: () => import('../views/rental/ReservationDetailView.vue'), props: true, meta: { title: 'Réservation', permission: 'rental.reservations.read', navMatch: 'rental.reservations' } },
+      { path: 'taux', name: 'finance.rates', component: () => import('../views/finance/RatesView.vue'), meta: { title: 'Taux de change' } },
       { path: 'planning', name: 'rental.planning', component: () => import('../views/rental/PlanningView.vue'), meta: { title: 'Planning', permission: 'rental.calendar.read', navMatch: 'rental.planning' } },
       { path: 'vehicules', name: 'rental.vehicles', component: () => import('../views/rental/VehiclesView.vue'), meta: { title: 'Véhicules', permission: 'rental.vehicles.read', navMatch: 'rental.vehicles' } },
       { path: 'vehicules/nouveau', name: 'rental.vehicle.new', component: () => import('../views/rental/VehicleNewView.vue'), meta: { title: 'Ajouter un véhicule', permission: 'rental.vehicles.manage', navMatch: 'rental.vehicles' } },
       { path: 'vehicules/:vehicleId', name: 'rental.vehicle', component: () => import('../views/rental/VehicleDetailView.vue'), props: true, meta: { title: 'Véhicule', permission: 'rental.vehicles.read', navMatch: 'rental.vehicles' } },
     ],
+  },
+  {
+    path: '/recu/:paymentId',
+    name: 'receipt',
+    component: () => import('../views/receipts/ReceiptView.vue'),
+    props: true,
+    meta: { auth: true, company: true, permission: 'rental.reservations.read', title: 'Reçu' },
+  },
+  {
+    // Page publique ouverte par le QR d'un reçu.
+    path: '/verification/recu/:code/:number',
+    name: 'receipt.verify',
+    component: () => import('../views/receipts/VerifyReceiptView.vue'),
+    props: true,
+    meta: { title: 'Vérification d’un reçu' },
   },
   {
     path: '/:pathMatch(.*)*',

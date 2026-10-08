@@ -70,6 +70,7 @@ export interface CompanyContext {
     permissions: string[] | { allow?: string[] }
   }
   sites: ContextSite[]
+  exchange_rate?: ExchangeRate | null
 }
 
 export interface CompanyLegalIdentity {
@@ -173,6 +174,45 @@ export interface CarRentalPayment {
   proof_file_url?: string | null
   submitted_at: string | null
   approved_at: string | null
+  /** Taux appliqué quand la devise diffère de celle de la réservation. */
+  exchange_rate_htg_per_usd?: string | null
+  amount_in_reservation_currency?: string | null
+  /** Numéro du reçu, attribué à l'approbation d'un encaissement. */
+  receipt_number?: string | null
+}
+
+export interface ExchangeRate {
+  id: string
+  rate_htg_per_usd: string
+  brh_reference_rate: string | null
+  brh_reference_date: string | null
+  below_brh: boolean
+  note: string | null
+  effective_at: string | null
+  set_by: string | null
+}
+
+export interface PaymentReceipt {
+  payment_id: string
+  number: string
+  issued_at: string | null
+  print_count: number
+  company: { name: string; display_name: string; address: string | null; tax_identification_number: string | null; phone_numbers: string | null }
+  site: string | null
+  cash_register: string | null
+  cashier: string | null
+  reservation_number: string
+  customer: string | null
+  vehicle: string
+  kind: 'rental' | 'security_deposit'
+  method: PaymentMethod
+  currency: Currency
+  amount: string
+  reservation_currency: Currency
+  exchange_rate_htg_per_usd: string | null
+  amount_in_reservation_currency: string | null
+  bank_reference: string | null
+  verification_url: string | null
 }
 
 export interface CarRentalSecurityDeposit {
@@ -252,6 +292,11 @@ export interface InvoicePaymentLine {
   currency: Currency
   amount: string
   date: string | null
+  receipt_number?: string | null
+  /** Paiement converti au taux enregistré lors de l'encaissement. */
+  original_currency?: Currency
+  original_amount?: string
+  exchange_rate_htg_per_usd?: string
 }
 
 export interface InvoiceSnapshot {

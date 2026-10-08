@@ -2,7 +2,7 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import type { RentalInvoice } from '../api/types'
 import { Writer } from './contractPdf'
 import { fuelLevelLabel } from './labels'
-import { formatMoney } from './money'
+import { formatMoney, formatRate } from './money'
 import { formatDateTime } from './time'
 
 /*
@@ -67,8 +67,14 @@ export async function buildInvoicePdf(invoice: RentalInvoice): Promise<Uint8Arra
 
   w.heading('Règlements')
   const payments: Array<[string, string]> = data.payments.map((payment) => [
-    `${methodLabels[payment.method] ?? payment.method}${payment.date ? ` - ${when(payment.date)}` : ''}`,
-    formatMoney(payment.amount, payment.currency),
+    [
+      methodLabels[payment.method] ?? payment.method,
+      payment.receipt_number ? `reçu ${payment.receipt_number}` : '',
+      payment.date ? when(payment.date) : '',
+    ].filter(Boolean).join(' - '),
+    payment.original_currency && payment.original_amount && payment.exchange_rate_htg_per_usd
+      ? `${formatMoney(payment.amount, payment.currency)} (${formatMoney(payment.original_amount, payment.original_currency)}, ${formatRate(payment.exchange_rate_htg_per_usd)})`
+      : formatMoney(payment.amount, payment.currency),
   ])
   if (Number(data.totals.deposit_applied) > 0) payments.push(['Dépôt de garantie retenu', formatMoney(data.totals.deposit_applied, currency)])
   w.facts(payments.length ? payments : [['Aucun règlement', formatMoney(0, currency)]])

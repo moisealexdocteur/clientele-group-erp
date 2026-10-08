@@ -2,6 +2,18 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.7.0-alpha.1 - 2026-10-12
+
+Socle commun, premier volet. Détail : `docs/26_Taux_HTG_USD_et_recus_0.7.0.md`.
+
+### Ajouté
+
+- Taux HTG/USD manuel par société, historique, référence BRH et alerte avec confirmation et motif sous la référence.
+- Conversion des paiements dans l'autre devise au taux en vigueur, taux et équivalent conservés avec le paiement et repris sur la facture.
+- Reçus de caisse numérotés sur huit chiffres à l'approbation d'un encaissement, copie Administration, journal des impressions et mention de réimpression.
+- Mise en page thermique 80 mm et QR de vérification signé ; page publique de vérification sans donnée client.
+- Permission `finance.rates.manage`.
+
 ## 0.6.0-alpha.1 - 2026-10-11
 
 Cycle Car Rental complet. Détail : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`.
