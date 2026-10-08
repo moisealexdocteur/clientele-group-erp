@@ -20,7 +20,7 @@
                         <td style="padding:30px 28px;">
                             <p style="margin:0 0 14px;font-size:16px;line-height:1.5;">Bonjour {{ $recipientName }},</p>
                             <p style="margin:0 0 22px;font-size:16px;line-height:1.5;">
-                                Utilisez ce code pour {{ $purposeLabel() }}. Ne le partagez avec personne.
+                                Utilisez ce code pour {{ $purposeLabel }}. Ne le partagez avec personne.
                             </p>
                             <p style="margin:0 0 22px;padding:18px;border-radius:12px;background:#eef0ff;color:#2222e6;font-size:32px;font-weight:800;letter-spacing:.22em;text-align:center;">
                                 {{ $code }}
