@@ -2,6 +2,13 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.13 - 2026-10-08
+
+### Corrigé
+
+- L’adresse de site est préremplie avec `Pont Parois, Route Nationale 6` dans Configuration système.
+- Le préremplissage d’une fiche véhicule sélectionne ce site lorsqu’il existe dans la société active. Aucune adresse ni aucun véhicule ne sont créés automatiquement.
+
 ## 0.2.0-alpha.12 - 2026-10-08
 
 ### Ajouté

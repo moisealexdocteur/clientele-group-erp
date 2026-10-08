@@ -428,7 +428,7 @@ const companyConfigurationForm = reactive({
 const siteConfigurationForm = reactive({
   code: '',
   name: '',
-  address: '',
+  address: CLIENTELE_CAR_RENTAL_FLEET_ADDRESS,
 })
 
 const cashRegisterConfigurationForm = reactive({
@@ -1348,7 +1348,11 @@ async function createSystemSite(): Promise<void> {
       body: JSON.stringify(siteConfigurationForm),
     })
 
-    Object.assign(siteConfigurationForm, { code: '', name: '', address: '' })
+    Object.assign(siteConfigurationForm, {
+      code: '',
+      name: '',
+      address: CLIENTELE_CAR_RENTAL_FLEET_ADDRESS,
+    })
     cashRegisterConfigurationForm.site_id = result.data.id
     await loadSystemConfiguration()
     configurationMessage.value = 'Adresse créée.'
@@ -2714,6 +2718,7 @@ onBeforeUnmount(() => {
               <div class="form-field">
                 <label for="site-address">Adresse complète</label>
                 <textarea id="site-address" v-model.trim="siteConfigurationForm.address" name="address" rows="3" maxlength="1000" required :disabled="configurationBusy || !configurationCompanyId" :aria-invalid="Boolean(siteConfigurationErrors.address)" :aria-describedby="siteConfigurationErrors.address ? 'site-address-error' : undefined" @input="clearConfigurationFormFieldError('site', 'address')"></textarea>
+                <span class="field-help">Adresse préremplie : Pont Parois, Route Nationale 6.</span>
                 <span v-if="siteConfigurationErrors.address" id="site-address-error" class="field-error" role="alert">{{ siteConfigurationErrors.address }}</span>
               </div>
               <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online' || !configurationCompanyId">
@@ -3862,7 +3867,7 @@ onBeforeUnmount(() => {
     </div>
 
     <footer class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.12' }}</span>
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.13' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>
