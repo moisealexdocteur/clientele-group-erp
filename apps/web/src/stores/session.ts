@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api, bindApiClient } from '../api/client'
+import { api, bindApiClient, clearPrivateFiles } from '../api/client'
 import type { CompanyChoice, CompanyContext, ContextSite, SessionUser } from '../api/types'
 
 const TOKEN_KEY = 'clientele.erp.session'
@@ -170,6 +170,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   function clear(): void {
+    clearPrivateFiles()
     token.value = ''
     user.value = null
     companies.value = []

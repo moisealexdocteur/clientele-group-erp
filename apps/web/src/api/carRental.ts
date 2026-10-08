@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, apiUpload } from './client'
 import type {
   CarRentalAvailabilityResponse,
   CarRentalCalendarResponse,
@@ -6,13 +6,16 @@ import type {
   CarRentalReservation,
   CarRentalReservationListResponse,
   Currency,
+  FuelType,
   KilometerPlan,
+  PaymentMethod,
   RentalCategory,
   RentalLocation,
   RentalVehicle,
   RentalVehicleDocument,
   ReservationCancellationReason,
   ReservationState,
+  Transmission,
   VehicleDocumentType,
   VehicleOperationalStatus,
   VehicleRegistrationStatus,
@@ -41,7 +44,16 @@ export async function fetchVehicle(vehicleId: string): Promise<RentalVehicle | n
   return result.data.find((vehicle) => vehicle.id === vehicleId) ?? null
 }
 
-export interface NewVehiclePayload {
+/* Champs repris dans le contrat. null efface la valeur enregistrée. */
+export interface VehicleContractFields {
+  color?: string | null
+  fuel_type?: FuelType | null
+  transmission?: Transmission | null
+  engine_displacement_cc?: number | null
+  doors?: number | null
+}
+
+export interface NewVehiclePayload extends VehicleContractFields {
   site_id: string
   category: RentalCategory
   operational_status: VehicleOperationalStatus
@@ -59,6 +71,48 @@ export interface NewVehiclePayload {
 
 export function createVehicle(payload: NewVehiclePayload) {
   return api<{ data: RentalVehicle }>(`${base}/vehicles`, { method: 'POST', body: payload })
+}
+
+export function updateVehicleDetails(vehicleId: string, payload: VehicleContractFields & {
+  category: RentalCategory
+  make?: string
+  model?: string
+  model_year?: number
+  vin?: string
+  latest_odometer_km: number
+}) {
+  return api<{ data: RentalVehicle }>(`${base}/vehicles/${vehicleId}/details`, { method: 'PATCH', body: payload })
+}
+
+export function updateVehicleActive(vehicleId: string, isActive: boolean) {
+  return api<{ data: RentalVehicle }>(`${base}/vehicles/${vehicleId}/active`, { method: 'PATCH', body: { is_active: isActive } })
+}
+
+export function updateVehiclePhoto(vehicleId: string, fileId: string | null) {
+  return api<{ data: RentalVehicle }>(`${base}/vehicles/${vehicleId}/photo`, { method: 'PUT', body: { file_id: fileId } })
+}
+
+export type FilePurpose =
+  | 'payment_proof'
+  | 'vehicle_photo'
+  | 'driver_license_front'
+  | 'driver_license_back'
+  | 'inspection_photo'
+  | 'signature'
+  | 'rental_contract'
+
+export interface UploadedFileRef {
+  id: string
+  purpose: FilePurpose
+  mime_type: string
+  size_bytes: number
+  sha256: string
+  url: string
+}
+
+export function uploadFile(purpose: FilePurpose, siteId: string, file: Blob, fileName = 'document') {
+  const named = file instanceof File ? file : new File([file], fileName, { type: file.type })
+  return apiUpload<{ data: UploadedFileRef }>(`${base}/files`, { purpose, site_id: siteId, file: named })
 }
 
 export function updateVehicleStatus(vehicleId: string, status: VehicleOperationalStatus) {
@@ -139,7 +193,7 @@ export interface NewReservationPayload {
   daily_rate: string
   kilometer_plan: KilometerPlan
   included_km?: number
-  additional_km_rate?: string
+  additional_km_rate?: string | null
 }
 
 export function createReservation(payload: NewReservationPayload) {
@@ -149,14 +203,40 @@ export function createReservation(payload: NewReservationPayload) {
   })
 }
 
-export function updateReservation(reservation: CarRentalReservation, payload: {
+export interface ReservationUpdatePayload {
   vehicle_id: string
   pickup_at: string
   due_at: string
-}) {
-  return api<{ data: CarRentalReservation }>(`${base}/reservations/${reservation.id}`, {
+  customer?: {
+    customer_type: 'individual' | 'institution'
+    display_name: string
+    email?: string | null
+    phone?: string | null
+  }
+  pickup_location_type?: RentalLocation
+  pickup_location_detail?: string
+  dropoff_location_type?: RentalLocation
+  dropoff_location_detail?: string
+  apply_airport_pickup_fee?: boolean
+  apply_airport_dropoff_fee?: boolean
+  currency?: Currency
+  daily_rate?: string
+  kilometer_plan?: KilometerPlan
+  included_km?: number
+  additional_km_rate?: string | null
+  notify_customer?: boolean
+}
+
+export function updateReservation(reservation: CarRentalReservation, payload: ReservationUpdatePayload) {
+  return api<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(`${base}/reservations/${reservation.id}`, {
     method: 'PATCH',
     body: { ...payload, expected_lock_version: reservation.lock_version },
+  })
+}
+
+export function notifyReservation(reservationId: string) {
+  return api<{ customer_notification_sent: boolean; message: string }>(`${base}/reservations/${reservationId}/notify`, {
+    method: 'POST',
   })
 }
 
@@ -195,14 +275,12 @@ export function cancelReservation(reservation: CarRentalReservation, reason: Res
 
 export interface NewPaymentPayload {
   payment_kind: 'rental' | 'security_deposit'
-  method: 'cash' | 'bank_transfer'
+  method: PaymentMethod
   currency: Currency
   amount: string
   cash_register_id?: string
-  bank_name?: string
   bank_reference?: string
-  proof_storage_key?: string
-  proof_sha256?: string
+  proof_file_id?: string
 }
 
 export function submitPayment(reservationId: string, payload: NewPaymentPayload) {

@@ -2,6 +2,33 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.4.0-alpha.1 - 2026-10-09
+
+Livraison 1 des retours de recette. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md`.
+
+### Modifié
+
+- Design Microsoft Fluent 2 : Segoe UI, échelle typographique standard, chiffres non étirés, dialogues et espacements alignés sur Windows et Microsoft 365. La police embarquée Archivo est retirée.
+- Le tarif de réservation vient de la fiche véhicule. Seul l'administrateur peut le modifier (`rental.reservations.override_rate`), contrôle appliqué par le serveur.
+- Champs obligatoires marqués d'un astérisque, liste des éléments manquants et bouton d'enregistrement grisé tant que la saisie est incomplète.
+- Durée minimale de deux jours affichée en avertissement ; prix du kilomètre supplémentaire facultatif.
+
+### Ajouté
+
+- Modification complète d'une réservation non remise : client, coordonnées, véhicule de toute catégorie, période, lieux, tarif selon permission. Envoi et renvoi de la confirmation au client.
+- Paiements en espèces USD ou HTG, par virement Sogebank avec photo ou PDF du reçu, et crédit réservé à l'administrateur ou au propriétaire (`rental.payments.credit`).
+- Fiche véhicule : photo réelle, interrupteur Actif ou Inactif avec confirmation, caractéristiques du contrat (couleur, carburant, transmission, cylindrée, portes, numéro de série).
+- Identité légale de la société (raison sociale, représentant, NIF, siège, téléphones) pour l'en-tête du contrat.
+- Stockage privé des fichiers : volume `clientele-documents`, 10 Mo au plus, SHA-256, isolation par société, lecture selon permission.
+
+### Corrigé
+
+- La mise à jour des caractéristiques d'un véhicule ne vide plus son numéro de série lorsqu'il n'est pas envoyé.
+
+### Exploitation
+
+- Remplacer `$HOME/deploy-preprod.sh` sur le serveur par `infra/deploy-preprod.sh` avant de déployer.
+
 ## 0.3.0-alpha.1 - 2026-10-08
 
 ### Modifié

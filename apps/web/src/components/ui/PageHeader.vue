@@ -46,9 +46,9 @@ defineProps<{
   min-height: 40px;
   margin-left: -4px;
   padding: 0 8px 0 4px;
-  border-radius: 10px;
+  border-radius: 4px;
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
 }
 

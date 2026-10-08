@@ -97,8 +97,7 @@ async function signOut(): Promise<void> {
 
 .choice-name {
   font-size: var(--text-xl);
-  font-weight: 760;
-  font-stretch: 112%;
+  font-weight: 600;
   line-height: 1.1;
 }
 </style>

@@ -5,14 +5,20 @@ import {
   fetchVehicle,
   fetchVehicleDocuments,
   saveVehicleDocuments,
+  updateVehicleActive,
   updateVehicleCommercialTerms,
+  updateVehicleDetails,
+  updateVehiclePhoto,
   updateVehicleRegistration,
   updateVehicleStatus,
 } from '../../api/carRental'
 import type {
   CarRentalReservationListEntry,
+  FuelType,
+  RentalCategory,
   RentalVehicle,
   RentalVehicleDocument,
+  Transmission,
   VehicleDocumentType,
   VehicleOperationalStatus,
   VehicleRegistrationStatus,
@@ -24,7 +30,9 @@ import { useRequest } from '../../composables/useRequest'
 import {
   categoryLabels,
   documentStatusTones,
+  fuelTypeLabels,
   registrationStatusLabels,
+  transmissionLabels,
   vehicleDocumentStatusLabels,
   vehicleDocumentTypeLabels,
   vehicleStatusLabels,
@@ -33,7 +41,9 @@ import {
 import { formatMoney } from '../../lib/money'
 import { defaultMonthPeriod, formatDate } from '../../lib/time'
 import { vehicleName, vehiclePlate } from '../../lib/text'
+import FileCapture from '../../components/ui/FileCapture.vue'
 import FormField from '../../components/ui/FormField.vue'
+import ToggleSwitch from '../../components/ui/ToggleSwitch.vue'
 import InlineAlert from '../../components/ui/InlineAlert.vue'
 import SheetDialog from '../../components/ui/SheetDialog.vue'
 import StatusPill from '../../components/ui/StatusPill.vue'
@@ -56,11 +66,34 @@ const action = useRequest()
 const vehicle = ref<RentalVehicle | null>(null)
 const documents = ref<RentalVehicleDocument[]>([])
 const reservations = ref<CarRentalReservationListEntry[]>([])
-type Task = 'terms' | 'plate' | 'documents' | null
+type Task = 'terms' | 'plate' | 'documents' | 'details' | 'photo' | null
 const task = ref<Task>(null)
 
 const canManage = computed(() => session.can('rental.vehicles.manage'))
 const canReadReservations = computed(() => session.can('rental.reservations.read'))
+
+const detailsForm = reactive({
+  category: 'suv' as RentalCategory,
+  make: '',
+  model: '',
+  model_year: '',
+  vin: '',
+  latest_odometer_km: '',
+  color: '',
+  fuel_type: '' as '' | FuelType,
+  transmission: '' as '' | Transmission,
+  engine_displacement_cc: '',
+  doors: '',
+})
+
+/* Champs obligatoires de la fiche, listés avant l'enregistrement. */
+const detailsMissing = computed(() => {
+  const items: string[] = []
+  if (!detailsForm.make.trim()) items.push('La marque')
+  if (!detailsForm.model.trim()) items.push('Le modèle')
+  if (detailsForm.latest_odometer_km === '' || Number(detailsForm.latest_odometer_km) < 0) items.push('Le kilométrage')
+  return items
+})
 
 const termsForm = reactive({ daily_rate_usd: '', minimum_security_deposit_usd: '' })
 const plateForm = reactive({ registration_number: '', registration_status: 'normal' as VehicleRegistrationStatus })
@@ -144,6 +177,109 @@ async function changeStatus(status: VehicleOperationalStatus): Promise<void> {
   }
   vehicle.value = { ...result.data, document_statuses: result.data.document_statuses ?? vehicle.value.document_statuses }
   ui.toast(`État mis à jour : ${vehicleStatusLabels[result.data.operational_status]}.`)
+}
+
+function applyVehicle(next: RentalVehicle): void {
+  vehicle.value = { ...next, document_statuses: next.document_statuses ?? vehicle.value?.document_statuses }
+}
+
+/* ---------- Actif ou inactif ---------- */
+
+async function setActive(next: boolean): Promise<void> {
+  if (!vehicle.value || vehicle.value.is_active === next) return
+  const confirmed = await ui.confirm({
+    title: next ? 'Remettre le véhicule dans la flotte' : 'Retirer le véhicule de la flotte',
+    message: next
+      ? `${vehiclePlate(vehicle.value)} pourra de nouveau être réservé. Le changement est journalisé.`
+      : `${vehiclePlate(vehicle.value)} ne sera plus proposé à la réservation. Un véhicule réservé ou en location ne peut pas être retiré. Le changement est journalisé.`,
+    confirmLabel: next ? 'Activer' : 'Désactiver',
+  })
+  if (!confirmed) return
+  const result = await action.run(() => updateVehicleActive(props.vehicleId, next))
+  if (!result) {
+    ui.toast(action.error.value, 'danger')
+    return
+  }
+  applyVehicle(result.data)
+  ui.toast(next ? 'Véhicule actif.' : 'Véhicule inactif.')
+}
+
+/* ---------- Photo ---------- */
+
+function openPhoto(): void {
+  action.reset()
+  task.value = 'photo'
+}
+
+async function savePhoto(fileId: string): Promise<void> {
+  const result = await action.run(() => updateVehiclePhoto(props.vehicleId, fileId))
+  if (!result) return
+  applyVehicle(result.data)
+  task.value = null
+  ui.toast('Photo du véhicule enregistrée.')
+}
+
+async function removePhoto(): Promise<void> {
+  const confirmed = await ui.confirm({
+    title: 'Retirer la photo',
+    message: 'La photo de référence ou l’illustration de catégorie sera affichée à la place.',
+    confirmLabel: 'Retirer',
+  })
+  if (!confirmed) return
+  const result = await action.run(() => updateVehiclePhoto(props.vehicleId, null))
+  if (!result) {
+    ui.toast(action.error.value, 'danger')
+    return
+  }
+  applyVehicle(result.data)
+  ui.toast('Photo retirée.')
+}
+
+/* ---------- Caractéristiques ---------- */
+
+function openDetails(): void {
+  const current = vehicle.value
+  if (!current) return
+  Object.assign(detailsForm, {
+    category: current.category,
+    make: current.make ?? '',
+    model: current.model ?? '',
+    model_year: current.model_year?.toString() ?? '',
+    vin: current.vin ?? '',
+    latest_odometer_km: current.latest_odometer_km.toString(),
+    color: current.color ?? '',
+    fuel_type: current.fuel_type ?? '',
+    transmission: current.transmission ?? '',
+    engine_displacement_cc: current.engine_displacement_cc?.toString() ?? '',
+    doors: current.doors?.toString() ?? '',
+  })
+  action.reset()
+  task.value = 'details'
+}
+
+function optionalNumber(value: string): number | undefined {
+  return value === '' ? undefined : Number(value)
+}
+
+async function saveDetails(): Promise<void> {
+  if (detailsMissing.value.length) return
+  const result = await action.run(() => updateVehicleDetails(props.vehicleId, {
+    category: detailsForm.category,
+    make: detailsForm.make.trim(),
+    model: detailsForm.model.trim(),
+    model_year: optionalNumber(detailsForm.model_year),
+    vin: detailsForm.vin.trim(),
+    latest_odometer_km: Number(detailsForm.latest_odometer_km),
+    color: detailsForm.color.trim() || null,
+    fuel_type: detailsForm.fuel_type || null,
+    transmission: detailsForm.transmission || null,
+    engine_displacement_cc: optionalNumber(detailsForm.engine_displacement_cc) ?? null,
+    doors: optionalNumber(detailsForm.doors) ?? null,
+  }))
+  if (!result) return
+  applyVehicle(result.data)
+  task.value = null
+  ui.toast('Fiche du véhicule mise à jour.')
 }
 
 /* ---------- Tarification ---------- */
@@ -249,7 +385,15 @@ async function saveDocuments(): Promise<void> {
 
   <div v-else-if="vehicle" class="vehicle-detail">
     <header class="vehicle-hero">
-      <VehicleThumb size="lg" :photo-url="vehicle.reference_photo?.url" :category="vehicle.category" :alt="vehicleName(vehicle)" />
+      <div class="hero-photo">
+        <VehicleThumb size="lg" :vehicle="vehicle" :alt="vehicleName(vehicle)" />
+        <div v-if="canManage" class="btn-row">
+          <button class="btn btn-secondary" type="button" :disabled="!app.canReachServer" @click="openPhoto">
+            {{ vehicle.photo ? 'Changer la photo' : 'Ajouter une photo' }}
+          </button>
+          <button v-if="vehicle.photo" class="btn btn-ghost" type="button" :disabled="action.busy.value || !app.canReachServer" @click="removePhoto">Retirer la photo</button>
+        </div>
+      </div>
       <div class="vehicle-hero-text">
         <div class="pills">
           <StatusPill :tone="vehicleStatusTones[vehicle.operational_status]" :label="vehicleStatusLabels[vehicle.operational_status]" />
@@ -258,14 +402,25 @@ async function saveDocuments(): Promise<void> {
         <h1 class="display display-xxl hero-plate">{{ vehiclePlate(vehicle) }}</h1>
         <p class="hero-name">{{ vehicleName(vehicle) }}</p>
         <p class="text-secondary">{{ categoryLabels[vehicle.category] }} - {{ vehicle.site?.name ?? 'Adresse non disponible' }}</p>
-        <p v-if="vehicle.reference_photo" class="text-muted text-small">{{ vehicle.reference_photo.label }}</p>
+        <p v-if="!vehicle.photo && vehicle.reference_photo" class="text-muted text-small">Photo de référence : {{ vehicle.reference_photo.label }}</p>
       </div>
     </header>
 
     <div class="detail-grid">
       <div class="stack-lg">
         <section class="panel" aria-labelledby="status-title">
-          <h2 id="status-title" class="title-section">État opérationnel</h2>
+          <div class="panel-header">
+            <h2 id="status-title" class="title-section">État opérationnel</h2>
+            <ToggleSwitch
+              v-if="canManage"
+              :model-value="vehicle.is_active"
+              on-label="Actif"
+              off-label="Inactif"
+              :disabled="action.busy.value || !app.canReachServer"
+              @update:model-value="setActive"
+            />
+          </div>
+          <p v-if="!vehicle.is_active" class="text-secondary text-small">Ce véhicule n’est pas proposé à la réservation.</p>
           <div v-if="canManage" class="status-grid" role="group" aria-label="Changer l’état">
             <button
               v-for="(label, status) in vehicleStatusLabels"
@@ -333,7 +488,7 @@ async function saveDocuments(): Promise<void> {
         <section class="panel" aria-labelledby="identity-title">
           <div class="panel-header">
             <h2 id="identity-title" class="title-section">Identité</h2>
-            <button v-if="canManage" class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openPlate">Remplacer la plaque</button>
+            <button v-if="canManage" class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openDetails">Modifier</button>
           </div>
           <dl class="facts">
             <div>
@@ -349,10 +504,35 @@ async function saveDocuments(): Promise<void> {
               <dd>{{ vehicle.model_year }}</dd>
             </div>
             <div>
+              <dt>Couleur</dt>
+              <dd>{{ vehicle.color || 'Non renseignée' }}</dd>
+            </div>
+            <div>
+              <dt>Carburant</dt>
+              <dd>{{ vehicle.fuel_type ? fuelTypeLabels[vehicle.fuel_type] : 'Non renseigné' }}</dd>
+            </div>
+            <div>
+              <dt>Transmission</dt>
+              <dd>{{ vehicle.transmission ? transmissionLabels[vehicle.transmission] : 'Non renseignée' }}</dd>
+            </div>
+            <div v-if="vehicle.engine_displacement_cc">
+              <dt>Cylindrée</dt>
+              <dd>{{ vehicle.engine_displacement_cc.toLocaleString('fr-FR') }} cm³</dd>
+            </div>
+            <div v-if="vehicle.doors">
+              <dt>Portes</dt>
+              <dd>{{ vehicle.doors }}</dd>
+            </div>
+            <div v-if="vehicle.vin">
+              <dt>Numéro de série</dt>
+              <dd class="mono">{{ vehicle.vin }}</dd>
+            </div>
+            <div>
               <dt>Adresse</dt>
               <dd>{{ vehicle.site?.name ?? 'Non disponible' }}</dd>
             </div>
           </dl>
+          <button v-if="canManage" class="btn btn-secondary" type="button" :disabled="!app.canReachServer" @click="openPlate">Remplacer la plaque</button>
         </section>
       </aside>
     </div>
@@ -360,23 +540,99 @@ async function saveDocuments(): Promise<void> {
 
   <SheetDialog :open="task === 'terms'" title="Tarif et dépôt" description="Les nouvelles conditions s’appliquent aux réservations futures." :locked="action.busy.value" @close="task = null">
     <form id="terms-form" class="form" novalidate @submit.prevent="saveTerms">
-      <FormField label="Tarif quotidien (USD)" :error="action.fieldErrors.value.daily_rate_usd" v-slot="field">
+      <FormField label="Tarif quotidien (USD)" required :error="action.fieldErrors.value.daily_rate_usd" v-slot="field">
         <input v-model="termsForm.daily_rate_usd" v-bind="field.attrs" class="input" type="number" inputmode="decimal" min="0.01" step="0.01" required />
       </FormField>
-      <FormField label="Dépôt minimum (USD)" :error="action.fieldErrors.value.minimum_security_deposit_usd" v-slot="field">
+      <FormField label="Dépôt minimum (USD)" required :error="action.fieldErrors.value.minimum_security_deposit_usd" v-slot="field">
         <input v-model="termsForm.minimum_security_deposit_usd" v-bind="field.attrs" class="input" type="number" inputmode="decimal" min="0" step="0.01" required />
       </FormField>
       <InlineAlert :message="action.error.value" />
     </form>
     <template #footer>
       <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="task = null">Fermer</button>
-      <button class="btn btn-primary" type="submit" form="terms-form" :disabled="action.busy.value">Enregistrer</button>
+      <button class="btn btn-primary" type="submit" form="terms-form" :disabled="action.busy.value || !termsForm.daily_rate_usd || termsForm.minimum_security_deposit_usd === ''">Enregistrer</button>
+    </template>
+  </SheetDialog>
+
+  <SheetDialog :open="task === 'photo'" title="Photo du véhicule" description="Utilisez une photo réelle du véhicule. Elle remplace la photo de référence dans l’application." :locked="action.busy.value" @close="task = null">
+    <div v-if="vehicle" class="form">
+      <FileCapture
+        purpose="vehicle_photo"
+        :site-id="vehicle.site_id"
+        label="Photo"
+        help="JPEG, PNG ou WebP, 10 Mo au plus. Évitez que la plaque soit lisible si la photo peut être envoyée au client."
+        :disabled="action.busy.value"
+        @uploaded="(file) => savePhoto(file.id)"
+      />
+      <InlineAlert :message="action.error.value" />
+    </div>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="task = null">Fermer</button>
+    </template>
+  </SheetDialog>
+
+  <SheetDialog :open="task === 'details'" title="Identité du véhicule" description="Ces informations sont reprises dans le contrat de location. Les champs marqués * sont obligatoires." :locked="action.busy.value" @close="task = null">
+    <form id="details-form" class="form" novalidate @submit.prevent="saveDetails">
+      <FormField label="Catégorie" required :error="action.fieldErrors.value.category" v-slot="field">
+        <select v-model="detailsForm.category" v-bind="field.attrs" class="select">
+          <option v-for="(label, value) in categoryLabels" :key="value" :value="value">{{ label }}</option>
+        </select>
+      </FormField>
+      <div class="grid-2">
+        <FormField label="Marque" required :error="action.fieldErrors.value.make" v-slot="field">
+          <input v-model="detailsForm.make" v-bind="field.attrs" class="input" maxlength="64" autocomplete="off" />
+        </FormField>
+        <FormField label="Modèle" required :error="action.fieldErrors.value.model" v-slot="field">
+          <input v-model="detailsForm.model" v-bind="field.attrs" class="input" maxlength="64" autocomplete="off" />
+        </FormField>
+        <FormField label="Année" :error="action.fieldErrors.value.model_year" v-slot="field">
+          <input v-model="detailsForm.model_year" v-bind="field.attrs" class="input" type="number" inputmode="numeric" min="1900" max="2100" />
+        </FormField>
+        <FormField label="Kilométrage relevé" required :error="action.fieldErrors.value.latest_odometer_km" v-slot="field">
+          <input v-model="detailsForm.latest_odometer_km" v-bind="field.attrs" class="input" type="number" inputmode="numeric" min="0" />
+        </FormField>
+        <FormField label="Couleur" :error="action.fieldErrors.value.color" v-slot="field">
+          <input v-model="detailsForm.color" v-bind="field.attrs" class="input" maxlength="48" autocomplete="off" />
+        </FormField>
+        <FormField label="Carburant" :error="action.fieldErrors.value.fuel_type" v-slot="field">
+          <select v-model="detailsForm.fuel_type" v-bind="field.attrs" class="select">
+            <option value="">Non renseigné</option>
+            <option v-for="(label, value) in fuelTypeLabels" :key="value" :value="value">{{ label }}</option>
+          </select>
+        </FormField>
+        <FormField label="Transmission" :error="action.fieldErrors.value.transmission" v-slot="field">
+          <select v-model="detailsForm.transmission" v-bind="field.attrs" class="select">
+            <option value="">Non renseignée</option>
+            <option v-for="(label, value) in transmissionLabels" :key="value" :value="value">{{ label }}</option>
+          </select>
+        </FormField>
+        <FormField label="Cylindrée (cm³)" :error="action.fieldErrors.value.engine_displacement_cc" v-slot="field">
+          <input v-model="detailsForm.engine_displacement_cc" v-bind="field.attrs" class="input" type="number" inputmode="numeric" min="50" max="10000" />
+        </FormField>
+        <FormField label="Portes" :error="action.fieldErrors.value.doors" v-slot="field">
+          <input v-model="detailsForm.doors" v-bind="field.attrs" class="input" type="number" inputmode="numeric" min="2" max="6" />
+        </FormField>
+        <FormField label="Numéro de série" :error="action.fieldErrors.value.vin" v-slot="field">
+          <input v-model="detailsForm.vin" v-bind="field.attrs" class="input mono" maxlength="64" autocapitalize="characters" autocomplete="off" />
+        </FormField>
+      </div>
+      <div v-if="detailsMissing.length" class="missing" role="status">
+        <strong>À compléter</strong>
+        <ul>
+          <li v-for="item in detailsMissing" :key="item">{{ item }}</li>
+        </ul>
+      </div>
+      <InlineAlert :message="action.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="task = null">Fermer</button>
+      <button class="btn btn-primary" type="submit" form="details-form" :disabled="action.busy.value || detailsMissing.length > 0">Enregistrer</button>
     </template>
   </SheetDialog>
 
   <SheetDialog :open="task === 'plate'" title="Remplacer la plaque" description="L’ancienne plaque reste dans l’historique du véhicule." :locked="action.busy.value" @close="task = null">
     <form id="plate-form" class="form" novalidate @submit.prevent="savePlate">
-      <FormField label="Plaque en cours" :error="action.fieldErrors.value.registration_number" v-slot="field">
+      <FormField label="Plaque en cours" required :error="action.fieldErrors.value.registration_number" v-slot="field">
         <input v-model.trim="plateForm.registration_number" v-bind="field.attrs" class="input" maxlength="32" autocapitalize="characters" required />
       </FormField>
       <FormField label="Type de plaque" v-slot="field">
@@ -444,9 +700,9 @@ async function saveDocuments(): Promise<void> {
   min-height: 40px;
   margin: 0 0 8px -4px;
   padding: 0 8px 0 4px;
-  border-radius: 10px;
+  border-radius: 4px;
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -468,6 +724,11 @@ async function saveDocuments(): Promise<void> {
   gap: 18px;
 }
 
+.hero-photo {
+  display: grid;
+  gap: 12px;
+}
+
 .vehicle-hero-text {
   display: grid;
   gap: 8px;
@@ -486,7 +747,7 @@ async function saveDocuments(): Promise<void> {
 
 .hero-name {
   font-size: var(--text-xl);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .status-grid {
@@ -501,7 +762,7 @@ async function saveDocuments(): Promise<void> {
   min-height: 56px;
   padding: 0 12px;
   border: 2px solid var(--line);
-  border-radius: 14px;
+  border-radius: 4px;
   background: var(--surface);
   cursor: pointer;
 }

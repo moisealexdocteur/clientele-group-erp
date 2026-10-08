@@ -82,8 +82,7 @@ const instant = computed(() => (props.focus === 'due' ? props.entry.due_at : pro
 }
 
 .reservation-number {
-  font-weight: 800;
-  font-stretch: 112%;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 </style>

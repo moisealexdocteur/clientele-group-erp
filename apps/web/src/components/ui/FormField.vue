@@ -10,6 +10,8 @@ const props = defineProps<{
   label: string
   help?: string
   error?: string
+  /** Affiche l'astérisque des champs obligatoires. */
+  required?: boolean
 }>()
 
 const id = useId()
@@ -25,7 +27,7 @@ const attrs = computed(() => ({
 
 <template>
   <div class="field">
-    <label class="field-label" :for="id">{{ label }}</label>
+    <label class="field-label" :for="id">{{ label }}<span v-if="required" class="required" aria-hidden="true">*</span></label>
     <slot :attrs="attrs" />
     <span v-if="help" :id="helpId" class="field-help">{{ help }}</span>
     <span v-if="error" :id="errorId" class="field-error" role="alert">{{ error }}</span>

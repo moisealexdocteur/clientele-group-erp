@@ -109,7 +109,7 @@ function scopeText(user: SystemCompanyUser): string {
   height: 44px;
   border-radius: 50%;
   background: var(--surface-sunken);
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .ellipsis {

@@ -59,8 +59,8 @@ function onBackdropClick(event: MouseEvent): void {
     <div class="sheet-body">
       <header class="sheet-header">
         <div class="sheet-heading">
-          <h2 class="title-section">{{ title }}</h2>
-          <p v-if="description" class="text-secondary text-small">{{ description }}</p>
+          <h2 class="sheet-title">{{ title }}</h2>
+          <p v-if="description" class="text-secondary">{{ description }}</p>
         </div>
         <button class="sheet-close" type="button" aria-label="Fermer" :disabled="locked" @click="requestClose()">
           <span aria-hidden="true"></span>
@@ -84,13 +84,14 @@ function onBackdropClick(event: MouseEvent): void {
   margin: auto 0 0;
   padding: 0;
   border: 0;
-  border-radius: 22px 22px 0 0;
+  border-radius: 12px 12px 0 0;
   background: var(--surface);
   color: var(--ink);
+  box-shadow: var(--shadow-64);
 }
 
 .sheet::backdrop {
-  background: rgba(23, 24, 29, 0.48);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .sheet[open] {
@@ -99,7 +100,7 @@ function onBackdropClick(event: MouseEvent): void {
 
 @keyframes sheet-in {
   from {
-    transform: translateY(24px);
+    transform: translateY(16px);
     opacity: 0;
   }
 
@@ -128,6 +129,13 @@ function onBackdropClick(event: MouseEvent): void {
   gap: 4px;
 }
 
+.sheet-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .sheet-close {
   position: relative;
   flex: none;
@@ -135,9 +143,13 @@ function onBackdropClick(event: MouseEvent): void {
   height: var(--tap);
   margin: -8px -8px 0 0;
   border: 0;
-  border-radius: 50%;
-  background: var(--surface-sunken);
+  border-radius: var(--radius-control);
+  background: transparent;
   cursor: pointer;
+}
+
+.sheet-close:hover {
+  background: var(--surface-hover);
 }
 
 .sheet-close span::before,
@@ -146,9 +158,9 @@ function onBackdropClick(event: MouseEvent): void {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 16px;
-  height: 2.5px;
-  border-radius: 2px;
+  width: 14px;
+  height: 1.5px;
+  border-radius: 1px;
   background: var(--ink);
   transform: translate(-50%, -50%) rotate(45deg);
 }
@@ -181,18 +193,30 @@ function onBackdropClick(event: MouseEvent): void {
   .sheet {
     width: min(560px, calc(100% - 48px));
     margin: auto;
-    border-radius: 22px;
+    border-radius: 8px;
   }
 
+  /* Dialogue Fluent : 24 px de marge, actions alignées à droite, sans séparateur. */
   .sheet-header,
   .sheet-content,
   .sheet-footer {
-    padding-left: 28px;
-    padding-right: 28px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .sheet-header {
+    padding-top: 24px;
   }
 
   .sheet-footer {
-    padding-bottom: 20px;
+    justify-content: flex-end;
+    padding-bottom: 24px;
+    border-top: 0;
+  }
+
+  .sheet-footer > :deep(.btn) {
+    flex: 0 0 auto;
+    min-width: 96px;
   }
 }
 </style>

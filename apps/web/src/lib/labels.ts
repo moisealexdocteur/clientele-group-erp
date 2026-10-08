@@ -1,9 +1,11 @@
 import type {
   CarRentalUserRole,
+  FuelType,
   RentalCategory,
   RentalLocation,
   ReservationCancellationReason,
   ReservationState,
+  Transmission,
   VehicleDocumentStatus,
   VehicleDocumentType,
   VehicleOperationalStatus,
@@ -101,4 +103,14 @@ export const documentStatusTones: Record<VehicleDocumentStatus, Tone> = {
   expired: 'danger',
   expiring_soon: 'warning',
   current: 'success',
+}
+
+export const fuelTypeLabels: Record<FuelType, string> = {
+  gasoline: 'Essence',
+  diesel: 'Diesel',
+}
+
+export const transmissionLabels: Record<Transmission, string> = {
+  manual: 'Manuelle',
+  automatic: 'Automatique',
 }

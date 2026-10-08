@@ -185,7 +185,7 @@ onMounted(load)
   align-items: baseline;
   gap: 10px;
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .section-title.danger {

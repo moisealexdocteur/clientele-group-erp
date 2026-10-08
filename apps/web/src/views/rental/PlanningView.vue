@@ -292,7 +292,7 @@ onMounted(load)
   padding: 10px 12px;
   color: var(--ink-3);
   font-size: var(--text-xs);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .day-cells,
@@ -316,7 +316,7 @@ onMounted(load)
 }
 
 .day-number {
-  font-weight: 750;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -387,10 +387,10 @@ onMounted(load)
   margin: 0 2px;
   padding: 0 10px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 4px;
   color: #fff;
   font-size: var(--text-xs);
-  font-weight: 750;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   white-space: nowrap;

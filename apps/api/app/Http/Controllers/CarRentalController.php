@@ -360,6 +360,8 @@ final class CarRentalController extends Controller
         $actor = $request->user();
         $model = $this->vehicleFor($company, $access, $vehicle);
 
+        // Le numéro de série n'est modifié que s'il est envoyé.
+        $vinProvided = $request->exists('vin');
         $request->merge(['vin' => $this->canonicalVehicleIdentifier($request->input('vin'))]);
         $data = $request->validate([
             'category' => ['required', Rule::in(CarRentalVehicle::CATEGORIES)],
@@ -383,7 +385,7 @@ final class CarRentalController extends Controller
             'make' => $this->nullableTrimmed($data['make'] ?? null),
             'model' => $this->nullableTrimmed($data['model'] ?? null),
             'model_year' => $data['model_year'] ?? null,
-            'vin' => $this->nullableTrimmed($data['vin'] ?? null),
+            'vin' => $vinProvided ? $this->nullableTrimmed($data['vin'] ?? null) : $model->vin,
             'latest_odometer_km' => $data['latest_odometer_km'],
             ...$this->vehicleContractAttributes($data),
         ]);
@@ -1835,6 +1837,7 @@ final class CarRentalController extends Controller
         if ($includeManagementDetails) {
             $payload['registration_number'] = $vehicle->registration_number ?: $vehicle->code;
             $payload['registration_status'] = $vehicle->registration_status ?: 'normal';
+            $payload['vin'] = $vehicle->vin;
             $payload['document_statuses'] = $company !== null
                 ? $this->vehicleDocumentStatuses($vehicle, $company)
                 : [];

@@ -5,12 +5,12 @@ import {
   cancelReservation,
   extendReservation,
   fetchReservation,
-  fetchVehicles,
+  notifyReservation,
   returnReservation,
   submitPayment,
-  updateReservation,
 } from '../../api/carRental'
-import type { CarRentalPayment, CarRentalReservation, Currency, RentalVehicle, ReservationCancellationReason } from '../../api/types'
+import { privateFileUrl } from '../../api/client'
+import type { CarRentalPayment, CarRentalReservation, Currency, PaymentMethod, ReservationCancellationReason } from '../../api/types'
 import { useSessionStore } from '../../stores/session'
 import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
@@ -19,10 +19,10 @@ import {
   cancellationReasonLabels,
   reservationStateLabels,
   reservationStateTones,
-  vehicleStatusLabels,
 } from '../../lib/labels'
 import { formatMoney } from '../../lib/money'
 import { formatDate, formatDateTime, toDateTimeInput } from '../../lib/time'
+import FileCapture from '../../components/ui/FileCapture.vue'
 import { vehicleName, vehiclePlate } from '../../lib/text'
 import FormField from '../../components/ui/FormField.vue'
 import InlineAlert from '../../components/ui/InlineAlert.vue'
@@ -45,8 +45,7 @@ const loading = useRequest()
 const action = useRequest()
 
 const reservation = ref<CarRentalReservation | null>(null)
-const siteVehicles = ref<RentalVehicle[]>([])
-type Task = 'edit' | 'extend' | 'cancel' | 'payment' | null
+type Task = 'extend' | 'cancel' | 'payment' | null
 const task = ref<Task>(null)
 
 const canManage = computed(() => session.can('rental.reservations.manage'))
@@ -62,15 +61,19 @@ const cashRegisters = computed(() =>
   session.sites.find((site) => site.id === reservation.value?.site_id)?.cash_registers.filter((register) => register.is_active) ?? [],
 )
 
-const editForm = reactive({ vehicle_id: '', pickup_at: '', due_at: '' })
 const extendForm = reactive({ due_at: '' })
 const cancelForm = reactive({ reason: 'customer_request' as ReservationCancellationReason })
 const paymentForm = reactive({
   payment_kind: 'rental' as 'rental' | 'security_deposit',
+  method: 'cash' as PaymentMethod,
   currency: 'USD' as Currency,
   amount: '',
   cash_register_id: '',
+  bank_reference: '',
+  proof_file_id: '',
 })
+const canGrantCredit = computed(() => session.can('rental.payments.credit'))
+const notifying = ref(false)
 
 async function load(): Promise<void> {
   const result = await loading.run(() => fetchReservation(props.reservationId))
@@ -85,30 +88,6 @@ function replace(next: CarRentalReservation): void {
 }
 
 /* ---------- Tâches ---------- */
-
-async function openEdit(): Promise<void> {
-  if (!reservation.value) return
-  Object.assign(editForm, {
-    vehicle_id: reservation.value.vehicle?.id ?? '',
-    pickup_at: toDateTimeInput(reservation.value.pickup_at),
-    due_at: toDateTimeInput(reservation.value.due_at),
-  })
-  action.reset()
-  task.value = 'edit'
-  if (canReadVehicles.value) {
-    const result = await fetchVehicles({ site_id: reservation.value.site_id }).catch(() => ({ data: [] }))
-    siteVehicles.value = result.data.filter((vehicle) => vehicle.is_active && vehicle.id !== reservation.value?.vehicle?.id)
-  }
-}
-
-async function saveEdit(): Promise<void> {
-  if (!reservation.value) return
-  const result = await action.run(() => updateReservation(reservation.value as CarRentalReservation, { ...editForm }))
-  if (!result) return
-  replace(result.data)
-  task.value = null
-  ui.toast('Réservation mise à jour. Le tarif et les paiements existants n’ont pas été modifiés.')
-}
 
 function openExtend(): void {
   if (!reservation.value) return
@@ -163,9 +142,12 @@ async function recordReturn(): Promise<void> {
 function openPayment(kind: 'rental' | 'security_deposit' = 'rental', amount = ''): void {
   Object.assign(paymentForm, {
     payment_kind: kind,
+    method: 'cash',
     currency: kind === 'security_deposit' ? 'USD' : (reservation.value?.currency ?? 'USD'),
     amount,
     cash_register_id: cashRegisters.value[0]?.id ?? '',
+    bank_reference: '',
+    proof_file_id: '',
   })
   action.reset()
   task.value = 'payment'
@@ -173,43 +155,86 @@ function openPayment(kind: 'rental' | 'security_deposit' = 'rental', amount = ''
 
 function setPaymentKind(kind: 'rental' | 'security_deposit'): void {
   paymentForm.payment_kind = kind
-  if (kind === 'security_deposit') paymentForm.currency = 'USD'
+  if (kind === 'security_deposit') {
+    paymentForm.currency = 'USD'
+    if (paymentForm.method === 'credit') paymentForm.method = 'cash'
+  }
 }
 
+function setPaymentMethod(method: PaymentMethod): void {
+  paymentForm.method = method
+  action.reset()
+}
+
+/* Ce qu'il manque pour enregistrer le paiement, affiché avant l'envoi. */
+const paymentMissing = computed(() => {
+  const items: string[] = []
+  if (!paymentForm.amount || Number(paymentForm.amount) <= 0) items.push('Le montant')
+  if (paymentForm.method === 'cash' && !paymentForm.cash_register_id) items.push('La caisse')
+  if (paymentForm.method === 'bank_transfer' && !paymentForm.proof_file_id) items.push('La photo ou le fichier du reçu Sogebank')
+  return items
+})
+
 async function savePayment(): Promise<void> {
-  if (!reservation.value) return
-  if (!paymentForm.amount || Number(paymentForm.amount) <= 0) {
-    action.fail('Saisissez un montant supérieur à zéro.', { amount: 'Montant requis.' })
-    return
-  }
-  if (!paymentForm.cash_register_id) {
-    action.fail('Sélectionnez la caisse qui reçoit le paiement.', { cash_register_id: 'Caisse requise.' })
-    return
-  }
+  if (!reservation.value || paymentMissing.value.length) return
   const reservationId = reservation.value.id
   const result = await action.run(async () => {
     await submitPayment(reservationId, {
       payment_kind: paymentForm.payment_kind,
-      method: 'cash',
+      method: paymentForm.method,
       currency: paymentForm.currency,
       amount: paymentForm.amount,
-      cash_register_id: paymentForm.cash_register_id,
+      cash_register_id: paymentForm.method === 'cash' ? paymentForm.cash_register_id : undefined,
+      bank_reference: paymentForm.method === 'bank_transfer' ? paymentForm.bank_reference.trim() || undefined : undefined,
+      proof_file_id: paymentForm.method === 'bank_transfer' ? paymentForm.proof_file_id : undefined,
     })
     return fetchReservation(reservationId)
   })
   if (!result) return
   replace(result.data)
   task.value = null
-  ui.toast(canApprovePayment.value
-    ? 'Paiement enregistré. Approuvez-le dans la liste des paiements.'
-    : 'Paiement enregistré. Une approbation est requise avant la mise en circulation.')
+  if (paymentForm.method === 'credit') {
+    ui.toast('Crédit accordé et enregistré.')
+  } else {
+    ui.toast(canApprovePayment.value
+      ? 'Paiement enregistré. Approuvez-le dans la liste des paiements.'
+      : 'Paiement enregistré. Une approbation est requise avant la mise en circulation.')
+  }
+}
+
+async function openProof(payment: CarRentalPayment): Promise<void> {
+  if (!payment.proof_file_url) return
+  try {
+    window.open(await privateFileUrl(payment.proof_file_url), '_blank', 'noopener')
+  } catch {
+    ui.toast('Le reçu ne peut pas être affiché avec vos droits.', 'danger')
+  }
+}
+
+async function resendConfirmation(): Promise<void> {
+  if (!reservation.value) return
+  notifying.value = true
+  try {
+    const result = await notifyReservation(reservation.value.id)
+    ui.toast(result.message, result.customer_notification_sent ? 'success' : 'danger')
+  } catch (error) {
+    ui.toast(error instanceof Error ? error.message : 'La confirmation n’a pas pu être envoyée.', 'danger')
+  } finally {
+    notifying.value = false
+  }
+}
+
+const paymentMethodLabels: Record<PaymentMethod, string> = {
+  cash: 'Espèces',
+  bank_transfer: 'Virement Sogebank',
+  credit: 'Crédit accordé',
 }
 
 async function approve(payment: CarRentalPayment): Promise<void> {
   if (!reservation.value) return
   const confirmed = await ui.confirm({
     title: 'Approuver le paiement',
-    message: `${payment.kind === 'rental' ? 'Location' : 'Dépôt de garantie'} : ${formatMoney(payment.amount, payment.currency)} en espèces. Confirmez que le montant a été reçu.`,
+    message: `${payment.kind === 'rental' ? 'Location' : 'Dépôt de garantie'} : ${formatMoney(payment.amount, payment.currency)} (${paymentMethodLabels[payment.method].toLowerCase()}). Confirmez que le montant a été reçu.`,
     confirmLabel: 'Approuver',
   })
   if (!confirmed) return
@@ -264,6 +289,10 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
       </div>
       <h1 class="display display-xxl detail-number">{{ reservation.number }}</h1>
       <p class="detail-customer">{{ reservation.customer?.display_name ?? 'Client non disponible' }}</p>
+      <p v-if="reservation.customer?.email || reservation.customer?.phone" class="text-secondary text-small detail-contact">
+        <span v-if="reservation.customer?.email">{{ reservation.customer.email }}</span>
+        <span v-if="reservation.customer?.phone">{{ reservation.customer.phone }}</span>
+      </p>
     </header>
 
     <div class="detail-grid">
@@ -275,7 +304,10 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
             <button class="btn btn-secondary" type="button" :disabled="!app.canReachServer" @click="openExtend">Prolonger</button>
           </template>
           <template v-if="isReserved">
-            <button class="btn btn-secondary" type="button" :disabled="!app.canReachServer" @click="openEdit">Modifier</button>
+            <RouterLink class="btn btn-secondary" :to="{ name: 'rental.reservation.edit', params: { reservationId } }">Modifier</RouterLink>
+            <button class="btn btn-secondary" type="button" :disabled="notifying || !app.canReachServer || !reservation.customer?.email" @click="resendConfirmation">
+              {{ notifying ? 'Envoi en cours' : 'Renvoyer la confirmation' }}
+            </button>
             <button class="btn btn-danger" type="button" :disabled="!app.canReachServer" @click="openCancel">Annuler la réservation</button>
           </template>
         </div>
@@ -307,12 +339,13 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
               <span class="stack" style="gap: 2px">
                 <strong>{{ payment.kind === 'rental' ? 'Location' : 'Dépôt de garantie' }}</strong>
                 <span class="text-muted text-small">
-                  {{ payment.method === 'cash' ? 'Espèces' : 'Virement Sogebank' }}<template v-if="payment.submitted_at"> - {{ formatDateTime(payment.submitted_at) }}</template>
+                  {{ paymentMethodLabels[payment.method] }}<template v-if="payment.submitted_at"> - {{ formatDateTime(payment.submitted_at) }}</template>
                 </span>
               </span>
               <span class="payment-end">
                 <strong class="display display-sm">{{ formatMoney(payment.amount, payment.currency) }}</strong>
                 <StatusPill :tone="payment.status === 'approved' ? 'success' : payment.status === 'submitted' ? 'warning' : 'neutral'" :label="paymentStatusLabels[payment.status]" />
+                <button v-if="payment.proof_file_url" class="btn btn-ghost" type="button" @click="openProof(payment)">Voir le reçu</button>
                 <button
                   v-if="payment.status === 'submitted' && canApprovePayment"
                   class="btn btn-secondary"
@@ -331,13 +364,7 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
 
       <aside class="stack-lg">
         <section class="panel" aria-label="Véhicule">
-          <VehicleThumb
-            v-if="reservation.vehicle"
-            size="lg"
-            :photo-url="reservation.vehicle.reference_photo?.url"
-            :category="reservation.vehicle.category"
-            :alt="vehicleName(reservation.vehicle)"
-          />
+          <VehicleThumb v-if="reservation.vehicle" size="lg" :vehicle="reservation.vehicle" :alt="vehicleName(reservation.vehicle)" />
           <div class="vehicle-line">
             <strong class="title-section">{{ vehicleName(reservation.vehicle) }}</strong>
             <span v-if="reservation.vehicle" class="plate">{{ vehiclePlate(reservation.vehicle) }}</span>
@@ -374,7 +401,10 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
           </div>
           <div>
             <dt>Tarif journalier</dt>
-            <dd>{{ formatMoney(reservation.daily_rate, reservation.currency) }}</dd>
+            <dd>
+              {{ formatMoney(reservation.daily_rate, reservation.currency) }}
+              <StatusPill v-if="reservation.rate_overridden" tone="warning" label="Tarif modifié" />
+            </dd>
           </div>
           <div>
             <dt>Kilométrage</dt>
@@ -400,31 +430,6 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
       </aside>
     </div>
   </div>
-
-  <!-- Modifier -->
-  <SheetDialog :open="task === 'edit'" title="Modifier la réservation" description="La disponibilité est vérifiée à l’enregistrement." :locked="action.busy.value" @close="task = null">
-    <form id="edit-form" class="form" novalidate @submit.prevent="saveEdit">
-      <FormField label="Prise en charge" :error="action.fieldErrors.value.pickup_at" v-slot="field">
-        <input v-model="editForm.pickup_at" v-bind="field.attrs" class="input" type="datetime-local" required />
-      </FormField>
-      <FormField label="Retour prévu" :error="action.fieldErrors.value.due_at" v-slot="field">
-        <input v-model="editForm.due_at" v-bind="field.attrs" class="input" type="datetime-local" required />
-      </FormField>
-      <FormField label="Véhicule" :error="action.fieldErrors.value.vehicle_id" v-slot="field">
-        <select v-model="editForm.vehicle_id" v-bind="field.attrs" class="select" required>
-          <option v-if="reservation?.vehicle" :value="reservation.vehicle.id">{{ vehicleName(reservation.vehicle) }} - {{ vehiclePlate(reservation.vehicle) }}</option>
-          <option v-for="vehicle in siteVehicles" :key="vehicle.id" :value="vehicle.id">
-            {{ vehicleName(vehicle) }} - {{ vehiclePlate(vehicle) }} ({{ vehicleStatusLabels[vehicle.operational_status] }})
-          </option>
-        </select>
-      </FormField>
-      <InlineAlert :message="action.error.value" />
-    </form>
-    <template #footer>
-      <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="task = null">Fermer</button>
-      <button class="btn btn-primary" type="submit" form="edit-form" :disabled="action.busy.value">Enregistrer les modifications</button>
-    </template>
-  </SheetDialog>
 
   <!-- Prolonger -->
   <SheetDialog :open="task === 'extend'" title="Prolonger la location" description="En cas de conflit, la réservation suivante reste inchangée et aucune information client n’est affichée." :locked="action.busy.value" @close="task = null">
@@ -457,35 +462,81 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
   </SheetDialog>
 
   <!-- Paiement -->
-  <SheetDialog :open="task === 'payment'" title="Enregistrer un paiement" description="Paiement en espèces. L’approbation reste une étape distincte." :locked="action.busy.value" @close="task = null">
-    <form id="payment-form" class="form" novalidate @submit.prevent="savePayment">
-      <div class="segmented" role="group" aria-label="Nature du paiement">
-        <button type="button" :aria-pressed="paymentForm.payment_kind === 'rental'" @click="setPaymentKind('rental')">Location</button>
-        <button type="button" :aria-pressed="paymentForm.payment_kind === 'security_deposit'" @click="setPaymentKind('security_deposit')">Dépôt de garantie</button>
-      </div>
+  <SheetDialog :open="task === 'payment'" title="Enregistrer un paiement" description="L’approbation reste une étape distincte, sauf pour un crédit accordé." :locked="action.busy.value" @close="task = null">
+    <form v-if="reservation" id="payment-form" class="form" novalidate @submit.prevent="savePayment">
+      <FormField label="Nature" required v-slot="field">
+        <div v-bind="field.attrs" class="segmented" role="group">
+          <button type="button" :aria-pressed="paymentForm.payment_kind === 'rental'" @click="setPaymentKind('rental')">Location</button>
+          <button type="button" :aria-pressed="paymentForm.payment_kind === 'security_deposit'" @click="setPaymentKind('security_deposit')">Dépôt de garantie</button>
+        </div>
+      </FormField>
+      <FormField label="Mode de paiement" required :error="action.fieldErrors.value.method" v-slot="field">
+        <div v-bind="field.attrs" class="segmented" role="group">
+          <button type="button" :aria-pressed="paymentForm.method === 'cash'" @click="setPaymentMethod('cash')">Espèces</button>
+          <button type="button" :aria-pressed="paymentForm.method === 'bank_transfer'" @click="setPaymentMethod('bank_transfer')">Virement Sogebank</button>
+          <button
+            v-if="canGrantCredit && paymentForm.payment_kind === 'rental'"
+            type="button"
+            :aria-pressed="paymentForm.method === 'credit'"
+            @click="setPaymentMethod('credit')"
+          >
+            Crédit
+          </button>
+        </div>
+      </FormField>
+      <p v-if="paymentForm.method === 'credit'" class="alert alert-warning">Le crédit est approuvé immédiatement et journalisé à votre nom. Le client reste redevable du montant.</p>
+
       <div class="grid-2">
-        <FormField label="Devise" :help="paymentForm.payment_kind === 'security_deposit' ? 'Le dépôt est contrôlé en USD.' : undefined" v-slot="field">
+        <FormField label="Devise" required :help="paymentForm.payment_kind === 'security_deposit' ? 'Le dépôt est contrôlé en USD.' : undefined" v-slot="field">
           <select v-model="paymentForm.currency" v-bind="field.attrs" class="select" :disabled="paymentForm.payment_kind === 'security_deposit'">
             <option value="USD">USD</option>
             <option value="HTG">HTG</option>
           </select>
         </FormField>
-        <FormField label="Montant reçu" :error="action.fieldErrors.value.amount" v-slot="field">
+        <FormField :label="paymentForm.method === 'credit' ? 'Montant accordé' : 'Montant reçu'" required :error="action.fieldErrors.value.amount" v-slot="field">
           <input v-model="paymentForm.amount" v-bind="field.attrs" class="input input-amount" type="number" inputmode="decimal" min="0.01" step="0.01" required />
         </FormField>
       </div>
-      <FormField label="Caisse" :error="action.fieldErrors.value.cash_register_id" v-slot="field">
-        <select v-model="paymentForm.cash_register_id" v-bind="field.attrs" class="select" required>
-          <option value="" disabled>Sélectionnez une caisse active</option>
-          <option v-for="register in cashRegisters" :key="register.id" :value="register.id">{{ register.name }}</option>
-        </select>
-      </FormField>
-      <p v-if="!cashRegisters.length" class="alert alert-warning">Aucune caisse active pour ce bureau. Demandez au propriétaire d’en créer une.</p>
+
+      <template v-if="paymentForm.method === 'cash'">
+        <FormField label="Caisse" required :error="action.fieldErrors.value.cash_register_id" v-slot="field">
+          <select v-model="paymentForm.cash_register_id" v-bind="field.attrs" class="select" required>
+            <option value="" disabled>Sélectionnez une caisse active</option>
+            <option v-for="register in cashRegisters" :key="register.id" :value="register.id">{{ register.name }}</option>
+          </select>
+        </FormField>
+        <p v-if="!cashRegisters.length" class="alert alert-warning">Aucune caisse active pour ce bureau. Demandez au propriétaire d’en créer une.</p>
+      </template>
+
+      <template v-if="paymentForm.method === 'bank_transfer'">
+        <FileCapture
+          purpose="payment_proof"
+          :site-id="reservation.site_id"
+          label="Reçu de virement Sogebank *"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          help="Photo nette du reçu ou fichier PDF, 10 Mo au plus."
+          :error="action.fieldErrors.value.proof_file_id"
+          @uploaded="(file) => (paymentForm.proof_file_id = file.id)"
+          @cleared="paymentForm.proof_file_id = ''"
+        />
+        <FormField label="Référence du virement" help="Facultatif. Numéro indiqué sur le reçu." :error="action.fieldErrors.value.bank_reference" v-slot="field">
+          <input v-model="paymentForm.bank_reference" v-bind="field.attrs" class="input" type="text" maxlength="80" autocomplete="off" />
+        </FormField>
+      </template>
+
+      <div v-if="paymentMissing.length" class="missing" role="status">
+        <strong>À compléter</strong>
+        <ul>
+          <li v-for="item in paymentMissing" :key="item">{{ item }}</li>
+        </ul>
+      </div>
       <InlineAlert :message="action.error.value" />
     </form>
     <template #footer>
       <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="task = null">Fermer</button>
-      <button class="btn btn-primary" type="submit" form="payment-form" :disabled="action.busy.value || !cashRegisters.length">Enregistrer le paiement</button>
+      <button class="btn btn-primary" type="submit" form="payment-form" :disabled="action.busy.value || paymentMissing.length > 0">
+        {{ paymentForm.method === 'credit' ? 'Accorder le crédit' : 'Enregistrer le paiement' }}
+      </button>
     </template>
   </SheetDialog>
 </template>
@@ -498,9 +549,9 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
   min-height: 40px;
   margin: 0 0 8px -4px;
   padding: 0 8px 0 4px;
-  border-radius: 10px;
+  border-radius: 4px;
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -533,7 +584,7 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
 
 .detail-customer {
   font-size: var(--text-xl);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .detail-grid {
@@ -575,9 +626,15 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
   gap: 10px;
 }
 
+.detail-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
 .input-amount {
   font-size: var(--text-xl);
-  font-weight: 750;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 

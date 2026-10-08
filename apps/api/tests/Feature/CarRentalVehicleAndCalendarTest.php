@@ -388,6 +388,7 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             'rental.vehicles.manage',
         ]);
         $vehicle = $this->vehicle($company, $site, 'LO-01725', 'suv');
+        $vehicle->forceFill(['vin' => 'JSAJTD54V00000001'])->save();
 
         $this->requestFor($token, $company)
             ->patchJson("/api/v1/car-rental/vehicles/{$vehicle->id}/details", [
@@ -407,7 +408,8 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             ->assertJsonPath('data.fuel_type', 'gasoline')
             ->assertJsonPath('data.engine_displacement_cc', 1500)
             ->assertJsonPath('data.doors', 4)
-            ->assertJsonPath('data.latest_odometer_km', 15851);
+            ->assertJsonPath('data.latest_odometer_km', 15851)
+            ->assertJsonPath('data.vin', 'JSAJTD54V00000001');
 
         $this->requestFor($token, $company)
             ->patchJson("/api/v1/car-rental/vehicles/{$vehicle->id}/details", [

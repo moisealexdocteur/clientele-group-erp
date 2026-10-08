@@ -96,7 +96,7 @@ const day = computed(() => formatDayHeading(app.now))
   width: 100%;
   max-width: 480px;
   padding: 24px var(--gutter);
-  border-radius: 22px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -126,12 +126,13 @@ const day = computed(() => formatDayHeading(app.now))
   .auth-logo {
     width: 168px;
     padding: 10px 14px;
-    border-radius: 12px;
+    border-radius: 4px;
     background: #fff;
   }
 
   .auth-clock .display {
-    font-size: clamp(4.5rem, 9vw, 8.5rem);
+    font-size: 4.25rem;
+    font-weight: 600;
   }
 
   .auth-day {
