@@ -1,8 +1,17 @@
-const CACHE_NAME = 'clientele-group-erp-v0.2.0-alpha.14'
-const APP_SHELL = ['/', '/manifest.webmanifest', '/icon.svg']
+/*
+ * Service worker de la PWA Clientèle Group ERP.
+ *
+ * - Pages : réseau d'abord, puis la coquille en cache si le poste est hors ligne.
+ *   Toutes les adresses (/location/reservations/...) partagent la même coquille.
+ * - Fichiers compilés et images : cache d'abord, ils sont versionnés par leur nom.
+ * - API : jamais mise en cache. Les données métier restent sous le contrôle du serveur.
+ */
+const CACHE_NAME = 'clientele-group-erp-v0.3.0-alpha.1'
+const SHELL = '/index.html'
+const PRECACHE = ['/', SHELL, '/manifest.webmanifest', '/icon.svg', '/brand/clientele-group-logo.webp']
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)))
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)))
   self.skipWaiting()
 })
 
@@ -23,10 +32,25 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone()
+          void caches.open(CACHE_NAME).then((cache) => cache.put(SHELL, copy))
+          return response
+        })
+        .catch(() => caches.match(SHELL).then((cached) => cached || Response.error())),
+    )
+    return
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      const copy = response.clone()
-      void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
+      if (response.ok) {
+        const copy = response.clone()
+        void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
+      }
       return response
     })),
   )

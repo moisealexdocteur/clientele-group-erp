@@ -51,10 +51,11 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 | docs/11_Identite_visuelle_et_experience_mobile.md | Logo, couleurs et règles mobile-first |
 | docs/12_Pilote_Car_Rental.md | Périmètre, permissions et critères du pilote Car Rental |
 | docs/21_Flotte_car_rental_references_publiques_alpha12.md | Références publiques de flotte et procédure de validation |
+| docs/22_Interface_modulaire_0.3.0.md | Organisation de la PWA, adresses des écrans, correctifs P0 et système visuel |
 
 ## État du projet
 
-Version : 0.2.0-alpha.14
+Version : 0.3.0-alpha.1
 
 Cette préversion contient le routage HTTPS, l'authentification à double étape par courriel, la réinitialisation de mot de passe, les rôles locaux, le choix obligatoire de société/site et l'audit sécurisé. Le pilote Car Rental couvre les véhicules, le planning, les réservations, les notifications client, les papiers de flotte et les références publiques contrôlées. Aucun module n'est prêt pour la production sans recette métier, imprimante réelle et données validées.
 

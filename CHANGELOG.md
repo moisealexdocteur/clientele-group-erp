@@ -2,6 +2,38 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.3.0-alpha.1 - 2026-10-08
+
+### Modifié
+
+- L’interface est réorganisée en pages, composants et services : `App.vue` (4 492 lignes) et `styles.css` (2 764 lignes) sont remplacés par 58 fichiers par domaine, le plus long faisant 633 lignes. Les routes API, les règles métier et les permissions serveur sont inchangées.
+- Chaque écran a sa propre adresse : une réservation ou un véhicule peut être rouvert directement, le bouton Retour du téléphone fonctionne et les filtres de liste sont conservés.
+- Les permissions sont vérifiées à la navigation : un écran non autorisé n’est plus atteignable depuis l’interface.
+- Nouveau système visuel mobile d’abord : onglets en bas sur téléphone, rail de navigation sur grand écran, numéros, plaques, heures et montants en grand format, police embarquée pour un rendu identique hors ligne.
+
+### Corrigé (P0 Car Rental)
+
+- Nouvelle réservation : les véhicules disponibles s’affichent dès l’ouverture, dans le même panneau que les dates, et se mettent à jour à chaque changement. Toutes les catégories sont proposées par défaut.
+- Rendu mobile : le résumé et le bouton d’enregistrement restent visibles au pouce ; les résultats ne tombent plus en bas de page.
+- Toute réservation et tout véhicule affichés dans une liste, le planning ou un détail sont ouvrables.
+- Mise en circulation : le calcul de la location, le montant approuvé, le dépôt requis et le dépôt retenu sont affichés sans ressaisie. L’action finale reste désactivée tant qu’une exigence manque, et chaque exigence manquante est nommée.
+- Fiche véhicule en sections courtes : état opérationnel tactile avec confirmation, réservations actives, documents, tarification, identité.
+- Planning : grille véhicules par jour, ouverte sur le jour courant, réservations cliquables, navigation par mois.
+
+### Ajouté
+
+- Écran Aujourd’hui : départs du jour, retours attendus, retours en retard et état de la flotte du bureau actif.
+- Tests unitaires de la PWA (dates de Cap-Haïtien, période par défaut, devises, textes), exécutés dans la CI.
+- Le service worker sert l’application pour toutes les adresses, y compris hors ligne. Les réponses `/api` ne sont jamais mises en cache.
+
+### Sécurité
+
+- `deploy-preprod.sh` retire l’authentification au registre GHCR même si le téléchargement des images échoue.
+
+### Non couvert, en attente d’une évolution de l’API
+
+- Interrupteur Actif ou Inactif du véhicule, photo du permis, pays et province du permis, virement Sogebank avec pièce justificative. Voir `docs/22_Interface_modulaire_0.3.0.md`.
+
 ## 0.2.0-alpha.14 - 2026-10-08
 
 ### Ajouté

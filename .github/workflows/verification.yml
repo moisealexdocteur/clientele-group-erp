@@ -65,6 +65,8 @@ jobs:
         run: npm ci
       - name: Vérifier TypeScript
         run: npm run typecheck
+      - name: Tester la PWA
+        run: npm test
       - name: Compiler la PWA
         run: npm run build
 
