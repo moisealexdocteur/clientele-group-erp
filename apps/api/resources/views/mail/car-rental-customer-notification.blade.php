@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $heading }} — Clientèle Group</title>
+    <title>{{ $heading }} - Clientèle Group</title>
 </head>
 <body style="margin:0;background:#f4f5f8;color:#0e0e10;font-family:Arial,sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:28px 12px;">
@@ -29,6 +29,18 @@
                                     </td>
                                 </tr>
                             </table>
+                            @if ($vehicleImageUrl)
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 20px;border:1px solid #e4e6ed;border-radius:12px;overflow:hidden;">
+                                    <tr>
+                                        <td align="center" style="padding:16px 16px 8px;">
+                                            <img src="{{ $vehicleImageUrl }}" alt="{{ $vehicleImageAlt }}" width="240" style="display:block;width:100%;max-width:240px;height:auto;border:0;" />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td align="center" style="padding:0 16px 14px;color:#6b6d78;font-size:12px;line-height:1.4;">Image indicative du véhicule</td>
+                                    </tr>
+                                </table>
+                            @endif
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                                 @foreach ($details as $label => $value)
                                     <tr>

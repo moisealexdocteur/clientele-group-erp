@@ -209,15 +209,20 @@ Le lien d'écran utilise un jeton aléatoire à forte entropie et un code de jum
 ## 10. Module Clientèle Car Rental
 
 - Catalogue de SUV, mid SUV et pick-up, avec plaque, état, kilométrage, photos, assurance, documents et tarifs.
+- Chaque véhicule enregistre obligatoirement son tarif quotidien en USD et son dépôt minimum de garantie en USD. Les réservations conservent le dépôt minimum confirmé au moment de leur création.
 - Réservation par disponibilité réelle, avec calendrier global et par véhicule.
+- Une nouvelle réservation propose la date et l’heure actuelles de Cap-Haïtien, un retour le lendemain et le bureau actif du préposé comme lieu de prise en charge. Le préposé confirme ou modifie ces valeurs.
+- La création, la recherche, la modification, le paiement, la mise en circulation, la prolongation, le retour et l’annulation sont des tâches distinctes. Après création, un récapitulatif de réservation est affiché.
 - États obligatoires : réservé, en circulation, en préparation, lavage, au garage, réparation, disponible.
 - Drop-off et prise en charge à l'aéroport du Cap-Haïtien, avec frais, horaire et responsable.
 - Dépôt de garantie en USD ou HTG, ou dépôt de passeport US lorsqu'autorisé. La garde, la remise et la libération du passeport sont tracées de manière restreinte.
 - Paiement espèces ou virement ou dépôt Sogebank avec photo de la pièce et approbation par personne autorisée.
+- La mise en circulation exige un paiement de location approuvé, un dépôt de garantie approuvé et retenu au moins égal au minimum du véhicule, ainsi que le nom du conducteur, un permis valide et la confirmation de vérification de l’original.
 - Contrat de location numéroté et signé par le client et Clientèle Car Rental.
 - Inspection pré-location : croquis des dommages, photos, odomètre, carburant, kilométrage, accessoires et signatures.
 - Inspection post-location : état final, nouveaux dommages, kilomètres, frais, libération ou retenue du dépôt.
 - Kilométrage limité ou illimité selon contrat.
+- Les courriels client présentent la marque et le modèle du véhicule avec une image indicative générique. Ils ne présentent jamais la plaque d’immatriculation.
 - Paie et rapports comptables adaptés à la société.
 
 ## 11. Module Clientèle Gaz Station
@@ -278,14 +283,6 @@ Tous les rapports respectent les permissions. Un utilisateur voit seulement les 
 - Une caisse ne peut pas être clôturée définitivement tant que les opérations critiques ne sont pas synchronisées ou explicitement remises à un superviseur.
 - Le stock hors ligne est contrôlé par une quantité autorisée et une réserve de sécurité afin de limiter les surventes.
 
-## 16. Importations en lot Excel
-
-L’application fournit des modèles Excel `.xlsx` versionnés et téléchargeables pour importer par lot les produits, inventaires, utilisateurs, véhicules, chambres d’hôtel, clients, fournisseurs et transactions autorisées.
-
-Chaque import impose le contexte société et site, une validation complète avant écriture, un aperçu des erreurs par ligne, une confirmation explicite, une protection contre le double import et un rapport de résultat. Les mots de passe, données sensibles inter-sociétés et transactions finalisées ne sont jamais importés sans un mécanisme d’autorisation et de journalisation prévu à cet effet.
-
-Les règles détaillées, les colonnes de modèles et les critères d’acceptation sont définis dans [14_Importations_en_lot_Excel.md](14_Importations_en_lot_Excel.md).
-
-## 17. Hors périmètre initial
+## 16. Hors périmètre initial
 
 Les éléments suivants ne seront ajoutés qu'après étude spécifique : intégration bancaire automatique, passerelle de carte choisie, facturation électronique gouvernementale, intégration de pompe à carburant, paie avec calcul légal automatique non validé, intégration de balance réseau, synchronisation avec ERP tiers et application mobile native.

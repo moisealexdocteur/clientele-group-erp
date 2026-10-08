@@ -25,7 +25,7 @@ final class AccessCodeMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Votre code de sécurité — Clientèle Group',
+            subject: 'Votre code de sécurité - Clientèle Group',
         );
     }
 
@@ -33,9 +33,6 @@ final class AccessCodeMail extends Mailable
     {
         return new Content(
             view: 'mail.access-code',
-            with: [
-                'purposeLabel' => $this->purposeLabel(),
-            ],
         );
     }
 

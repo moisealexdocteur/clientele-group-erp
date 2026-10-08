@@ -1,4 +1,4 @@
-# Réservations, notifications et utilisateurs Car Rental — alpha.11
+# Réservations, notifications et utilisateurs Car Rental - alpha.11
 
 ## Réservations
 
@@ -31,7 +31,7 @@ Le journal conserve uniquement le résultat de l’envoi et le nombre de pièces
 
 ## Facture et contrat PDF
 
-Le contrat signé et la facture PDF ne sont pas encore générés dans l’alpha.11. Le service de courriel refuse une notification de contrat signé ou de facture sans PDF valide. Lorsqu’un futur module aura généré et validé ces documents, il pourra joindre au maximum deux PDF — par exemple la facture et le contrat signé — au courriel concerné.
+Le contrat signé et la facture PDF ne sont pas encore générés dans l’alpha.11. Le service de courriel refuse une notification de contrat signé ou de facture sans PDF valide. Lorsqu’un futur module aura généré et validé ces documents, il pourra joindre au maximum deux PDF - par exemple la facture et le contrat signé - au courriel concerné.
 
 Aucun PDF fictif, contrat non signé ou facture non validée n’est joint ou annoncé au client.
 

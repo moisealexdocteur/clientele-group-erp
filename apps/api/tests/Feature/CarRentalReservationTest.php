@@ -6,6 +6,7 @@ use App\Models\ApiAccessToken;
 use App\Models\AuditEvent;
 use App\Models\CarRentalVehicle;
 use App\Models\CarRentalReservation;
+use App\Models\CashRegister;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
@@ -78,7 +79,10 @@ final class CarRentalReservationTest extends TestCase
 
         Mail::assertSent(CarRentalCustomerNotificationMail::class, function (CarRentalCustomerNotificationMail $mail): bool {
             return $mail->reservationNumber === '0000 0001'
-                && $mail->subjectLine === 'Votre réservation est confirmée — Clientèle Group'
+                && $mail->subjectLine === 'Votre réservation est confirmée - Clientèle Group'
+                && ($mail->details['Véhicule'] ?? null) === 'Toyota Test'
+                && ! in_array('SUV-MAIL', $mail->details, true)
+                && str_ends_with((string) $mail->vehicleImageUrl, '/vehicle-images/car-rental-suv.svg')
                 && $mail->pdfAttachments === [];
         });
     }
@@ -115,7 +119,7 @@ final class CarRentalReservationTest extends TestCase
         ]]));
 
         Mail::assertSent(CarRentalCustomerNotificationMail::class, function (CarRentalCustomerNotificationMail $mail): bool {
-            return $mail->subjectLine === 'Votre facture est disponible — Clientèle Group'
+            return $mail->subjectLine === 'Votre facture est disponible - Clientèle Group'
                 && count($mail->pdfAttachments) === 1
                 && $mail->pdfAttachments[0]['name'] === 'facture-0000-0001.pdf';
         });
@@ -159,7 +163,7 @@ final class CarRentalReservationTest extends TestCase
         ]]));
 
         Mail::assertSent(CarRentalCustomerNotificationMail::class, function (CarRentalCustomerNotificationMail $mail): bool {
-            return $mail->subjectLine === 'Votre contrat de location signé est disponible — Clientèle Group'
+            return $mail->subjectLine === 'Votre contrat de location signé est disponible - Clientèle Group'
                 && count($mail->pdfAttachments) === 1
                 && $mail->pdfAttachments[0]['name'] === 'contrat-signe-0000-0001.pdf';
         });
@@ -323,6 +327,88 @@ final class CarRentalReservationTest extends TestCase
         self::assertArrayNotHasKey('bank_reference', $event->metadata);
     }
 
+    public function test_check_out_requires_an_approved_payment_a_held_deposit_and_a_verified_driver_license(): void
+    {
+        Mail::fake();
+
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+            'rental.reservations.manage',
+            'rental.payments.submit',
+            'rental.payments.approve',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-CHECKOUT', 'suv');
+        $reservation = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->json('data');
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/check-out", [
+                'expected_lock_version' => $reservation['lock_version'],
+                'driver_full_name' => 'Jean Pierre',
+                'driver_license_number' => 'HT-123456',
+                'driver_license_expires_at' => '2027-01-01',
+                'driver_license_verified' => true,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('payment');
+
+        $cashRegister = CashRegister::query()->create([
+            'company_id' => $company->id,
+            'site_id' => $site->id,
+            'code' => 'CAR-01',
+            'name' => 'Caisse Car Rental 1',
+            'is_active' => true,
+        ]);
+
+        $rentalPayment = $this->submitCashPayment($token, $company, $reservation['id'], $cashRegister->id, 'rental', '130.00');
+        $this->approvePayment($token, $company, $reservation['id'], $rentalPayment['id']);
+        $depositPayment = $this->submitCashPayment($token, $company, $reservation['id'], $cashRegister->id, 'security_deposit', '250.00');
+        $this->approvePayment($token, $company, $reservation['id'], $depositPayment['id']);
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/check-out", [
+                'expected_lock_version' => $reservation['lock_version'],
+                'driver_full_name' => 'Jean Pierre',
+                'driver_license_number' => 'HT-123456',
+                'driver_license_expires_at' => '2027-01-01',
+                'driver_license_verified' => false,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('driver_license_verified');
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/check-out", [
+                'expected_lock_version' => $reservation['lock_version'],
+                'driver_full_name' => 'Jean Pierre',
+                'driver_license_number' => 'HT-123456',
+                'driver_license_expires_at' => '2027-01-01',
+                'driver_license_verified' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.state', 'checked_out')
+            ->assertJsonPath('data.driver_license_verified', true)
+            ->assertJsonMissingPath('data.driver_license_number');
+
+        $this->assertDatabaseHas('car_rental_security_deposits', [
+            'company_id' => $company->id,
+            'reservation_id' => $reservation['id'],
+            'payment_id' => $depositPayment['id'],
+            'status' => 'held',
+            'currency' => 'USD',
+            'amount' => '250.00',
+        ]);
+        $this->assertDatabaseHas('car_rental_reservations', [
+            'id' => $reservation['id'],
+            'state' => 'checked_out',
+            'driver_full_name' => 'Jean Pierre',
+        ]);
+    }
+
     /**
      * @param array<int, string> $permissions
      * @return array{0: User, 1: Company, 2: Site, 3: string, 4: CompanyUserAccess}
@@ -365,9 +451,42 @@ final class CarRentalReservationTest extends TestCase
             'operational_status' => 'available',
             'make' => 'Toyota',
             'model' => 'Test',
+            'registration_number' => $code,
+            'registration_status' => 'normal',
             'latest_odometer_km' => 100,
+            'daily_rate_usd' => '130.00',
+            'minimum_security_deposit_usd' => '250.00',
             'is_active' => true,
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function submitCashPayment(
+        string $token,
+        Company $company,
+        string $reservationId,
+        string $cashRegisterId,
+        string $kind,
+        string $amount,
+    ): array {
+        return $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservationId}/payments", [
+                'payment_kind' => $kind,
+                'method' => 'cash',
+                'currency' => 'USD',
+                'amount' => $amount,
+                'cash_register_id' => $cashRegisterId,
+            ])
+            ->assertCreated()
+            ->json('data');
+    }
+
+    private function approvePayment(string $token, Company $company, string $reservationId, string $paymentId): void
+    {
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservationId}/payments/{$paymentId}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
     }
 
     /** @param array<string, mixed> $overrides */

@@ -59,7 +59,7 @@ Une identité client peut être commune au groupe, mais les données ne le sont 
 - Le personnel opérationnel ne voit que le profil client de sa société active et les données nécessaires à sa tâche.
 - Un service de confidentialité séparé peut rechercher une identité maître uniquement pour dédoublonner ou appliquer un consentement. Il ne fournit pas automatiquement l'historique d'autres sociétés.
 - Les coordonnées et préférences d'une autre société exigent un consentement valide, une finalité autorisée et une société destinataire précise.
-- Les données sensibles — passeport, inspection, contrat, photos, solde, limite de crédit, dépôt, paiement et document joint — ne sont jamais partagées par ce mécanisme.
+- Les données sensibles - passeport, inspection, contrat, photos, solde, limite de crédit, dépôt, paiement et document joint - ne sont jamais partagées par ce mécanisme.
 - Le propriétaire global ou l'administrateur global ne reçoit pas une vue opérationnelle transversale automatique : il choisit une société et exerce une permission précise, ou passe par le processus de confidentialité.
 - Chaque recherche de rapprochement, affichage partagé, création de lien, export, refus et révocation est journalisé.
 

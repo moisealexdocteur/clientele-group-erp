@@ -74,6 +74,8 @@ final class CarRentalCustomerNotificationService
                 $content['intro'],
                 $reservation->formattedNumber(),
                 $content['details'],
+                $content['vehicle_image_url'],
+                $content['vehicle_image_alt'],
                 $pdfAttachments,
             ));
         } catch (Throwable) {
@@ -121,54 +123,70 @@ final class CarRentalCustomerNotificationService
         return $this->notify($company, $reservation, self::SIGNED_CONTRACT_ISSUED, $validAttachments);
     }
 
-    /** @return array{subject: string, heading: string, intro: string, details: array<string, string>} */
+    /** @return array{subject: string, heading: string, intro: string, details: array<string, string>, vehicle_image_url: string, vehicle_image_alt: string} */
     private function contentFor(Company $company, CarRentalReservation $reservation, string $event): array
     {
         $vehicle = $reservation->vehicle;
+        $vehicleName = trim(implode(' ', array_filter([
+            $vehicle?->make,
+            $vehicle?->model,
+        ], static fn (?string $value): bool => filled($value))));
         $details = [
-            'Véhicule' => $vehicle?->code ?? 'À confirmer',
+            'Véhicule' => $vehicleName !== '' ? $vehicleName : 'Véhicule de location',
             'Départ prévu' => $this->formatDate($reservation->pickup_at, $company),
             'Retour prévu' => $this->formatDate($reservation->due_at, $company),
         ];
 
-        return match ($event) {
+        $vehicleCategory = $vehicle?->category;
+        $imageName = match ($vehicleCategory) {
+            'pickup' => 'car-rental-pickup.svg',
+            'mid_suv' => 'car-rental-mid-suv.svg',
+            default => 'car-rental-suv.svg',
+        };
+        $imageUrl = rtrim((string) config('app.url'), '/') . '/vehicle-images/' . $imageName;
+        $imageAlt = $vehicleName !== ''
+            ? 'Image indicative du véhicule ' . $vehicleName
+            : 'Image indicative du véhicule de location';
+
+        $content = match ($event) {
             self::CHECKED_OUT => [
-                'subject' => 'Votre location est en circulation — Clientèle Group',
+                'subject' => 'Votre location est en circulation - Clientèle Group',
                 'heading' => 'Votre location est en circulation',
                 'intro' => 'Le véhicule a été remis. Conservez cette information pour votre suivi.',
-                'details' => $details,
             ],
             self::EXTENDED => [
-                'subject' => 'Votre location a été prolongée — Clientèle Group',
+                'subject' => 'Votre location a été prolongée - Clientèle Group',
                 'heading' => 'Votre location a été prolongée',
                 'intro' => 'La nouvelle date de retour est indiquée ci-dessous.',
-                'details' => $details,
             ],
             self::RETURN_RECORDED => [
-                'subject' => 'Votre retour de véhicule est enregistré — Clientèle Group',
+                'subject' => 'Votre retour de véhicule est enregistré - Clientèle Group',
                 'heading' => 'Votre retour est enregistré',
                 'intro' => 'Le retour du véhicule a été enregistré. La facturation finale est traitée séparément.',
-                'details' => $details,
             ],
             self::SIGNED_CONTRACT_ISSUED => [
-                'subject' => 'Votre contrat de location signé est disponible — Clientèle Group',
+                'subject' => 'Votre contrat de location signé est disponible - Clientèle Group',
                 'heading' => 'Votre contrat signé est disponible',
                 'intro' => 'Le contrat de location signé est joint à ce courriel.',
-                'details' => $details,
             ],
             self::INVOICE_ISSUED => [
-                'subject' => 'Votre facture est disponible — Clientèle Group',
+                'subject' => 'Votre facture est disponible - Clientèle Group',
                 'heading' => 'Votre facture est disponible',
                 'intro' => 'La facture de votre location est jointe à ce courriel.',
-                'details' => $details,
             ],
             default => [
-                'subject' => 'Votre réservation est confirmée — Clientèle Group',
+                'subject' => 'Votre réservation est confirmée - Clientèle Group',
                 'heading' => 'Votre réservation est confirmée',
                 'intro' => 'Votre réservation de véhicule a été enregistrée.',
-                'details' => $details,
             ],
         };
+
+        return [
+            ...$content,
+            'details' => $details,
+            'vehicle_image_url' => $imageUrl,
+            'vehicle_image_alt' => $imageAlt,
+        ];
     }
 
     /**

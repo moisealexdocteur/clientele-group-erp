@@ -70,6 +70,9 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/vehicles/{vehicle}/registration', [CarRentalController::class, 'updateVehicleRegistration'])
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.registration');
+            Route::patch('/vehicles/{vehicle}/commercial-terms', [CarRentalController::class, 'updateVehicleCommercialTerms'])
+                ->middleware('company.permission:rental.vehicles.manage')
+                ->name('api.v1.car-rental.vehicles.commercial-terms');
             Route::get('/vehicles/{vehicle}/documents', [CarRentalController::class, 'vehicleDocuments'])
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.documents.index');

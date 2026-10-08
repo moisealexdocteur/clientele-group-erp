@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 260" role="img" aria-labelledby="title desc">
+  <title id="title">Pick-up de location</title>
+  <desc id="desc">Illustration générique sans plaque d'immatriculation.</desc>
+  <rect width="480" height="260" rx="24" fill="#eef0ff"/>
+  <path d="M77 158h225l-18-59c-5-17-20-29-39-29h-85c-19 0-34 11-40 28z" fill="#2222e6"/>
+  <path d="M152 102h64v54h-88l14-37c2-6 4-11 10-17z" fill="#dfe3ff"/>
+  <path d="M302 121h94c10 0 18 8 18 18v39H302z" fill="#4a4c5c"/>
+  <path d="M63 157h353c13 0 24 11 24 24v14H39v-14c0-13 11-24 24-24z" fill="#171820"/>
+  <circle cx="135" cy="195" r="29" fill="#ffffff"/><circle cx="135" cy="195" r="14" fill="#383a46"/>
+  <circle cx="350" cy="195" r="29" fill="#ffffff"/><circle cx="350" cy="195" r="14" fill="#383a46"/>
+  <rect x="218" y="177" width="74" height="12" rx="6" fill="#f4f5f8"/>
+</svg>

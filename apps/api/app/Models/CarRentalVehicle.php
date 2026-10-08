@@ -37,19 +37,19 @@ final class CarRentalVehicle extends Model
         'nissan-frontier-aa-85177' => [
             'key' => 'nissan-frontier-aa-85177',
             'url' => '/fleet/nissan-frontier-aa-85177.jpg',
-            'label' => 'Photo de référence — publication Clientèle Group',
+            'label' => 'Photo de référence - publication Clientèle Group',
             'source_url' => 'https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr',
         ],
         'suzuki-jimny-lo-01727' => [
             'key' => 'suzuki-jimny-lo-01727',
             'url' => '/fleet/suzuki-jimny-lo-01727.jpg',
-            'label' => 'Photo de référence — publication Clientèle Group',
+            'label' => 'Photo de référence - publication Clientèle Group',
             'source_url' => 'https://www.tiktok.com/@clientele_group/video/7679127374331481352?lang=fr',
         ],
         'great-wall-poer-dm-00849' => [
             'key' => 'great-wall-poer-dm-00849',
             'url' => '/fleet/great-wall-poer-dm-00849.jpg',
-            'label' => 'Photo de référence — publication Clientèle Group',
+            'label' => 'Photo de référence - publication Clientèle Group',
             'source_url' => 'https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr',
         ],
     ];
@@ -72,6 +72,8 @@ final class CarRentalVehicle extends Model
         'reference_photo_key',
         'vin',
         'latest_odometer_km',
+        'daily_rate_usd',
+        'minimum_security_deposit_usd',
         'is_active',
     ];
 
@@ -80,6 +82,8 @@ final class CarRentalVehicle extends Model
         return [
             'model_year' => 'integer',
             'latest_odometer_km' => 'integer',
+            'daily_rate_usd' => 'decimal:2',
+            'minimum_security_deposit_usd' => 'decimal:2',
             'is_active' => 'boolean',
         ];
     }

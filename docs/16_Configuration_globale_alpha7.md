@@ -1,4 +1,4 @@
-# Configuration globale — alpha.7
+# Configuration globale - alpha.7
 
 ## Objet
 

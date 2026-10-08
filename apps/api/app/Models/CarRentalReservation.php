@@ -48,9 +48,14 @@ final class CarRentalReservation extends Model
         'airport_dropoff_fee_usd',
         'currency',
         'daily_rate',
+        'minimum_security_deposit_usd',
         'kilometer_plan',
         'included_km',
         'additional_km_rate',
+        'driver_full_name',
+        'driver_license_number',
+        'driver_license_expires_at',
+        'driver_license_verified_at',
         'lock_version',
     ];
 
@@ -66,8 +71,12 @@ final class CarRentalReservation extends Model
             'airport_pickup_fee_usd' => 'decimal:2',
             'airport_dropoff_fee_usd' => 'decimal:2',
             'daily_rate' => 'decimal:2',
+            'minimum_security_deposit_usd' => 'decimal:2',
             'additional_km_rate' => 'decimal:2',
             'included_km' => 'integer',
+            'driver_license_number' => 'encrypted',
+            'driver_license_expires_at' => 'immutable_date',
+            'driver_license_verified_at' => 'immutable_datetime',
             'lock_version' => 'integer',
         ];
     }

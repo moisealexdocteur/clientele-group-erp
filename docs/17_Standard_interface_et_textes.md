@@ -19,6 +19,14 @@ L’interface Clientèle Group ERP utilise des conventions de produits professio
 
 Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans l’interface métier. Exemples à éviter : titres très longs, slogans, promesses de sécurité non nécessaires, ou explications qui ne changent pas l’action de l’utilisateur.
 
+## Valeurs par défaut
+
+- Chaque nouvelle tâche propose immédiatement une valeur métier valable. L’utilisateur confirme ou la modifie.
+- Une réservation propose la date et l’heure actuelles à Cap-Haïtien pour la prise en charge, puis le même horaire le lendemain pour le retour.
+- Le bureau de prise en charge proposé est l’adresse autorisée active de la session. Le navigateur conserve ce choix pour la société active et utilise la première adresse autorisée si aucun choix antérieur n’existe.
+- Les listes et calendriers chargent une période utile par défaut. Une page ne doit pas attendre une action de l’utilisateur pour afficher ses données principales.
+- Une valeur proposée doit être visible et modifiable. Elle ne doit jamais être appliquée de manière cachée.
+
 ## Densité des écrans
 
 - Un titre de tâche reste lisible sans dominer l’écran : 32 à 46 px sur grand écran, 30 à 38 px sur téléphone.
@@ -26,6 +34,8 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Une description ne répète pas le titre ; elle explique uniquement la prochaine décision ou une règle importante.
 - Les formulaires de configuration utilisent des titres courts : `Ajouter une société`, `Ajouter une adresse`, `Ajouter une caisse`.
 - Une liste ou un planning affiche une période utile par défaut. L’utilisateur affine seulement si nécessaire.
+- Une tâche principale est présentée dans une vue ou un dialogue dédié. Ne pas empiler la création, la recherche, la modification, le paiement et la mise en circulation dans le même formulaire.
+- Après une création, afficher un récapitulatif clair avec les actions `Voir`, `Nouvelle` et `Retour à la liste`.
 
 ## Menus
 
@@ -50,6 +60,7 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Les erreurs de validation restent près du champ ou expliquent précisément le champ concerné.
 - Une erreur technique ou une clé interne telle que `validation.regex` ne doit jamais être affichée à l’utilisateur.
 - Les informations sensibles ne sont jamais affichées dans un message, un journal ou une notification.
+- Les notifications clients décrivent le véhicule par marque et modèle. Elles ne contiennent jamais sa plaque d’immatriculation. Une image générique de catégorie peut être utilisée à titre indicatif.
 
 ## Formulaires de configuration
 
@@ -61,6 +72,12 @@ Les formulations décoratives, ambiguës ou promotionnelles sont interdites dans
 - Le formulaire d’utilisateur affiche la règle complète du mot de passe avant l’enregistrement : au moins 12 caractères, majuscule, minuscule, chiffre et symbole.
 - Le détail d’un utilisateur permet d’enregistrer les modifications, désactiver, réactiver, réinitialiser le mot de passe ou supprimer définitivement, avec des libellés d’action explicites.
 
+## Typographie et ponctuation
+
+- Le caractère typographique U+2014 est interdit dans les titres, menus, dialogues, courriels, documents, code source et scripts du dépôt.
+- Lorsqu’une séparation est nécessaire, utiliser uniquement le tiret ASCII entouré d’espaces : `texte - texte`.
+- Cette règle est vérifiée avant livraison avec la recherche de ce caractère dans les fichiers versionnés.
+
 ## Contrôle avant livraison
 
 Avant chaque préproduction, vérifier que :
@@ -71,3 +88,5 @@ Avant chaque préproduction, vérifier que :
 4. les actions tactiles importantes font au moins 48 px ;
 5. les messages d’erreur donnent une action précise ;
 6. aucune donnée fictive n’est présentée comme réelle.
+7. les nouvelles tâches proposent des valeurs par défaut adaptées au contexte ;
+8. aucun caractère U+2014 n’est présent dans les fichiers versionnés.

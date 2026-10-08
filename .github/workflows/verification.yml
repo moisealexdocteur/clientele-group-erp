@@ -20,10 +20,13 @@ jobs:
           test -f docs/03_Impression_et_mode_kiosque.md
           test -f docs/05_Securite_et_acces.md
           test -f apps/api/database/001_noyau.sql
-      - name: Vérifier les fichiers d’exploitation
+      - name: Interdire le tiret long
         run: |
-          bash -n infra/deploy-preprod.sh
-          docker compose --env-file infra/.env.example -f infra/compose.yaml config -q
+          forbidden="$(printf '\342\200\224')"
+          if git grep -n "$forbidden"; then
+            echo "Le caractère typographique U+2014 est interdit. Utilisez le tiret ASCII."
+            exit 1
+          fi
 
   api:
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-# Configuration système et validation — alpha.9
+# Configuration système et validation - alpha.9
 
 ## Correction livrée
 

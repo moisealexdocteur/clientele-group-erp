@@ -34,8 +34,11 @@ final class CompanyContextController extends Controller
                     );
                 },
             )
+            ->with(['cashRegisters' => static fn ($query) => $query
+                ->where('is_active', true)
+                ->orderBy('name')])
             ->orderBy('name')
-            ->get(['id', 'code', 'name', 'address']);
+            ->get(['id', 'company_id', 'code', 'name', 'address']);
 
         return response()->json([
             'company' => [
@@ -51,7 +54,20 @@ final class CompanyContextController extends Controller
                 'site_scope' => $access->site_scope,
                 'permissions' => $access->permissions,
             ],
-            'sites' => $sites,
+            'sites' => $sites->map(static fn (Site $site): array => [
+                'id' => $site->id,
+                'code' => $site->code,
+                'name' => $site->name,
+                'address' => $site->address,
+                'cash_registers' => $site->cashRegisters
+                    ->map(static fn ($register): array => [
+                        'id' => $register->id,
+                        'code' => $register->code,
+                        'name' => $register->name,
+                        'is_active' => $register->is_active,
+                    ])
+                    ->values(),
+            ])->values(),
         ]);
     }
 }

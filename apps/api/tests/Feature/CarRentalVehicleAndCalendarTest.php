@@ -38,12 +38,16 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
                 'registration_status' => 'normal',
                 'vin' => '1TESTVIN000000017',
                 'latest_odometer_km' => 12600,
+                'daily_rate_usd' => '130.00',
+                'minimum_security_deposit_usd' => '250.00',
             ])
             ->assertCreated()
             ->assertJsonPath('data.code', 'AA-12345')
             ->assertJsonPath('data.registration_number', 'AA-12345')
             ->assertJsonPath('data.registration_status', 'normal')
             ->assertJsonPath('data.operational_status', 'available')
+            ->assertJsonPath('data.daily_rate_usd', '130.00')
+            ->assertJsonPath('data.minimum_security_deposit_usd', '250.00')
             ->json('data');
 
         $this->requestFor($token, $company)
@@ -59,9 +63,20 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.operational_status', 'garage');
 
+        $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/vehicles/{$vehicle['id']}/commercial-terms", [
+                'daily_rate_usd' => '150.00',
+                'minimum_security_deposit_usd' => '325.00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.daily_rate_usd', '150.00')
+            ->assertJsonPath('data.minimum_security_deposit_usd', '325.00');
+
         $this->assertDatabaseHas('car_rental_vehicles', [
             'id' => $vehicle['id'],
             'operational_status' => 'garage',
+            'daily_rate_usd' => '150.00',
+            'minimum_security_deposit_usd' => '325.00',
         ]);
         $this->assertDatabaseHas('audit_events', [
             'event_type' => 'car_rental.vehicle_created',
@@ -69,6 +84,10 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
         ]);
         $this->assertDatabaseHas('audit_events', [
             'event_type' => 'car_rental.vehicle_status_changed',
+            'company_id' => $company->id,
+        ]);
+        $this->assertDatabaseHas('audit_events', [
+            'event_type' => 'car_rental.vehicle_commercial_terms_updated',
             'company_id' => $company->id,
         ]);
     }
@@ -154,6 +173,8 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             'registration_status' => 'normal',
             'vin' => '1testvin000000021',
             'latest_odometer_km' => 100,
+            'daily_rate_usd' => '130.00',
+            'minimum_security_deposit_usd' => '250.00',
         ];
 
         $this->requestFor($token, $company)
@@ -185,7 +206,6 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             ->assertCreated();
     }
 
-
     public function test_a_catalog_reference_photo_is_limited_to_the_versioned_public_fleet_images(): void
     {
         [, $company, $site, $token] = $this->context(['rental.vehicles.manage']);
@@ -200,11 +220,13 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
                 'registration_status' => 'normal',
                 'reference_photo_key' => 'nissan-frontier-aa-85177',
                 'latest_odometer_km' => 15420,
+                'daily_rate_usd' => '200.00',
+                'minimum_security_deposit_usd' => '300.00',
             ])
             ->assertCreated()
             ->assertJsonPath('data.reference_photo.key', 'nissan-frontier-aa-85177')
             ->assertJsonPath('data.reference_photo.url', '/fleet/nissan-frontier-aa-85177.jpg')
-            ->assertJsonPath('data.reference_photo.label', 'Photo de référence — publication Clientèle Group');
+            ->assertJsonPath('data.reference_photo.label', 'Photo de référence - publication Clientèle Group');
 
         $this->assertDatabaseHas('car_rental_vehicles', [
             'company_id' => $company->id,
@@ -220,6 +242,8 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
                 'registration_status' => 'normal',
                 'reference_photo_key' => 'image-non-autorisée',
                 'latest_odometer_km' => 15421,
+                'daily_rate_usd' => '200.00',
+                'minimum_security_deposit_usd' => '300.00',
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('reference_photo_key');
@@ -236,6 +260,8 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
                 'registration_number' => 'DEMONSTRATION-01',
                 'registration_status' => 'demonstration',
                 'latest_odometer_km' => 0,
+                'daily_rate_usd' => '200.00',
+                'minimum_security_deposit_usd' => '300.00',
             ])
             ->assertCreated()
             ->assertJsonPath('data.code', 'DEMONSTRATION-01')
@@ -392,6 +418,8 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             'registration_number' => $code,
             'registration_status' => 'normal',
             'latest_odometer_km' => 100,
+            'daily_rate_usd' => '130.00',
+            'minimum_security_deposit_usd' => '250.00',
             'is_active' => true,
         ]);
     }

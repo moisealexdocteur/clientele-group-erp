@@ -4,9 +4,9 @@ Ces images sont des références de flotte extraites des publications publiques 
 
 | Fichier | Véhicule | Source publique |
 | --- | --- | --- |
-| `great-wall-poer-dm-00849.jpg` | Great Wall Poer — `DM-00849` | [Publication Clientèle Group](https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr) |
-| `nissan-frontier-aa-85177.jpg` | Nissan Frontier — `AA-85177` | [Publication Clientèle Group](https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr) |
-| `suzuki-jimny-lo-01727.jpg` | Suzuki Jimny — `LO-01727` | [Vidéo Clientèle Group](https://www.tiktok.com/@clientele_group/video/7679127374331481352?lang=fr) |
+| `great-wall-poer-dm-00849.jpg` | Great Wall Poer - `DM-00849` | [Publication Clientèle Group](https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr) |
+| `nissan-frontier-aa-85177.jpg` | Nissan Frontier - `AA-85177` | [Publication Clientèle Group](https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr) |
+| `suzuki-jimny-lo-01727.jpg` | Suzuki Jimny - `LO-01727` | [Vidéo Clientèle Group](https://www.tiktok.com/@clientele_group/video/7679127374331481352?lang=fr) |
 
 Règles :
 

@@ -2,6 +2,22 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.14 - 2026-10-08
+
+### Ajouté
+
+- Le véhicule exige un tarif quotidien USD et un dépôt minimum USD. Les références connues proposent les tarifs validés : Suzuki Jimny 120 USD, Suzuki Vitara 130 USD, pick-up 200 USD. Les autres modèles restent à confirmer.
+- Une nouvelle réservation propose la date et l’heure actuelles à Cap-Haïtien, le retour le lendemain et le bureau actif du préposé.
+- Le parcours Réservations est séparé en vue d’ensemble, nouvelle réservation et recherche. Le détail s’ouvre dans un dialogue par tâche, puis la création affiche un récapitulatif.
+- La mise en circulation exige le permis du conducteur, sa vérification, un paiement de location approuvé et un dépôt USD retenu au minimum requis.
+- L’approbation d’un paiement de dépôt crée une retenue de dépôt journalisée.
+- Les notifications client Car Rental utilisent la marque et le modèle avec une image générique de catégorie. Elles ne contiennent pas la plaque d’immatriculation.
+
+### Corrigé
+
+- La règle de valeur par défaut est documentée et appliquée aux nouvelles réservations.
+- Le caractère typographique U+2014 est interdit dans les fichiers versionnés. Le tiret ASCII est la seule forme utilisée pour séparer deux éléments de texte.
+
 ## 0.2.0-alpha.13 - 2026-10-08
 
 ### Corrigé
@@ -14,7 +30,6 @@ Toutes les modifications notables de ce projet sont documentées ici.
 ### Ajouté
 
 - Catalogue de préremplissage Car Rental issu des publications publiques fournies pour la flotte Clientèle Group.
-- Adresse d’affectation par défaut de la flotte actuelle : `Pont Parois, Route Nationale 6`.
 - Références visibles : Nissan Frontier `AA-85177`, Suzuki Jimny `LO-01727` et Great Wall Poer `DM-00849`, avec photo de référence versionnée.
 - Fiches à vérifier avant enregistrement : Suzuki Jimny `LO-01724`, BAIC BJ40 `DM-00437` et Great Wall Poer `DM-00835`.
 - La photo de référence choisie est conservée sur la fiche véhicule et renvoyée par l’API de flotte.
