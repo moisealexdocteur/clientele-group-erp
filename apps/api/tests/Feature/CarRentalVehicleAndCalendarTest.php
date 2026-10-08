@@ -269,7 +269,7 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             'vehicle_id' => $vehicle->id,
             'document_type' => 'oavct_insurance',
             'document_number' => 'OAVCT-220',
-            'expires_at' => $expiresAt,
+            'expires_at' => $expiresAt . ' 00:00:00',
         ]);
 
         $this->requestFor($token, $company)
