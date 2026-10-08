@@ -55,7 +55,7 @@ final class TestSmtpCommand extends Command
                 static function ($message) use ($email): void {
                     $message
                         ->to($email)
-                        ->subject('Clientèle Group ERP — test SMTP');
+                        ->subject('Clientèle Group ERP - test SMTP');
                 },
             );
         } catch (Throwable $error) {

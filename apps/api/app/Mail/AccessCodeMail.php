@@ -33,6 +33,9 @@ final class AccessCodeMail extends Mailable
     {
         return new Content(
             view: 'mail.access-code',
+            with: [
+                'purposeLabel' => $this->purposeLabel(),
+            ],
         );
     }
 

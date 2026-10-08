@@ -610,6 +610,7 @@ final class CarRentalController extends Controller
                 'vehicle_id' => $vehicle->id,
                 'reservation_number' => $number,
                 'state' => 'reserved',
+                'lock_version' => 0,
                 'pickup_at' => $pickupAt,
                 'due_at' => $dueAt,
                 'pickup_location_type' => $data['pickup_location_type'],
