@@ -789,13 +789,15 @@ final class CarRentalReservationTest extends TestCase
             ->assertJsonPath('data.security_deposits.0.status', 'partially_applied')
             ->assertJsonPath('data.security_deposits.0.applied_amount', '45.00');
 
-        // 3 jours × 130 + aéroport 20 + nettoyage 20 + kilomètres 25 = 455 ; payé 390 ; dépôt retenu 45.
+        // Frais aéroport non choisis : 3 jours × 130 + nettoyage 20 + kilomètres 25 = 435 ;
+        // payé 390 ; dépôt retenu 45 ; solde nul.
         $invoice = $this->requestFor($token, $company)
             ->postJson($invoiceUrl)
             ->assertCreated()
             ->assertJsonPath('data.invoice.number', '0000 0001')
-            ->assertJsonPath('data.invoice.total', '455.00')
-            ->assertJsonPath('data.invoice.balance_due', '20.00')
+            ->assertJsonPath('data.invoice.total', '435.00')
+            ->assertJsonPath('data.invoice.balance_due', '0.00')
+            ->assertJsonPath('data.invoice.snapshot.totals.paid', '390.00')
             ->assertJsonPath('data.invoice.snapshot.totals.deposit_applied', '45.00')
             ->assertJsonPath('data.invoice.snapshot.deposit.released_usd', '205.00')
             ->json('data.invoice');
