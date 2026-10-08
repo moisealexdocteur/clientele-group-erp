@@ -74,7 +74,8 @@ final class SystemConfigurationTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame($companyId, $audit->company_id);
-        $this->assertSame([], $audit->metadata);
+        $this->assertArrayNotHasKey('company_code', $audit->metadata);
+        $this->assertSame('USD', $audit->metadata['base_currency']);
     }
 
     public function test_owner_can_add_a_site_and_its_cash_register_without_cross_company_assignment(): void
