@@ -50,7 +50,20 @@ Les flux de terrain sont conçus à partir d'un téléphone de 360 px et s'éten
 
 La première version est en français et ne montre pas de sélecteur de langue. Les libellés restent directs : « Vente », « Encaisser », « Reçu client », « Copie Administration », « Hors ligne », « À synchroniser », « Adresse à compléter ».
 
-## 7. Écrans à produire avant développement
+
+## 7. Connexion et réinitialisation
+
+La connexion est une fonction de travail, pas un espace promotionnel. Elle utilise une carte unique et une étape à la fois :
+
+1. adresse courriel et mot de passe ;
+2. code à six chiffres envoyé par courriel ;
+3. réinitialisation du mot de passe si nécessaire.
+
+Les intitulés doivent suivre le vocabulaire standard des plateformes professionnelles : « Se connecter », « Mot de passe », « Afficher », « Envoyer le code », « Valider le code », « Réinitialiser le mot de passe ». Les explications sont limitées aux informations nécessaires pour terminer l’action.
+
+Les erreurs indiquent l’action à effectuer sans divulguer d’information sensible. Exemple : « Le code de sécurité ne peut pas être envoyé pour le moment. Réessayez plus tard ou contactez l’administrateur. »
+
+## 8. Écrans à produire avant développement
 
 1. Sélection société, site et poste ;
 2. vente ou encaissement par activité ;
@@ -61,6 +74,6 @@ La première version est en français et ne montre pas de sélecteur de langue. 
 7. folio et check-out Hotel ;
 8. identité maître client et consentement, réservée au rôle de confidentialité.
 
-## 8. Maquette de validation
+## 9. Maquette de validation
 
 La maquette interactive de référence est versionnée dans design/wireframes_mobile_v1.html. Elle montre les six contextes requis à l'écran, les actions formulées explicitement et l'absence d'adresse inventée. Elle sert de base de validation avant la réalisation des écrans Vue.
