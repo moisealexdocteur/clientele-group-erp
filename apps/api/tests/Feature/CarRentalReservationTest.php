@@ -11,12 +11,15 @@ use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
+use App\Models\StoredFile;
 use App\Models\User;
 use App\Mail\CarRentalCustomerNotificationMail;
 use App\Support\CarRentalCustomerNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 final class CarRentalReservationTest extends TestCase
@@ -275,8 +278,10 @@ final class CarRentalReservationTest extends TestCase
             ->assertJsonCount(1, 'data');
     }
 
-    public function test_a_sogebank_transfer_requires_proof_and_an_authorized_approval(): void
+    public function test_a_sogebank_transfer_requires_an_uploaded_receipt_and_an_authorized_approval(): void
     {
+        Storage::fake('local');
+
         [$user, $company, $site, $token] = $this->context([
             'rental.reservations.create',
             'rental.payments.submit',
@@ -297,11 +302,25 @@ final class CarRentalReservationTest extends TestCase
                 'method' => 'bank_transfer',
                 'currency' => 'USD',
                 'amount' => '250.00',
-                'bank_name' => 'Sogebank',
                 'bank_reference' => 'SOG-2026-0001',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['proof_storage_key', 'proof_sha256']);
+            ->assertJsonValidationErrors('proof_file_id');
+
+        $receipt = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'payment_proof',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('recu sogebank Jean.pdf', "%PDF-1.4\nRecu Sogebank\n%%EOF"),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.mime_type', 'application/pdf')
+            ->json('data');
+
+        $stored = StoredFile::query()->findOrFail($receipt['id']);
+        self::assertSame(hash('sha256', "%PDF-1.4\nRecu Sogebank\n%%EOF"), $stored->sha256);
+        self::assertStringNotContainsString('Jean', $stored->path);
+        Storage::disk('local')->assertExists($stored->path);
 
         $payment = $this->requestFor($token, $company)
             ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments", [
@@ -309,14 +328,20 @@ final class CarRentalReservationTest extends TestCase
                 'method' => 'bank_transfer',
                 'currency' => 'USD',
                 'amount' => '250.00',
-                'bank_name' => 'Sogebank',
                 'bank_reference' => 'SOG-2026-0001',
-                'proof_storage_key' => 'car-rental/payments/evidence-1.jpg',
-                'proof_sha256' => str_repeat('a', 64),
+                'proof_file_id' => $receipt['id'],
             ])
             ->assertCreated()
             ->assertJsonPath('data.status', 'submitted')
+            ->assertJsonPath('data.proof_file_url', '/api/v1/car-rental/files/' . $receipt['id'])
             ->json('data');
+
+        $this->assertDatabaseHas('car_rental_payments', [
+            'id' => $payment['id'],
+            'bank_name' => 'Sogebank',
+            'proof_file_id' => $receipt['id'],
+            'proof_sha256' => $stored->sha256,
+        ]);
 
         $this->requestFor($token, $company)
             ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments/{$payment['id']}/approve")
@@ -325,6 +350,205 @@ final class CarRentalReservationTest extends TestCase
 
         $event = AuditEvent::query()->where('event_type', 'car_rental.payment_submitted')->firstOrFail();
         self::assertArrayNotHasKey('bank_reference', $event->metadata);
+    }
+
+    public function test_a_receipt_can_be_read_by_its_uploader_or_an_approver_only(): void
+    {
+        Storage::fake('local');
+
+        [, $company, $site, $token] = $this->context(['rental.payments.submit']);
+        $receipt = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'payment_proof',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('recu.pdf', "%PDF-1.4\nRecu\n%%EOF"),
+            ])
+            ->assertCreated()
+            ->json('data');
+
+        $this->requestFor($token, $company)
+            ->get($receipt['url'])
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        $otherToken = $this->additionalUser($company, ['rental.reservations.read']);
+        $this->requestFor($otherToken, $company)
+            ->getJson($receipt['url'])
+            ->assertForbidden();
+
+        $approverToken = $this->additionalUser($company, ['rental.payments.approve']);
+        $this->requestFor($approverToken, $company)
+            ->get($receipt['url'])
+            ->assertOk();
+
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'payment_proof',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('recu.txt', 'pas un document'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file');
+
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'vehicle_photo',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('photo.png', $this->pngBytes()),
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_only_an_authorized_role_can_change_the_vehicle_rate(): void
+    {
+        [, $company, $site, $agentToken] = $this->context(['rental.reservations.create']);
+        $vehicle = $this->vehicle($company, $site, 'SUV-RATE', 'suv');
+
+        $this->requestFor($agentToken, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+                'daily_rate' => '100.00',
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('daily_rate');
+
+        $this->requestFor($agentToken, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+                'currency' => 'HTG',
+                'daily_rate' => '130.00',
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('daily_rate');
+
+        $adminToken = $this->additionalUser($company, ['rental.reservations.create', 'rental.reservations.override_rate']);
+        $this->requestFor($adminToken, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+                'daily_rate' => '100.00',
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('data.daily_rate', '100.00')
+            ->assertJsonPath('data.rate_overridden', true);
+    }
+
+    public function test_a_reserved_booking_can_be_fully_edited_and_the_confirmation_resent(): void
+    {
+        Mail::fake();
+
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+            'rental.reservations.read',
+            'rental.reservations.manage',
+        ]);
+        $suv = $this->vehicle($company, $site, 'SUV-EDIT', 'suv');
+        $pickup = $this->vehicle($company, $site, 'PICK-EDIT', 'pickup');
+        $pickup->forceFill(['daily_rate_usd' => '200.00', 'minimum_security_deposit_usd' => '800.00'])->save();
+
+        $reservation = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $suv->id,
+            ]))
+            ->assertCreated()
+            ->json('data');
+
+        Mail::fake();
+
+        $updated = $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/reservations/{$reservation['id']}", [
+                'expected_lock_version' => $reservation['lock_version'],
+                'vehicle_id' => $pickup->id,
+                'pickup_at' => '2026-11-03T09:00:00-05:00',
+                'due_at' => '2026-11-06T09:00:00-05:00',
+                'customer' => [
+                    'customer_type' => 'individual',
+                    'display_name' => 'Marie Joseph',
+                    'email' => 'marie.joseph@example.test',
+                    'phone' => '+509 3700 1111',
+                ],
+                'daily_rate' => '130.00',
+                'notify_customer' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.vehicle.code', 'PICK-EDIT')
+            ->assertJsonPath('data.daily_rate', '200.00')
+            ->assertJsonPath('data.minimum_security_deposit_usd', '800.00')
+            ->assertJsonPath('data.rate_overridden', false)
+            ->assertJsonPath('data.customer.display_name', 'Marie Joseph')
+            ->assertJsonPath('data.customer.email', 'marie.joseph@example.test')
+            ->assertJsonPath('customer_notification_sent', true)
+            ->json('data');
+
+        Mail::assertSent(CarRentalCustomerNotificationMail::class, function (CarRentalCustomerNotificationMail $mail): bool {
+            return $mail->subjectLine === 'Votre réservation a été mise à jour - Clientèle Group'
+                && ! in_array('PICK-EDIT', $mail->details, true);
+        });
+
+        $event = AuditEvent::query()->where('event_type', 'car_rental.reservation_updated')->firstOrFail();
+        self::assertContains('vehicle', $event->metadata['changed']);
+        self::assertContains('customer', $event->metadata['changed']);
+        self::assertArrayNotHasKey('email', $event->metadata);
+
+        Mail::fake();
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/notify")
+            ->assertOk()
+            ->assertJsonPath('customer_notification_sent', true);
+        Mail::assertSent(CarRentalCustomerNotificationMail::class);
+
+        $this->requestFor($token, $company)
+            ->patchJson("/api/v1/car-rental/reservations/{$reservation['id']}", [
+                'expected_lock_version' => $updated['lock_version'],
+                'vehicle_id' => $pickup->id,
+                'pickup_at' => '2026-11-03T09:00:00-05:00',
+                'due_at' => '2026-11-06T09:00:00-05:00',
+                'daily_rate' => '150.00',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('daily_rate');
+    }
+
+    public function test_credit_is_limited_to_authorized_roles_and_to_the_rental_amount(): void
+    {
+        [, $company, $site, $agentToken] = $this->context([
+            'rental.reservations.create',
+            'rental.payments.submit',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-CREDIT', 'suv');
+        $reservation = $this->requestFor($agentToken, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->json('data');
+
+        $credit = [
+            'payment_kind' => 'rental',
+            'method' => 'credit',
+            'currency' => 'USD',
+            'amount' => '390.00',
+        ];
+
+        $this->requestFor($agentToken, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments", $credit)
+            ->assertForbidden();
+
+        $adminToken = $this->additionalUser($company, ['rental.payments.submit', 'rental.payments.credit']);
+        $this->requestFor($adminToken, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments", [...$credit, 'payment_kind' => 'security_deposit'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('method');
+
+        $this->requestFor($adminToken, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments", $credit)
+            ->assertCreated()
+            ->assertJsonPath('data.method', 'credit')
+            ->assertJsonPath('data.status', 'approved');
     }
 
     public function test_check_out_requires_an_approved_payment_a_held_deposit_and_a_verified_driver_license(): void
@@ -460,6 +684,28 @@ final class CarRentalReservationTest extends TestCase
         ]);
     }
 
+    /** @param array<int, string> $permissions */
+    private function additionalUser(Company $company, array $permissions): string
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        CompanyUserAccess::query()->create([
+            'company_id' => $company->id,
+            'user_id' => $user->id,
+            'role_key' => 'prepose',
+            'site_scope' => 'all',
+            'permissions' => $permissions,
+            'is_active' => true,
+        ]);
+        [, $token] = ApiAccessToken::issueFor($user, Request::create('/api/v1/auth/login', 'POST'));
+
+        return $token;
+    }
+
+    private function pngBytes(): string
+    {
+        return (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    }
+
     /** @return array<string, mixed> */
     private function submitCashPayment(
         string $token,
@@ -505,7 +751,7 @@ final class CarRentalReservationTest extends TestCase
             'pickup_location_type' => 'site',
             'dropoff_location_type' => 'cap_haitien_airport',
             'currency' => 'USD',
-            'daily_rate' => '75.00',
+            'daily_rate' => '130.00',
             'kilometer_plan' => 'limited',
             'included_km' => 300,
             'additional_km_rate' => '0.50',

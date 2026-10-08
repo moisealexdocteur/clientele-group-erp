@@ -21,6 +21,10 @@ final class CarRentalVehicle extends Model
         'in_circulation',
     ];
 
+    public const FUEL_TYPES = ['gasoline', 'diesel'];
+
+    public const TRANSMISSIONS = ['manual', 'automatic'];
+
     public const REGISTRATION_STATUSES = [
         'demonstration',
         'location',
@@ -75,6 +79,12 @@ final class CarRentalVehicle extends Model
         'daily_rate_usd',
         'minimum_security_deposit_usd',
         'is_active',
+        'color',
+        'fuel_type',
+        'transmission',
+        'engine_displacement_cc',
+        'doors',
+        'photo_file_id',
     ];
 
     protected function casts(): array
@@ -85,6 +95,8 @@ final class CarRentalVehicle extends Model
             'daily_rate_usd' => 'decimal:2',
             'minimum_security_deposit_usd' => 'decimal:2',
             'is_active' => 'boolean',
+            'engine_displacement_cc' => 'integer',
+            'doors' => 'integer',
         ];
     }
 
@@ -106,6 +118,11 @@ final class CarRentalVehicle extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(CarRentalVehicleDocument::class, 'vehicle_id');
+    }
+
+    public function photo(): BelongsTo
+    {
+        return $this->belongsTo(StoredFile::class, 'photo_file_id');
     }
 
     public function registrationEvents(): HasMany

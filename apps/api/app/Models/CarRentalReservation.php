@@ -57,11 +57,13 @@ final class CarRentalReservation extends Model
         'driver_license_expires_at',
         'driver_license_verified_at',
         'lock_version',
+        'rate_overridden',
     ];
 
     protected function casts(): array
     {
         return [
+            'rate_overridden' => 'boolean',
             'pickup_at' => 'immutable_datetime',
             'due_at' => 'immutable_datetime',
             'checked_out_at' => 'immutable_datetime',

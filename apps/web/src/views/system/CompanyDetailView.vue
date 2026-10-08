@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { createCashRegister, createSite } from '../../api/system'
+import { createCashRegister, createSite, updateCompany } from '../../api/system'
 import { useSystemStore } from '../../stores/system'
 import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
@@ -21,10 +21,28 @@ const ui = useUiStore()
 const loading = useRequest()
 const siteRequest = useRequest()
 const registerRequest = useRequest()
+const legalRequest = useRequest()
 
 const company = computed(() => system.company(props.companyId))
 const siteOpen = ref(false)
 const registerOpen = ref(false)
+const legalOpen = ref(false)
+
+const legalForm = reactive({
+  legal_name: '',
+  display_name: '',
+  legal_representative: '',
+  tax_identification_number: '',
+  legal_address: '',
+  phone_numbers: '',
+})
+
+const legalMissing = computed(() => {
+  const items: string[] = []
+  if (!legalForm.legal_name.trim()) items.push('La raison sociale')
+  if (!legalForm.display_name.trim()) items.push('Le nom affiché')
+  return items
+})
 
 const siteForm = reactive({ code: '', name: '', address: CLIENTELE_CAR_RENTAL_FLEET_ADDRESS })
 const registerForm = reactive({ site_id: '', code: '', name: '' })
@@ -44,6 +62,37 @@ function openRegister(siteId?: string): void {
   Object.assign(registerForm, { site_id: siteId ?? company.value?.sites[0]?.id ?? '', code: '', name: '' })
   registerRequest.reset()
   registerOpen.value = true
+}
+
+function openLegal(): void {
+  const current = company.value
+  if (!current) return
+  Object.assign(legalForm, {
+    legal_name: current.legal_name,
+    display_name: current.display_name,
+    legal_representative: current.legal_representative ?? '',
+    tax_identification_number: current.tax_identification_number ?? '',
+    legal_address: current.legal_address ?? '',
+    phone_numbers: current.phone_numbers ?? '',
+  })
+  legalRequest.reset()
+  legalOpen.value = true
+}
+
+async function saveLegal(): Promise<void> {
+  if (legalMissing.value.length) return
+  const result = await legalRequest.run(() => updateCompany(props.companyId, {
+    legal_name: legalForm.legal_name.trim(),
+    display_name: legalForm.display_name.trim(),
+    legal_representative: legalForm.legal_representative.trim() || null,
+    tax_identification_number: legalForm.tax_identification_number.trim() || null,
+    legal_address: legalForm.legal_address.trim() || null,
+    phone_numbers: legalForm.phone_numbers.trim() || null,
+  }))
+  if (!result) return
+  await system.load()
+  legalOpen.value = false
+  ui.toast('Identité légale enregistrée.')
 }
 
 async function saveSite(): Promise<void> {
@@ -97,6 +146,38 @@ async function saveRegister(): Promise<void> {
       </div>
     </dl>
 
+    <section class="panel" aria-labelledby="legal-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="legal-title" class="title-section">Identité légale</h2>
+          <p class="text-secondary text-small">Reprise en en-tête des contrats et des factures.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openLegal">Modifier</button>
+      </div>
+      <dl class="facts">
+        <div>
+          <dt>Raison sociale</dt>
+          <dd>{{ company.legal_name }}</dd>
+        </div>
+        <div>
+          <dt>Représentant légal</dt>
+          <dd>{{ company.legal_representative || 'Non renseigné' }}</dd>
+        </div>
+        <div>
+          <dt>NIF</dt>
+          <dd>{{ company.tax_identification_number || 'Non renseigné' }}</dd>
+        </div>
+        <div>
+          <dt>Adresse du siège</dt>
+          <dd>{{ company.legal_address || 'Non renseignée' }}</dd>
+        </div>
+        <div>
+          <dt>Téléphones</dt>
+          <dd>{{ company.phone_numbers || 'Non renseignés' }}</dd>
+        </div>
+      </dl>
+    </section>
+
     <section class="stack" aria-labelledby="sites-title">
       <h2 id="sites-title" class="title-section">Adresses et caisses</h2>
 
@@ -124,6 +205,42 @@ async function saveRegister(): Promise<void> {
       </article>
     </section>
   </div>
+
+  <SheetDialog :open="legalOpen" title="Identité légale" description="Ces informations figurent sur les contrats. Les champs marqués * sont obligatoires." :locked="legalRequest.busy.value" @close="legalOpen = false">
+    <form id="legal-form" class="form" novalidate @submit.prevent="saveLegal">
+      <FormField label="Raison sociale" required :error="legalRequest.fieldErrors.value.legal_name" v-slot="field">
+        <input v-model="legalForm.legal_name" v-bind="field.attrs" class="input" maxlength="255" />
+      </FormField>
+      <FormField label="Nom affiché" required :error="legalRequest.fieldErrors.value.display_name" v-slot="field">
+        <input v-model="legalForm.display_name" v-bind="field.attrs" class="input" maxlength="255" />
+      </FormField>
+      <FormField label="Représentant légal" :error="legalRequest.fieldErrors.value.legal_representative" v-slot="field">
+        <input v-model="legalForm.legal_representative" v-bind="field.attrs" class="input" maxlength="160" autocomplete="off" />
+      </FormField>
+      <FormField label="NIF" help="Numéro d’identification fiscale de la société." :error="legalRequest.fieldErrors.value.tax_identification_number" v-slot="field">
+        <input v-model="legalForm.tax_identification_number" v-bind="field.attrs" class="input mono" maxlength="64" autocomplete="off" />
+      </FormField>
+      <FormField label="Adresse du siège" :error="legalRequest.fieldErrors.value.legal_address" v-slot="field">
+        <textarea v-model="legalForm.legal_address" v-bind="field.attrs" class="textarea" rows="3" maxlength="1000"></textarea>
+      </FormField>
+      <FormField label="Téléphones" help="Séparez plusieurs numéros par une barre oblique." :error="legalRequest.fieldErrors.value.phone_numbers" v-slot="field">
+        <input v-model="legalForm.phone_numbers" v-bind="field.attrs" class="input" type="tel" maxlength="160" autocomplete="off" />
+      </FormField>
+      <div v-if="legalMissing.length" class="missing" role="status">
+        <strong>À compléter</strong>
+        <ul>
+          <li v-for="item in legalMissing" :key="item">{{ item }}</li>
+        </ul>
+      </div>
+      <InlineAlert :message="legalRequest.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="legalRequest.busy.value" @click="legalOpen = false">Annuler</button>
+      <button class="btn btn-primary" type="submit" form="legal-form" :disabled="legalRequest.busy.value || legalMissing.length > 0 || !app.canReachServer">
+        {{ legalRequest.busy.value ? 'Enregistrement' : 'Enregistrer' }}
+      </button>
+    </template>
+  </SheetDialog>
 
   <SheetDialog :open="siteOpen" title="Ajouter une adresse" :locked="siteRequest.busy.value" @close="siteOpen = false">
     <form id="site-form" class="form" novalidate @submit.prevent="saveSite">

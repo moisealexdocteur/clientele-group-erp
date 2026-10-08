@@ -180,7 +180,7 @@ async function signOut(): Promise<void> {
   top: 12px;
   z-index: 60;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: 4px;
   background: var(--surface);
 }
 
@@ -199,7 +199,7 @@ async function signOut(): Promise<void> {
   gap: 10px;
   height: calc(var(--header-h) + env(safe-area-inset-top));
   padding: env(safe-area-inset-top) var(--gutter) 0;
-  background: rgba(243, 244, 247, 0.92);
+  background: var(--surface);
   backdrop-filter: saturate(1.4) blur(12px);
   border-bottom: 1px solid var(--line);
 }
@@ -226,15 +226,14 @@ async function signOut(): Promise<void> {
 
 .topbar-company {
   overflow: hidden;
-  font-weight: 650;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .topbar-time {
   flex: none;
-  font-weight: 800;
-  font-stretch: 118%;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -258,7 +257,7 @@ async function signOut(): Promise<void> {
   color: #fff;
   background: var(--ink);
   font-size: var(--text-sm);
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .status-dot {
@@ -325,7 +324,7 @@ async function signOut(): Promise<void> {
   min-width: 0;
   color: var(--ink-3);
   font-size: 0.75rem;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -384,7 +383,7 @@ async function signOut(): Promise<void> {
     gap: 2px;
     padding: 12px;
     border: 0;
-    border-radius: 14px;
+    border-radius: 4px;
     background: var(--surface-sunken);
     text-align: left;
     cursor: pointer;
@@ -401,9 +400,9 @@ async function signOut(): Promise<void> {
     gap: 12px;
     min-height: var(--tap);
     padding: 0 12px;
-    border-radius: 12px;
+    border-radius: 4px;
     color: var(--ink-2);
-    font-weight: 650;
+    font-weight: 600;
     text-decoration: none;
   }
 
@@ -437,7 +436,7 @@ async function signOut(): Promise<void> {
     min-height: 56px;
     padding: 8px;
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 4px;
     background: var(--surface);
     text-align: left;
     cursor: pointer;
@@ -451,7 +450,7 @@ async function signOut(): Promise<void> {
 
   .rail-account-name {
     overflow: hidden;
-    font-weight: 650;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
   }

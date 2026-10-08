@@ -130,3 +130,72 @@ export function errorMessage(error: unknown): string {
 export function fieldErrors(error: unknown): Record<string, string> {
   return error instanceof ApiError ? error.fieldErrors : {}
 }
+
+/**
+ * Envoie un fichier en multipart. Le navigateur fixe lui-même l'en-tête
+ * Content-Type avec la frontière du formulaire.
+ */
+export async function apiUpload<T>(path: string, fields: Record<string, string | Blob>): Promise<T> {
+  const headers = new Headers({ Accept: 'application/json' })
+  const token = bindings.token()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const companyId = bindings.companyId()
+  if (companyId) headers.set('X-Clientele-Company-Id', companyId)
+
+  const body = new FormData()
+  for (const [key, value] of Object.entries(fields)) body.append(key, value)
+
+  let response: Response
+  try {
+    response = await fetch(path, { method: 'POST', headers, body })
+  } catch {
+    throw new ApiError('L’envoi a échoué. Vérifiez Internet puis réessayez.', 0)
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as { message?: string; errors?: ApiValidationErrors }
+  if (!response.ok) {
+    if (response.status === 401 && token) bindings.onUnauthorized()
+    const errors = payload.errors ?? {}
+    const first = Object.values(errors).flat().find((message) => message.length > 0)
+    const message = response.status === 413
+      ? 'Le fichier dépasse la taille autorisée (10 Mo).'
+      : readableMessage(first ?? payload.message, response.status)
+    throw new ApiError(message, response.status, errors)
+  }
+
+  return payload as T
+}
+
+const blobCache = new Map<string, Promise<string>>()
+
+/**
+ * Lit un fichier privé avec la session courante et renvoie une adresse
+ * locale utilisable dans <img> ou pour l'ouvrir. Les fichiers sont gardés
+ * en mémoire pendant la session seulement.
+ */
+export function privateFileUrl(path: string): Promise<string> {
+  const cached = blobCache.get(path)
+  if (cached) return cached
+
+  const promise = (async () => {
+    const headers = new Headers()
+    const token = bindings.token()
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    const companyId = bindings.companyId()
+    if (companyId) headers.set('X-Clientele-Company-Id', companyId)
+    const response = await fetch(path, { headers })
+    if (!response.ok) throw new ApiError(readableMessage(undefined, response.status), response.status)
+    return URL.createObjectURL(await response.blob())
+  })()
+
+  blobCache.set(path, promise)
+  promise.catch(() => blobCache.delete(path))
+  return promise
+}
+
+export function clearPrivateFiles(): void {
+  for (const promise of blobCache.values()) {
+    void promise.then((url) => URL.revokeObjectURL(url)).catch(() => undefined)
+  }
+  blobCache.clear()
+}

@@ -11,7 +11,7 @@ defineProps<{ vehicle: RentalVehicle }>()
 
 <template>
   <RouterLink class="list-row vehicle-row" :to="{ name: 'rental.vehicle', params: { vehicleId: vehicle.id } }">
-    <VehicleThumb :photo-url="vehicle.reference_photo?.url" :category="vehicle.category" :alt="vehicleName(vehicle)" />
+    <VehicleThumb :vehicle="vehicle" :alt="vehicleName(vehicle)" />
     <span class="vehicle-main">
       <span class="vehicle-line">
         <span class="plate">{{ vehiclePlate(vehicle) }}</span>

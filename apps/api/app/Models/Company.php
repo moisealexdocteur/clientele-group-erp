@@ -23,6 +23,10 @@ final class Company extends Model
         'timezone_display_name',
         'locale',
         'is_active',
+        'legal_representative',
+        'tax_identification_number',
+        'legal_address',
+        'phone_numbers',
     ];
 
     protected function casts(): array

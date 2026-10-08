@@ -1,6 +1,6 @@
 # Reprise du projet Clientèle Group ERP
 
-Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec la version 0.3.0-alpha.1 (interface modulaire).
+Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire) et 0.4.0-alpha.1 (réservations, paiements et design Fluent).
 
 ## 1. Source de vérité et état de déploiement
 
@@ -9,10 +9,10 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `cdc1152220cc4aa62b02548473d457a397b3495c` |
-| Version du dépôt | `0.3.0-alpha.1` (interface modulaire, à déployer) |
-| Dernière version déployée | `0.2.0-alpha.14` |
+| Version du dépôt | `0.4.0-alpha.1` (réservations, paiements, design Fluent, à déployer) |
+| Dernière version déployée | `0.3.0-alpha.1` |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-cdc1152` |
+| Image API et web déployée | `sha-2ce2d48` |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
@@ -40,7 +40,7 @@ Le script demande un jeton GitHub classique ayant seulement l'autorisation `read
 
 ## 3. Architecture actuelle
 
-- Frontend : PWA Vue 3, TypeScript, Vue Router et Pinia dans `apps/web`. Un écran par fichier dans `src/views`, composants par domaine dans `src/components`, appels serveur dans `src/api`, dates et devises dans `src/lib`. Détail : `docs/22_Interface_modulaire_0.3.0.md`. Ne jamais recréer un fichier d'interface unique.
+- Frontend : PWA Vue 3, TypeScript, Vue Router et Pinia dans `apps/web`, design Microsoft Fluent 2 (Segoe UI, jetons dans `src/styles/main.css`). Un écran par fichier dans `src/views`, composants par domaine dans `src/components`, appels serveur dans `src/api`, dates et devises dans `src/lib`. Détail : `docs/22_Interface_modulaire_0.3.0.md`. Ne jamais recréer un fichier d'interface unique.
 - Backend : Laravel et PHP dans `apps/api`.
 - Infrastructure locale : Docker Compose et Traefik dans `infra`.
 - Base de données : PostgreSQL.
@@ -91,6 +91,8 @@ Les tests API pertinents sont notamment dans :
 - Le mot de passe initial doit être expliqué avant saisie : au moins 12 caractères, majuscule, minuscule, chiffre et symbole.
 - La gestion d'utilisateur doit permettre création, consultation, modification, désactivation, réactivation, réinitialisation et suppression définitive selon les droits.
 - La création d'un compte envoie un courriel au format visuel validé.
+- Permissions ajoutées en 0.4.0 : `rental.reservations.override_rate` (modifier le tarif de la fiche), `rental.payments.credit` (accorder un crédit), `rental.documents.sensitive` (voir permis et reçus). Elles sont accordées au rôle administrateur Car Rental, jamais à l'agent par défaut.
+- Les fichiers (photos, reçus, permis) sont privés : volume Docker `clientele-documents`, 10 Mo au plus, hash SHA-256, lecture selon la permission et journalisation.
 
 ## 5. Périmètre global à préserver
 
@@ -157,7 +159,7 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 
 L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent être repris avant d'ajouter d'autres modules.
 
-État au 0.3.0-alpha.1 : les points marqués « Fait » sont réalisés dans l'interface. Les points marqués « API » demandent une évolution du serveur avant l'interface.
+État au 0.4.0-alpha.1 : les points marqués « Fait » sont réalisés. Le reste est prévu dans la livraison 2 (permis international, fiche de sortie, signatures tactiles, contrat PDF). Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md`.
 
 ### P0 : disponibilité et navigation (fait)
 
@@ -167,7 +169,7 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 4. Rendre chaque véhicule et chaque réservation cliquable depuis liste, calendrier, résultat et résumé.
 5. Ouvrir une vue de détail dédiée et appliquer les droits d'accès avant d'afficher une action de modification.
 
-### P0 : fiche véhicule (fait sauf point 3 : API)
+### P0 : fiche véhicule (fait)
 
 1. Refaire la fiche en sections courtes et faciles à saisir : identité, tarification, disponibilité, documents, photo et état.
 2. Utiliser des champs sur une ligne lorsque cela convient et des libellés explicites.
@@ -175,7 +177,7 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 4. Afficher et permettre de modifier les tarifs et le dépôt minimum uniquement selon les permissions.
 5. Utiliser la photo sélectionnée de la fiche dans l'interface et, si elle est sûre, dans le courriel.
 
-### P0 : permis et mise en circulation (points 4 et 5 faits ; points 1 à 3 : API)
+### P0 : permis et mise en circulation (points 4 et 5 faits ; points 1 à 3 : livraison 2, stockage de fichiers déjà en place)
 
 1. Ajouter une zone d'ajout de photo du permis de conduire avec stockage contrôlé, type de fichier, taille maximale, hash, accès restreint et journalisation.
 2. Ajouter pays émetteur et province ou État émetteur.

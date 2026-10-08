@@ -48,6 +48,14 @@ final class CompanyContextController extends Controller
                 'timezone' => $company->timezone,
                 'timezone_label' => $company->timezone_display_name,
                 'base_currency' => $company->base_currency,
+                // Identité du loueur imprimée sur le contrat de location.
+                'legal' => [
+                    'name' => $company->legal_name,
+                    'representative' => $company->legal_representative,
+                    'tax_identification_number' => $company->tax_identification_number,
+                    'address' => $company->legal_address,
+                    'phone_numbers' => $company->phone_numbers,
+                ],
             ],
             'access' => [
                 'role_key' => $access->role_key,

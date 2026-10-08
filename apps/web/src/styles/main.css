@@ -1,71 +1,93 @@
 /*
- * Système visuel Clientèle Group ERP
+ * Système visuel Clientèle Group ERP, aligné sur Microsoft Fluent 2.
  *
- * Contexte : comptoirs, parkings et stations à Cap-Haïtien, utilisés debout,
- * au téléphone ou à la tablette, souvent en pleine lumière.
- *
- * Une seule signature : les repères que l'on cherche du regard
- * (numéro de réservation, plaque, heure, montant) sont composés en Archivo
- * très large et très gras. Tout le reste reste calme et lisible.
+ * - Police système Segoe UI (Windows), San Francisco (iOS, macOS), Roboto
+ *   (Android) : aucun téléchargement, rendu identique hors ligne.
+ * - Rampe typographique Fluent : 12, 14, 16, 20, 24, 28, 32, 40 px.
+ * - Couleurs neutres et bleu d'action Microsoft. Le rouge Clientèle reste
+ *   réservé au logo et à la rubrique active, pour ne pas être confondu
+ *   avec une action destructive.
+ * - Coins de 4 px pour les contrôles, 8 px pour les cartes et dialogues.
+ * - Cibles tactiles de 48 px au téléphone et à la tablette, 40 px avec
+ *   une souris.
  */
 
-@import '@fontsource-variable/archivo/wdth.css';
-
 :root {
-  --bg: #f3f4f7;
+  --bg: #f5f5f5;
   --surface: #ffffff;
-  --surface-sunken: #e9ebf0;
-  --ink: #17181d;
-  --ink-2: #474b57;
-  --ink-3: #6b7080;
-  --line: #dcdfe6;
-  --line-strong: #c3c7d1;
+  --surface-sunken: #f0f0f0;
+  --surface-hover: #f5f5f5;
+  --ink: #242424;
+  --ink-2: #424242;
+  --ink-3: #616161;
+  --line: #e0e0e0;
+  --line-strong: #d1d1d1;
+  --stroke-accessible: #616161;
 
   --brand: #d7141a;
-  --brand-press: #b20f14;
-  --brand-soft: #fde8e8;
-  --accent: #2430d9;
-  --accent-soft: #e8eafd;
+  --brand-soft: #fdf3f4;
+  --accent: #0f6cbd;
+  --accent-hover: #115ea3;
+  --accent-pressed: #0c3b5e;
+  --accent-soft: #ebf3fc;
 
-  --success: #0e7a45;
-  --success-soft: #e2f3e9;
-  --warning: #8f5500;
-  --warning-soft: #fcefd6;
-  --danger: #c0161b;
-  --danger-soft: #fce5e5;
+  --success: #107c10;
+  --success-soft: #f1faf1;
+  --warning: #8a5300;
+  --warning-soft: #fff9f5;
+  --warning-line: #fdcfb4;
+  --danger: #c50f1f;
+  --danger-hover: #b10e1c;
+  --danger-soft: #fdf3f4;
 
-  --font: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
 
-  /* Échelle typographique (rapport 1,25), le corps reste à 16 px minimum. */
-  --text-xs: 0.8125rem;
-  --text-sm: 0.9375rem;
-  --text-md: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.5625rem;
-  --text-2xl: 1.9375rem;
-  --text-3xl: 2.4375rem;
-  --text-4xl: 3.0625rem;
+  /* Rampe typographique Fluent 2 (taille / interligne). */
+  --text-xs: 0.75rem;     /* Caption 1 : 12 / 16 */
+  --text-sm: 0.875rem;    /* Body 1 : 14 / 20 */
+  --text-md: 1rem;        /* Subtitle 2 : 16 / 22 */
+  --text-lg: 1.25rem;     /* Subtitle 1 : 20 / 28 */
+  --text-xl: 1.5rem;      /* Title 3 : 24 / 32 */
+  --text-2xl: 1.75rem;    /* Title 2 : 28 / 36 */
+  --text-3xl: 2rem;       /* Title 1 : 32 / 40 */
+  --text-4xl: 2.5rem;     /* Large title : 40 / 52 */
 
-  --radius-control: 12px;
-  --radius-panel: 18px;
+  --radius-control: 4px;
+  --radius-panel: 8px;
   --tap: 48px;
-  --tap-main: 54px;
+  --tap-main: 48px;
+  --control-font: 1rem;
 
-  --header-h: 60px;
-  --tabbar-h: 68px;
-  --rail-w: 252px;
+  --shadow-2: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
+  --shadow-4: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14);
+  --shadow-16: 0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14);
+  --shadow-64: 0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14);
+
+  --header-h: 56px;
+  --tabbar-h: 64px;
+  --rail-w: 248px;
   --gutter: 16px;
-  --content-max: 1080px;
+  --content-max: 1120px;
 
   color: var(--ink);
   background: var(--bg);
   font-family: var(--font);
-  font-size: 100%;
-  line-height: 1.45;
+  font-size: 16px;
+  line-height: 1.43;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+}
+
+/* Souris et grand écran : densité Fluent standard. */
+@media (pointer: fine) and (min-width: 960px) {
+  :root {
+    --tap: 40px;
+    --tap-main: 40px;
+    --control-font: 0.875rem;
+  }
 }
 
 *,
@@ -83,6 +105,13 @@ body {
 body {
   min-width: 320px;
   background: var(--bg);
+  font-size: 0.9375rem;
+}
+
+@media (pointer: fine) and (min-width: 960px) {
+  body {
+    font-size: var(--text-sm);
+  }
 }
 
 img {
@@ -121,7 +150,7 @@ ol {
 }
 
 :focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -147,17 +176,16 @@ ol {
 /* ---------- Typographie ---------- */
 
 .title-page {
-  font-size: var(--text-2xl);
-  font-weight: 760;
-  font-stretch: 112%;
-  line-height: 1.08;
-  letter-spacing: -0.015em;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.33;
 }
 
 .title-section {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.375;
 }
 
 .text-muted {
@@ -168,98 +196,117 @@ ol {
   color: var(--ink-2);
 }
 
-.text-small {
-  font-size: var(--text-sm);
+.mono {
+  font-family: 'Cascadia Mono', Consolas, 'SF Mono', Menlo, monospace;
+  letter-spacing: 0.02em;
 }
 
-/* La signature : chiffres et identifiants en très large. */
+.text-small {
+  font-size: var(--text-xs);
+  line-height: 1.33;
+}
+
+/* Chiffres et identifiants : semi-gras, chiffres alignés, sans étirement. */
 .display {
-  font-weight: 860;
-  font-stretch: 125%;
+  font-family: var(--font-display);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 0.95;
+  line-height: 1.2;
 }
 
 .display-xxl {
-  font-size: clamp(2.6rem, 11vw, 4.4rem);
+  font-size: var(--text-3xl);
 }
 
 .display-xl {
-  font-size: clamp(2rem, 8vw, 3.0625rem);
-}
-
-.display-lg {
   font-size: var(--text-2xl);
 }
 
-.display-md {
+.display-lg {
   font-size: var(--text-xl);
 }
 
-.display-sm {
+.display-md {
   font-size: var(--text-lg);
-  letter-spacing: -0.01em;
+}
+
+.display-sm {
+  font-size: var(--text-md);
 }
 
 .plate {
   display: inline-block;
-  padding: 2px 8px 1px;
-  border: 2px solid var(--ink);
-  border-radius: 6px;
-  font-weight: 800;
-  font-stretch: 118%;
+  padding: 1px 6px;
+  border: 1px solid var(--stroke-accessible);
+  border-radius: var(--radius-control);
+  font-size: var(--text-sm);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
+  line-height: 1.43;
   background: var(--surface);
 }
 
 @media (min-width: 720px) {
   .title-page {
+    font-size: var(--text-2xl);
+    line-height: 1.29;
+  }
+
+  .display-xxl {
+    font-size: var(--text-4xl);
+  }
+
+  .display-xl {
     font-size: var(--text-3xl);
   }
 }
 
-/* ---------- Boutons ---------- */
+/* ---------- Boutons (Fluent Button) ---------- */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   min-height: var(--tap);
-  padding: 0 18px;
-  border: 1.5px solid transparent;
+  padding: 0 16px;
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
-  font-size: var(--text-md);
-  font-weight: 650;
-  line-height: 1.15;
+  font-size: var(--control-font);
+  font-weight: 600;
+  line-height: 1.25;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
-}
-
-.btn:active:not(:disabled) {
-  transform: scale(0.98);
+  transition: background-color 100ms ease, border-color 100ms ease;
 }
 
 .btn:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  color: #bdbdbd;
+  background: #f0f0f0;
+  border-color: #e0e0e0;
+}
+
+.btn .icon {
+  width: 20px;
+  height: 20px;
 }
 
 .btn-primary {
   min-height: var(--tap-main);
   color: #fff;
-  background: var(--brand);
+  background: var(--accent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--brand-press);
+  background: var(--accent-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-pressed);
 }
 
 .btn-secondary {
@@ -269,29 +316,47 @@ ol {
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: var(--ink-3);
+  background: var(--surface-hover);
+  border-color: #c7c7c7;
+}
+
+.btn-secondary:active:not(:disabled) {
+  background: #e0e0e0;
 }
 
 .btn-ghost {
   color: var(--accent);
   background: transparent;
-  padding: 0 12px;
+  padding: 0 10px;
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: var(--accent-soft);
+  background: var(--surface-hover);
+}
+
+.btn-ghost:disabled {
+  background: transparent;
+  border-color: transparent;
 }
 
 .btn-danger {
   color: var(--danger);
-  border-color: currentColor;
+  border-color: var(--line-strong);
   background: var(--surface);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
 }
 
 .btn-danger-solid {
   min-height: var(--tap-main);
   color: #fff;
   background: var(--danger);
+}
+
+.btn-danger-solid:hover:not(:disabled) {
+  background: var(--danger-hover);
 }
 
 .btn-block {
@@ -301,23 +366,29 @@ ol {
 .btn-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .btn-row > .btn {
   flex: 1 1 160px;
 }
 
-/* ---------- Champs ---------- */
+@media (min-width: 720px) {
+  .btn-row > .btn {
+    flex: 0 0 auto;
+  }
+}
+
+/* ---------- Champs (Fluent Input, Dropdown, Textarea) ---------- */
 
 .form {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .form-group {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   padding: 0;
   margin: 0;
   border: 0;
@@ -326,32 +397,38 @@ ol {
 
 .form-group > legend {
   padding: 0;
-  margin-bottom: 10px;
-  font-size: var(--text-lg);
-  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: var(--text-md);
+  font-weight: 600;
 }
 
 .field {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .field-label {
   font-size: var(--text-sm);
-  font-weight: 650;
-  color: var(--ink-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.field-label .required {
+  margin-left: 2px;
+  color: var(--danger);
 }
 
 .field-help {
   font-size: var(--text-xs);
+  line-height: 1.33;
   color: var(--ink-3);
 }
 
 .field-error {
   font-size: var(--text-xs);
-  font-weight: 600;
+  line-height: 1.33;
   color: var(--danger);
 }
 
@@ -360,34 +437,43 @@ ol {
 .textarea {
   width: 100%;
   min-height: var(--tap);
-  padding: 10px 14px;
-  border: 1.5px solid var(--line-strong);
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-bottom-color: var(--stroke-accessible);
   border-radius: var(--radius-control);
   background: var(--surface);
-  font-size: var(--text-md);
-  line-height: 1.3;
+  font-size: var(--control-font);
+  line-height: 1.43;
   appearance: none;
+  transition: border-color 100ms ease;
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: #c7c7c7;
+  border-bottom-color: #575757;
 }
 
 .select {
-  padding-right: 40px;
+  padding-right: 36px;
   background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
-  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
-  background-size: 6px 6px;
+  background-position: calc(100% - 18px) 52%, calc(100% - 13px) 52%;
+  background-size: 5px 5px;
   background-repeat: no-repeat;
 }
 
 .textarea {
-  min-height: 96px;
+  min-height: 88px;
   resize: vertical;
 }
 
 .input:focus,
 .select:focus,
 .textarea:focus {
-  border-color: var(--accent);
-  outline: 3px solid var(--accent-soft);
-  outline-offset: 0;
+  outline: none;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 5px;
 }
 
 .input[aria-invalid='true'],
@@ -398,15 +484,16 @@ ol {
 
 .input:disabled,
 .select:disabled,
-.textarea:disabled {
-  background: var(--surface-sunken);
+.textarea:disabled,
+.input[readonly] {
   color: var(--ink-3);
+  background: var(--surface-sunken);
+  border-color: var(--line);
 }
 
 .input-code {
-  font-size: var(--text-3xl);
-  font-weight: 800;
-  font-stretch: 125%;
+  font-size: var(--text-xl);
+  font-weight: 600;
   letter-spacing: 0.3em;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -415,19 +502,20 @@ ol {
 .check {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
   min-height: var(--tap);
-  padding: 12px 14px;
-  border: 1.5px solid var(--line-strong);
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   background: var(--surface);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .check input {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   margin: 0;
   accent-color: var(--accent);
 }
@@ -440,7 +528,7 @@ ol {
 .grid-2,
 .grid-3 {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 @media (min-width: 640px) {
@@ -453,45 +541,52 @@ ol {
   }
 }
 
-/* ---------- Choix segmenté (catégories, onglets courts) ---------- */
+/* ---------- Choix segmenté (boutons bascule Fluent) ---------- */
 
 .segmented {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 14px;
-  background: var(--surface-sunken);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
   overflow-x: auto;
   scrollbar-width: none;
 }
 
 .segmented button {
   flex: 1 0 auto;
-  min-height: 44px;
+  min-height: calc(var(--tap) - 6px);
   padding: 0 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 2px;
   background: transparent;
-  font-weight: 650;
+  font-size: var(--control-font);
+  font-weight: 400;
   color: var(--ink-2);
   cursor: pointer;
 }
 
-.segmented button[aria-pressed='true'],
-.segmented button[aria-selected='true'] {
-  color: var(--ink);
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(23, 24, 29, 0.12);
+.segmented button:hover {
+  background: var(--surface-hover);
 }
 
-/* ---------- Panneaux et listes ---------- */
+.segmented button[aria-pressed='true'],
+.segmented button[aria-selected='true'] {
+  color: #fff;
+  background: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- Cartes et listes (Fluent Card, List) ---------- */
 
 .panel {
   display: grid;
   gap: 16px;
-  padding: 20px var(--gutter);
+  padding: 16px;
   border-radius: var(--radius-panel);
   background: var(--surface);
+  box-shadow: var(--shadow-4);
 }
 
 .panel-header {
@@ -502,29 +597,29 @@ ol {
 }
 
 .panel-header p {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 @media (min-width: 720px) {
   .panel {
-    padding: 24px;
+    padding: 20px 24px;
   }
 }
 
 .stack {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .stack-lg {
   display: grid;
-  gap: 28px;
+  gap: 24px;
 }
 
-/* Liste groupée, séparateurs fins plutôt que cartes empilées. */
 .list {
   border-radius: var(--radius-panel);
   background: var(--surface);
+  box-shadow: var(--shadow-4);
   overflow: hidden;
 }
 
@@ -532,14 +627,15 @@ ol {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px 14px;
-  min-height: 72px;
-  padding: 14px var(--gutter);
+  gap: 2px 12px;
+  min-height: 64px;
+  padding: 12px 16px;
   border: 0;
   border-top: 1px solid var(--line);
   width: 100%;
   background: transparent;
   color: inherit;
+  font-size: var(--text-sm);
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -550,7 +646,7 @@ ol {
 }
 
 .list-row:hover {
-  background: #f8f9fb;
+  background: var(--surface-hover);
 }
 
 .list-row:active {
@@ -558,10 +654,10 @@ ol {
 }
 
 .list-row .chevron {
-  width: 10px;
-  height: 10px;
-  border-top: 2.5px solid var(--ink-3);
-  border-right: 2.5px solid var(--ink-3);
+  width: 8px;
+  height: 8px;
+  border-top: 1.5px solid var(--ink-3);
+  border-right: 1.5px solid var(--ink-3);
   transform: rotate(45deg);
 }
 
@@ -575,8 +671,9 @@ ol {
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 0;
+  padding: 10px 0;
   border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
 }
 
 .facts > div:first-child {
@@ -585,100 +682,121 @@ ol {
 
 .facts dt {
   color: var(--ink-3);
-  font-size: var(--text-sm);
 }
 
 .facts dd {
-  font-weight: 650;
+  font-weight: 600;
   text-align: right;
 }
 
-/* ---------- Pastilles d'état ---------- */
+/* ---------- Badges (Fluent Badge, apparence teintée) ---------- */
 
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 10px;
+  gap: 4px;
+  min-height: 20px;
+  padding: 0 8px;
+  border: 1px solid transparent;
   border-radius: 999px;
   font-size: var(--text-xs);
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.5;
   white-space: nowrap;
-}
-
-.pill::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
 }
 
 .pill-neutral {
   color: var(--ink-2);
   background: var(--surface-sunken);
+  border-color: var(--line);
 }
 
 .pill-info {
   color: var(--accent);
   background: var(--accent-soft);
+  border-color: #b4d6fa;
 }
 
 .pill-success {
   color: var(--success);
   background: var(--success-soft);
+  border-color: #9fd89f;
 }
 
 .pill-warning {
   color: var(--warning);
   background: var(--warning-soft);
+  border-color: var(--warning-line);
 }
 
 .pill-danger {
   color: var(--danger);
   background: var(--danger-soft);
+  border-color: #eeacb2;
 }
 
-/* ---------- Messages ---------- */
+/* ---------- Barres de message (Fluent MessageBar) ---------- */
 
 .alert {
   display: flex;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
   font-size: var(--text-sm);
-  font-weight: 550;
 }
 
 .alert-danger {
-  color: var(--danger);
+  color: var(--ink);
   background: var(--danger-soft);
+  border-color: #eeacb2;
 }
 
 .alert-success {
-  color: var(--success);
+  color: var(--ink);
   background: var(--success-soft);
+  border-color: #9fd89f;
 }
 
 .alert-info {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border-color: var(--line);
+}
+
+/* Liste des éléments manquants avant enregistrement. */
+.missing {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-control);
+  background: var(--warning-soft);
+  font-size: var(--text-sm);
+}
+
+.missing ul {
+  display: grid;
+  gap: 2px;
+  padding-left: 18px;
+  list-style: disc;
 }
 
 .alert-warning {
-  color: var(--warning);
+  color: var(--ink);
   background: var(--warning-soft);
+  border-color: var(--warning-line);
 }
 
 .empty {
   display: grid;
   justify-items: start;
-  gap: 10px;
-  padding: 28px var(--gutter);
-  border: 1.5px dashed var(--line-strong);
+  gap: 8px;
+  padding: 24px 16px;
+  border: 1px dashed var(--line-strong);
   border-radius: var(--radius-panel);
   color: var(--ink-2);
+  font-size: var(--text-sm);
 }
 
 .skeleton {
@@ -698,30 +816,31 @@ ol {
   }
 }
 
-/* ---------- Exigences (mise en circulation) ---------- */
+/* ---------- Listes de contrôle (mise en circulation, champs obligatoires) ---------- */
 
 .requirements {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .requirement {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   border-radius: var(--radius-control);
   background: var(--surface-sunken);
+  font-size: var(--text-sm);
 }
 
 .requirement-mark {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  border: 2px solid var(--line-strong);
+  border: 1.5px solid var(--stroke-accessible);
   background: var(--surface);
 }
 
@@ -732,15 +851,15 @@ ol {
 
 .requirement.met .requirement-mark::after {
   content: '';
-  width: 10px;
-  height: 6px;
-  margin-top: -3px;
-  border-left: 2.5px solid #fff;
-  border-bottom: 2.5px solid #fff;
+  width: 8px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
   transform: rotate(-45deg);
 }
 
 .requirement-value {
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

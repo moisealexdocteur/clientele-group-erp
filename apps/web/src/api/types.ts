@@ -61,6 +61,8 @@ export interface CompanyContext {
     timezone: string
     timezone_label: string
     base_currency: Currency
+    /** Identité du loueur imprimée sur le contrat de location. */
+    legal?: CompanyLegalIdentity
   }
   access: {
     role_key: string
@@ -68,6 +70,22 @@ export interface CompanyContext {
     permissions: string[] | { allow?: string[] }
   }
   sites: ContextSite[]
+}
+
+export interface CompanyLegalIdentity {
+  name: string
+  representative: string | null
+  tax_identification_number: string | null
+  address: string | null
+  phone_numbers: string | null
+}
+
+export type FuelType = 'gasoline' | 'diesel'
+export type Transmission = 'manual' | 'automatic'
+
+export interface StoredFileRef {
+  id: string
+  url: string
 }
 
 export type RentalCategory = 'suv' | 'mid_suv' | 'pickup'
@@ -100,6 +118,8 @@ export interface RentalVehicle {
   is_active: boolean
   registration_number?: string
   registration_status?: VehicleRegistrationStatus
+  /** Numéro de série, renvoyé seulement aux gestionnaires de flotte. */
+  vin?: string | null
   reference_photo?: {
     key: string
     url: string
@@ -108,6 +128,13 @@ export interface RentalVehicle {
   } | null
   daily_rate_usd: string | null
   minimum_security_deposit_usd: string | null
+  color?: string | null
+  fuel_type?: FuelType | null
+  transmission?: Transmission | null
+  engine_displacement_cc?: number | null
+  doors?: number | null
+  /** Photo réelle téléversée ; prioritaire sur la photo de référence publique. */
+  photo?: StoredFileRef | null
   document_statuses?: Array<{
     type: VehicleDocumentType
     status: VehicleDocumentStatus
@@ -128,15 +155,21 @@ export interface ReservationCustomer {
   id: string
   display_name: string
   customer_type: 'individual' | 'institution'
+  /** Renvoyés seulement aux rôles qui gèrent la réservation. */
+  email?: string | null
+  phone?: string | null
 }
+
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'credit'
 
 export interface CarRentalPayment {
   id: string
   kind: 'rental' | 'security_deposit'
-  method: 'cash' | 'bank_transfer'
+  method: PaymentMethod
   status: 'submitted' | 'approved' | 'rejected' | 'reversed'
   currency: Currency
   amount: string
+  proof_file_url?: string | null
   submitted_at: string | null
   approved_at: string | null
 }
@@ -172,11 +205,14 @@ export interface CarRentalReservation {
   checked_out_at: string | null
   returned_at: string | null
   lock_version: number
+  pickup_location?: { type: RentalLocation; detail: string | null }
+  dropoff_location?: { type: RentalLocation; detail: string | null }
   airport_pickup_fee_usd: string
   airport_dropoff_fee_usd: string
   airport_fees_total_usd: string
   currency: Currency
   daily_rate: string
+  rate_overridden?: boolean
   minimum_security_deposit_usd: string | null
   kilometer_plan: KilometerPlan
   included_km: number | null
@@ -268,6 +304,10 @@ export interface SystemCompany {
   timezone: string
   timezone_label: string
   is_active: boolean
+  legal_representative?: string | null
+  tax_identification_number?: string | null
+  legal_address?: string | null
+  phone_numbers?: string | null
   sites: SystemSite[]
 }
 

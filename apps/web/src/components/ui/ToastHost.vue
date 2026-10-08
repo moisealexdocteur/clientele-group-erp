@@ -34,16 +34,21 @@ const ui = useUiStore()
   margin: 0 auto;
   width: 100%;
   padding: 10px 10px 10px 16px;
-  border-radius: 14px;
-  color: #fff;
-  background: var(--ink);
-  box-shadow: 0 8px 24px rgba(23, 24, 29, 0.24);
-  font-weight: 550;
+  border-radius: 4px;
+  border-left: 4px solid var(--success);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-16);
+  font-size: var(--text-sm);
   pointer-events: auto;
 }
 
 .toast-danger {
-  background: var(--danger);
+  border-left-color: var(--danger);
+}
+
+.toast-info {
+  border-left-color: var(--accent);
 }
 
 .toast-close {
@@ -51,10 +56,10 @@ const ui = useUiStore()
   min-width: var(--tap);
   min-height: 40px;
   border: 0;
-  border-radius: 10px;
-  color: inherit;
-  background: rgba(255, 255, 255, 0.16);
-  font-weight: 700;
+  border-radius: 4px;
+  color: var(--accent);
+  background: transparent;
+  font-weight: 600;
   cursor: pointer;
 }
 

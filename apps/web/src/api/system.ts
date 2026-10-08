@@ -14,6 +14,17 @@ export function createCompany(payload: { code: string; legal_name: string; displ
   return api<{ data: SystemCompany }>(base, { ...global, method: 'POST', body: payload })
 }
 
+export function updateCompany(companyId: string, payload: {
+  legal_name: string
+  display_name: string
+  legal_representative?: string | null
+  tax_identification_number?: string | null
+  legal_address?: string | null
+  phone_numbers?: string | null
+}) {
+  return api<{ data: SystemCompany }>(`${base}/${companyId}`, { ...global, method: 'PATCH', body: payload })
+}
+
 export function createSite(companyId: string, payload: { code: string; name: string; address: string }) {
   return api<{ data: SystemSite }>(`${base}/${companyId}/sites`, { ...global, method: 'POST', body: payload })
 }
