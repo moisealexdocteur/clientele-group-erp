@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CarRentalController;
 use App\Http\Controllers\CompanyContextController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\SystemConfigurationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class)->name('api.health');
@@ -27,6 +28,19 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
         });
     });
+
+    Route::middleware(['api.token', 'system.owner'])
+        ->prefix('system/configuration')
+        ->group(function (): void {
+            Route::get('/companies', [SystemConfigurationController::class, 'companies'])
+                ->name('api.v1.system.configuration.companies.index');
+            Route::post('/companies', [SystemConfigurationController::class, 'storeCompany'])
+                ->name('api.v1.system.configuration.companies.store');
+            Route::post('/companies/{company}/sites', [SystemConfigurationController::class, 'storeSite'])
+                ->name('api.v1.system.configuration.sites.store');
+            Route::post('/companies/{company}/cash-registers', [SystemConfigurationController::class, 'storeCashRegister'])
+                ->name('api.v1.system.configuration.cash-registers.store');
+        });
 
     Route::middleware(['api.token', 'company.context'])->group(function (): void {
         Route::get('/context', CompanyContextController::class)->name('api.v1.context');

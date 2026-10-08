@@ -138,6 +138,37 @@ interface CarRentalCalendarResponse {
   }
 }
 
+interface SystemCashRegister {
+  id: string
+  site_id: string
+  code: string
+  name: string
+  automatic_print_enabled: boolean
+  customer_display_enabled: boolean
+  is_active: boolean
+}
+
+interface SystemSite {
+  id: string
+  code: string
+  name: string
+  address: string
+  is_active: boolean
+  cash_registers: SystemCashRegister[]
+}
+
+interface SystemCompany {
+  id: string
+  code: string
+  legal_name: string
+  display_name: string
+  base_currency: 'HTG' | 'USD'
+  timezone: string
+  timezone_label: string
+  is_active: boolean
+  sites: SystemSite[]
+}
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -178,6 +209,12 @@ const calendarMessage = ref('')
 const calendarError = ref(false)
 const calendarEntries = ref<CarRentalCalendarEntry[]>([])
 const calendarVehicles = ref<RentalVehicle[]>([])
+const showSystemConfiguration = ref(false)
+const configurationBusy = ref(false)
+const configurationMessage = ref('')
+const configurationError = ref(false)
+const configurationCompanies = ref<SystemCompany[]>([])
+const configurationCompanyId = ref('')
 let clockTimer: number | undefined
 
 const reservationForm = reactive({
@@ -225,15 +262,32 @@ const calendarForm = reactive({
   to: '',
 })
 
+const companyConfigurationForm = reactive({
+  code: '',
+  legal_name: '',
+  display_name: '',
+  base_currency: 'HTG' as 'HTG' | 'USD',
+})
+
+const siteConfigurationForm = reactive({
+  code: '',
+  name: '',
+  address: '',
+})
+
+const cashRegisterConfigurationForm = reactive({
+  site_id: '',
+  code: '',
+  name: '',
+  automatic_print_enabled: false,
+  customer_display_enabled: false,
+})
+
 const sections = [
   'Accueil',
   'Réservations',
   'Calendrier',
-  'Locations',
   'Véhicules',
-  'Inspections',
-  'Dépôts',
-  'Rapports',
 ]
 
 const categoryLabels: Record<RentalCategory, string> = {
@@ -283,6 +337,12 @@ const statusLabel = computed(() => {
 const activeCompanyName = computed(() => activeContext.value?.company.name ?? '')
 
 const userInitial = computed(() => user.value?.name.slice(0, 1).toUpperCase() ?? '?')
+
+const canManageSystemConfiguration = computed(() => user.value?.system_role === 'owner')
+
+const selectedConfigurationCompany = computed(() => (
+  configurationCompanies.value.find((company) => company.id === configurationCompanyId.value) ?? null
+))
 
 const canReadVehicles = computed(() => hasPermission('rental.vehicles.read'))
 const canManageVehicles = computed(() => hasPermission('rental.vehicles.manage'))
@@ -455,18 +515,22 @@ async function loadSession(): Promise<void> {
   }
 
   try {
-    const result = await requestApi<{ user: SessionUser; companies: CompanyChoice[] }>('/api/v1/auth/me')
-    user.value = result.user
-    companies.value = result.companies
+    await loadCompanyChoices()
     authView.value = 'authenticated'
 
-    if (companies.value.length === 1) {
+    if (companies.value.length === 1 && !showSystemConfiguration.value) {
       await selectCompany(companies.value[0].id)
     }
   } catch {
     clearSession()
     authMessage.value = 'Votre session a expiré. Connectez-vous de nouveau.'
   }
+}
+
+async function loadCompanyChoices(): Promise<void> {
+  const result = await requestApi<{ user: SessionUser; companies: CompanyChoice[] }>('/api/v1/auth/me')
+  user.value = result.user
+  companies.value = result.companies
 }
 
 async function selectCompany(companyId: string): Promise<void> {
@@ -478,6 +542,7 @@ async function selectCompany(companyId: string): Promise<void> {
       headers: { 'X-Clientele-Company-Id': companyId },
     })
     activeContext.value = context
+    showSystemConfiguration.value = false
     activeSection.value = 'Accueil'
     resetRentalForm(context.sites[0]?.id ?? '')
     resetVehicleWorkspace(context.sites[0]?.id ?? '')
@@ -485,6 +550,148 @@ async function selectCompany(companyId: string): Promise<void> {
     authMessage.value = messageFrom(error)
   } finally {
     authBusy.value = false
+  }
+}
+
+async function openSystemConfiguration(): Promise<void> {
+  if (!canManageSystemConfiguration.value) {
+    return
+  }
+
+  activeContext.value = null
+  showSystemConfiguration.value = true
+  configurationMessage.value = ''
+  configurationError.value = false
+  await loadSystemConfiguration()
+}
+
+function closeSystemConfiguration(): void {
+  showSystemConfiguration.value = false
+  configurationMessage.value = ''
+  configurationError.value = false
+}
+
+function selectConfigurationCompany(): void {
+  cashRegisterConfigurationForm.site_id = selectedConfigurationCompany.value?.sites[0]?.id ?? ''
+}
+
+async function loadSystemConfiguration(): Promise<void> {
+  if (!canManageSystemConfiguration.value) {
+    return
+  }
+
+  configurationBusy.value = true
+
+  try {
+    const result = await requestApi<{ data: SystemCompany[] }>('/api/v1/system/configuration/companies')
+    configurationCompanies.value = result.data
+
+    if (!configurationCompanyId.value || !result.data.some((company) => company.id === configurationCompanyId.value)) {
+      configurationCompanyId.value = result.data[0]?.id ?? ''
+    }
+
+    const selectedCompany = result.data.find((company) => company.id === configurationCompanyId.value)
+    if (!selectedCompany?.sites.some((site) => site.id === cashRegisterConfigurationForm.site_id)) {
+      cashRegisterConfigurationForm.site_id = selectedCompany?.sites[0]?.id ?? ''
+    }
+  } catch (error) {
+    configurationError.value = true
+    configurationMessage.value = messageFrom(error)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+async function createSystemCompany(): Promise<void> {
+  configurationBusy.value = true
+  configurationMessage.value = ''
+  configurationError.value = false
+
+  try {
+    const result = await requestApi<{ data: SystemCompany }>('/api/v1/system/configuration/companies', {
+      method: 'POST',
+      body: JSON.stringify(companyConfigurationForm),
+    })
+
+    configurationCompanyId.value = result.data.id
+    Object.assign(companyConfigurationForm, {
+      code: '',
+      legal_name: '',
+      display_name: '',
+      base_currency: 'HTG',
+    })
+    await Promise.all([loadSystemConfiguration(), loadCompanyChoices()])
+    configurationMessage.value = 'La société a été créée. Ajoutez maintenant son adresse opérationnelle.'
+  } catch (error) {
+    configurationError.value = true
+    configurationMessage.value = messageFrom(error)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+async function createSystemSite(): Promise<void> {
+  const companyId = configurationCompanyId.value
+  if (!companyId) {
+    configurationError.value = true
+    configurationMessage.value = 'Créez ou sélectionnez d’abord une société.'
+    return
+  }
+
+  configurationBusy.value = true
+  configurationMessage.value = ''
+  configurationError.value = false
+
+  try {
+    const result = await requestApi<{ data: SystemSite }>(`/api/v1/system/configuration/companies/${companyId}/sites`, {
+      method: 'POST',
+      body: JSON.stringify(siteConfigurationForm),
+    })
+
+    Object.assign(siteConfigurationForm, { code: '', name: '', address: '' })
+    cashRegisterConfigurationForm.site_id = result.data.id
+    await loadSystemConfiguration()
+    configurationMessage.value = 'L’adresse opérationnelle a été créée.'
+  } catch (error) {
+    configurationError.value = true
+    configurationMessage.value = messageFrom(error)
+  } finally {
+    configurationBusy.value = false
+  }
+}
+
+async function createSystemCashRegister(): Promise<void> {
+  const companyId = configurationCompanyId.value
+  if (!companyId || !cashRegisterConfigurationForm.site_id) {
+    configurationError.value = true
+    configurationMessage.value = 'Sélectionnez une société et une adresse avant de créer une caisse.'
+    return
+  }
+
+  configurationBusy.value = true
+  configurationMessage.value = ''
+  configurationError.value = false
+
+  try {
+    await requestApi<{ data: SystemCashRegister }>(`/api/v1/system/configuration/companies/${companyId}/cash-registers`, {
+      method: 'POST',
+      body: JSON.stringify(cashRegisterConfigurationForm),
+    })
+
+    Object.assign(cashRegisterConfigurationForm, {
+      site_id: cashRegisterConfigurationForm.site_id,
+      code: '',
+      name: '',
+      automatic_print_enabled: false,
+      customer_display_enabled: false,
+    })
+    await loadSystemConfiguration()
+    configurationMessage.value = 'La caisse a été créée.'
+  } catch (error) {
+    configurationError.value = true
+    configurationMessage.value = messageFrom(error)
+  } finally {
+    configurationBusy.value = false
   }
 }
 
@@ -504,6 +711,9 @@ function clearSession(): void {
   user.value = null
   companies.value = []
   activeContext.value = null
+  showSystemConfiguration.value = false
+  configurationCompanies.value = []
+  configurationCompanyId.value = ''
   authView.value = 'sign-in'
   activeSection.value = 'Accueil'
   resetRentalForm()
@@ -1003,17 +1213,9 @@ onBeforeUnmount(() => {
 
     <section v-if="authView !== 'authenticated'" class="access-layout" aria-labelledby="access-title">
       <div class="access-intro">
-        <p class="eyebrow">Accès personnel obligatoire</p>
-        <h1 id="access-title">Connexion sécurisée</h1>
-        <p>
-          Connectez-vous avec un compte individuel. Les sociétés, les adresses et les données clients
-          ne sont accessibles qu’après authentification.
-        </p>
-        <ul class="access-points">
-          <li><span>01</span> Compte personnel</li>
-          <li><span>02</span> Code de vérification par courriel</li>
-          <li><span>03</span> Accès limité à la société et à l’adresse autorisées</li>
-        </ul>
+        <p class="eyebrow">Clientèle Group ERP</p>
+        <h1 id="access-title">Connexion</h1>
+        <p>Utilisez votre compte personnel. Un code de vérification est envoyé à votre courriel.</p>
       </div>
 
       <section class="access-card" aria-live="polite">
@@ -1053,7 +1255,7 @@ onBeforeUnmount(() => {
             </label>
             <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
             <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-              {{ authBusy ? 'Ouverture…' : 'Ouvrir la session' }}
+              {{ authBusy ? 'Vérification…' : 'Vérifier le code' }}
             </button>
             <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'sign-in'; authMessage = ''">
               Revenir à la connexion
@@ -1109,10 +1311,199 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
-      <section v-if="!activeContext" class="company-choice" aria-labelledby="company-choice-title">
-        <p class="eyebrow">Session ouverte · {{ user?.name }}</p>
-        <h1 id="company-choice-title">Sélectionnez la société à utiliser.</h1>
-        <p>Cette sélection détermine les données, les sites et les fonctions autorisés pour cette session.</p>
+      <section v-if="showSystemConfiguration" class="configuration-page" aria-labelledby="configuration-title">
+        <section class="session-strip" aria-label="Session propriétaire">
+          <span class="avatar" aria-hidden="true">{{ userInitial }}</span>
+          <span><strong>{{ user?.name }}</strong> · Configuration globale</span>
+          <button class="text-button change-company" type="button" :disabled="configurationBusy" @click="closeSystemConfiguration">
+            Retour aux sociétés
+          </button>
+          <button class="text-button" type="button" @click="logout">Fermer la session</button>
+        </section>
+
+        <section class="configuration-header">
+          <p class="eyebrow">Réglages globaux · propriétaire du système</p>
+          <h1 id="configuration-title">Configuration globale</h1>
+          <p>Créez les sociétés, les adresses et les caisses. Chaque action est journalisée.</p>
+        </section>
+
+        <p v-if="configurationMessage" class="configuration-message" :class="{ error: configurationError }">
+          {{ configurationMessage }}
+        </p>
+
+        <div class="configuration-workspace">
+          <section class="configuration-form-card">
+            <div class="section-intro">
+              <p class="eyebrow">Étape 1</p>
+              <h2>Créer une société</h2>
+              <p>Utilisez un code interne unique.</p>
+            </div>
+
+            <form class="configuration-form" @submit.prevent="createSystemCompany">
+              <label>
+                Code de société
+                <input v-model.trim="companyConfigurationForm.code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. CARRENTAL" required :disabled="configurationBusy" />
+              </label>
+              <label>
+                Dénomination légale
+                <input v-model.trim="companyConfigurationForm.legal_name" type="text" maxlength="255" required :disabled="configurationBusy" />
+              </label>
+              <label>
+                Nom affiché dans l’application
+                <input v-model.trim="companyConfigurationForm.display_name" type="text" maxlength="255" required :disabled="configurationBusy" />
+              </label>
+              <label>
+                Devise de base
+                <select v-model="companyConfigurationForm.base_currency" :disabled="configurationBusy">
+                  <option value="HTG">HTG</option>
+                  <option value="USD">USD</option>
+                </select>
+              </label>
+              <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online'">
+                {{ configurationBusy ? 'Enregistrement…' : 'Créer la société' }}
+              </button>
+            </form>
+          </section>
+
+          <section class="configuration-form-card">
+            <div class="section-intro">
+              <p class="eyebrow">Étape 2</p>
+              <h2>Créer une adresse</h2>
+              <p>Ajoutez un lieu opérationnel réel.</p>
+            </div>
+
+            <form class="configuration-form" @submit.prevent="createSystemSite">
+              <label>
+                Société
+                <select v-model="configurationCompanyId" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
+                  <option value="" disabled>Sélectionnez une société</option>
+                  <option v-for="company in configurationCompanies" :key="company.id" :value="company.id">
+                    {{ company.display_name }} · {{ company.code }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                Code d’adresse
+                <input v-model.trim="siteConfigurationForm.code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. CAP-01" required :disabled="configurationBusy || !configurationCompanyId" />
+              </label>
+              <label>
+                Nom de l’adresse
+                <input v-model.trim="siteConfigurationForm.name" type="text" maxlength="255" required :disabled="configurationBusy || !configurationCompanyId" />
+              </label>
+              <label>
+                Adresse complète
+                <textarea v-model.trim="siteConfigurationForm.address" rows="3" maxlength="1000" required :disabled="configurationBusy || !configurationCompanyId"></textarea>
+              </label>
+              <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online' || !configurationCompanyId">
+                {{ configurationBusy ? 'Enregistrement…' : 'Créer l’adresse' }}
+              </button>
+            </form>
+          </section>
+
+          <section class="configuration-form-card">
+            <div class="section-intro">
+              <p class="eyebrow">Étape 3</p>
+              <h2>Créer une caisse</h2>
+              <p>Associez la caisse à une seule adresse.</p>
+            </div>
+
+            <form class="configuration-form" @submit.prevent="createSystemCashRegister">
+              <label>
+                Société
+                <select v-model="configurationCompanyId" :disabled="configurationBusy || !configurationCompanies.length" @change="selectConfigurationCompany">
+                  <option value="" disabled>Sélectionnez une société</option>
+                  <option v-for="company in configurationCompanies" :key="company.id" :value="company.id">
+                    {{ company.display_name }} · {{ company.code }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                Adresse
+                <select v-model="cashRegisterConfigurationForm.site_id" :disabled="configurationBusy || !selectedConfigurationCompany?.sites.length">
+                  <option value="" disabled>Sélectionnez une adresse</option>
+                  <option v-for="site in selectedConfigurationCompany?.sites ?? []" :key="site.id" :value="site.id">
+                    {{ site.name }} · {{ site.code }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                Code de caisse
+                <input v-model.trim="cashRegisterConfigurationForm.code" type="text" maxlength="32" autocapitalize="characters" placeholder="Ex. POS-01" required :disabled="configurationBusy || !cashRegisterConfigurationForm.site_id" />
+              </label>
+              <label>
+                Nom de la caisse
+                <input v-model.trim="cashRegisterConfigurationForm.name" type="text" maxlength="255" required :disabled="configurationBusy || !cashRegisterConfigurationForm.site_id" />
+              </label>
+              <label class="toggle-field">
+                <input v-model="cashRegisterConfigurationForm.automatic_print_enabled" type="checkbox" :disabled="configurationBusy" />
+                <span>Préparer l’impression automatique des reçus</span>
+              </label>
+              <label class="toggle-field">
+                <input v-model="cashRegisterConfigurationForm.customer_display_enabled" type="checkbox" :disabled="configurationBusy" />
+                <span>Préparer l’écran client</span>
+              </label>
+              <button class="primary-button" type="submit" :disabled="configurationBusy || apiStatus !== 'online' || !cashRegisterConfigurationForm.site_id">
+                {{ configurationBusy ? 'Enregistrement…' : 'Créer la caisse' }}
+              </button>
+            </form>
+          </section>
+        </div>
+
+        <section class="configuration-list-card">
+          <div class="workspace-heading">
+            <div>
+              <p class="eyebrow">Configuration enregistrée</p>
+              <h2>Sociétés et adresses</h2>
+            </div>
+            <button class="refresh-button" type="button" :disabled="configurationBusy" @click="loadSystemConfiguration">
+              Actualiser
+            </button>
+          </div>
+
+          <p v-if="!configurationCompanies.length" class="empty-configuration">
+            Aucune société n’est encore enregistrée.
+          </p>
+
+          <div v-else class="configuration-company-list">
+            <article v-for="company in configurationCompanies" :key="company.id" class="configuration-company-card">
+              <header>
+                <div>
+                  <span>{{ company.code }}</span>
+                  <h3>{{ company.display_name }}</h3>
+                </div>
+                <small>{{ company.base_currency }} · {{ company.timezone_label }}</small>
+              </header>
+              <p>{{ company.legal_name }}</p>
+              <div v-if="company.sites.length" class="configuration-site-list">
+                <article v-for="site in company.sites" :key="site.id" class="configuration-site-card">
+                  <div>
+                    <strong>{{ site.name }}</strong>
+                    <span>{{ site.code }}</span>
+                  </div>
+                  <p>{{ site.address }}</p>
+                  <ul v-if="site.cash_registers.length">
+                    <li v-for="register in site.cash_registers" :key="register.id">
+                      <strong>{{ register.name }}</strong>
+                      <span>{{ register.code }}</span>
+                      <small>
+                        {{ register.automatic_print_enabled ? 'Impression à préparer' : 'Impression non configurée' }} ·
+                        {{ register.customer_display_enabled ? 'Écran client à préparer' : 'Écran client non configuré' }}
+                      </small>
+                    </li>
+                  </ul>
+                  <p v-else class="configuration-empty">Aucune caisse créée pour cette adresse.</p>
+                </article>
+              </div>
+              <p v-else class="configuration-empty">Aucune adresse créée pour cette société.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <section v-else-if="!activeContext" class="company-choice" aria-labelledby="company-choice-title">
+        <p class="eyebrow">Connecté · {{ user?.name }}</p>
+        <h1 id="company-choice-title">Choisir une société</h1>
+        <p>Les données et les fonctions disponibles dépendent de cette sélection.</p>
         <div v-if="companies.length" class="company-grid">
           <button v-for="company in companies" :key="company.id" class="company-button" type="button" :disabled="authBusy" @click="selectCompany(company.id)">
             <span>{{ company.code }}</span>
@@ -1120,8 +1511,13 @@ onBeforeUnmount(() => {
             <small>Rôle : {{ company.role_key }}</small>
           </button>
         </div>
-        <p v-else class="form-message">Aucune société active n’est encore attribuée à votre compte.</p>
+        <p v-else class="form-message">
+          {{ canManageSystemConfiguration ? 'Aucune société n’est configurée.' : 'Aucune société n’est attribuée à votre compte. Contactez le propriétaire du système.' }}
+        </p>
         <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
+        <button v-if="canManageSystemConfiguration" class="secondary-button" type="button" @click="openSystemConfiguration">
+          Ouvrir la configuration globale
+        </button>
         <button class="text-button" type="button" @click="logout">Fermer la session</button>
       </section>
 
@@ -1129,6 +1525,7 @@ onBeforeUnmount(() => {
         <section class="session-strip" aria-label="Session active">
           <span class="avatar" aria-hidden="true">{{ userInitial }}</span>
           <span><strong>{{ user?.name }}</strong> · {{ activeCompanyName }}</span>
+          <button v-if="canManageSystemConfiguration" class="text-button" type="button" @click="openSystemConfiguration">Configuration globale</button>
           <button class="text-button change-company" type="button" @click="changeCompany">Changer de société</button>
           <button class="text-button" type="button" @click="logout">Fermer la session</button>
         </section>
@@ -1144,7 +1541,7 @@ onBeforeUnmount(() => {
           <span class="foundation-badge">Pilote {{ bootstrap?.pilot.label ?? 'Car Rental' }}</span>
         </section>
 
-        <nav class="module-nav" aria-label="Modules du pilote Location de véhicules">
+        <nav class="module-nav" aria-label="Menu Car Rental">
           <button
             v-for="section in visibleSections"
             :key="section"
@@ -1171,10 +1568,9 @@ onBeforeUnmount(() => {
             <div class="notice-card">
               <span class="notice-icon" aria-hidden="true">01</span>
               <div>
-                <h3>Réservations sécurisées par société et adresse</h3>
+                <h3>Créer une réservation</h3>
                 <p>
-                  La session est limitée à la société choisie et aux adresses autorisées. Le premier flux
-                  permet maintenant de vérifier la disponibilité et de créer une réservation numérotée.
+                  Sélectionnez une adresse, vérifiez la disponibilité, puis créez une réservation numérotée.
                 </p>
               </div>
             </div>
@@ -1199,15 +1595,15 @@ onBeforeUnmount(() => {
 
             <div class="checklist-card">
               <div>
-                <p class="eyebrow">État de la fondation</p>
-                <h3>Contrôles déjà disponibles</h3>
+              <p class="eyebrow">Fonctions disponibles</p>
+              <h3>Contrôles actifs</h3>
               </div>
               <ul>
                 <li><span>✓</span> Code par courriel personnel et session révocable</li>
                 <li><span>✓</span> Rôle, société active et périmètre de site</li>
                 <li><span>✓</span> Journal d’audit sans mot de passe ni jeton</li>
                 <li><span>✓</span> Disponibilité et réservation de SUV, Mid SUV et Pick-up</li>
-                <li><span>→</span> Contrat, inspection, dépôt et reçu suivront dans les prochains lots</li>
+                <li><span>→</span> Contrat, inspection, dépôt et reçu : non disponibles</li>
               </ul>
             </div>
           </template>
@@ -1642,12 +2038,8 @@ onBeforeUnmount(() => {
 
           <template v-else>
             <div class="empty-state">
-              <span class="empty-state-number">{{ String(visibleSections.indexOf(activeSection)).padStart(2, '0') }}</span>
-              <h3>{{ activeSection }} sera disponible dans un prochain lot Car Rental</h3>
-              <p>
-                Cet écran est volontairement vide : aucune réservation, véhicule, inspection,
-                dépôt ou rapport fictif ne sera créé avant la configuration validée de la société et du site.
-              </p>
+              <h3>Fonction non disponible</h3>
+              <p>Cette fonction n’est pas activée dans cette version.</p>
             </div>
           </template>
         </section>
@@ -1655,7 +2047,7 @@ onBeforeUnmount(() => {
     </template>
 
     <footer class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.6' }}</span>
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.7' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>

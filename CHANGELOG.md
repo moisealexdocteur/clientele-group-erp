@@ -2,6 +2,33 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.7 - 2026-10-08
+
+### Ajouté
+
+- Espace de configuration globale réservé au propriétaire du système : création explicite des sociétés, de leurs adresses opérationnelles et de leurs caisses.
+- Attribution automatique du propriétaire créateur à la nouvelle société, avec rôle local `owner`, portée de toutes les adresses et permissions explicites.
+- Préparation par caisse des indicateurs d’impression automatique des reçus et d’écran client, sans déclarer les pilotes Epson ni l’impression comme opérationnels.
+- API protégée par un contrôle de rôle système distinct des rôles métier de société.
+- Journalisation des créations de société, d’adresse et de caisse, sans adresse complète dans les métadonnées d’audit.
+- Tests d’autorisation propriétaire, d’isolement d’adresse entre sociétés et de création de caisse.
+
+### Sécurité
+
+- La lecture globale des adresses et caisses s’exécute dans le contexte RLS de chaque société ; aucun contournement de l’isolation PostgreSQL n’est ajouté.
+- Les utilisateurs non propriétaires reçoivent un refus explicite et journalisé avant toute lecture ou modification de la configuration globale.
+
+### Interface
+
+- Écran de connexion et choix de société simplifiés : titres courts, texte fonctionnel, aucune promesse ou formule décorative.
+- Le menu Car Rental n’affiche que les fonctions actuellement actives ; les inspections, dépôts et rapports ne sont plus présentés comme des écrans utilisables.
+- Les actions importantes restent des boutons tactiles d’au moins 48 px, placés après les champs qu’elles valident.
+
+### Limites connues
+
+- La gestion des utilisateurs par société, les imprimantes réelles, les dispositifs kiosque et les écrans clients restent à réaliser.
+- Aucune société, adresse ou caisse réelle n’est créée par le déploiement : le propriétaire les saisit après validation de leurs informations.
+
 ## 0.2.0-alpha.6 - 2026-10-08
 
 ### Ajouté
