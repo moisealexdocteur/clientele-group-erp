@@ -120,6 +120,7 @@ final class CarRentalController extends Controller
                 'required',
                 'string',
                 'max:32',
+                'regex:/\A[A-Z0-9][A-Z0-9_-]{0,31}\z/',
                 Rule::unique('car_rental_vehicles', 'code')
                     ->where(fn ($query) => $query->where('company_id', $company->id)),
             ],

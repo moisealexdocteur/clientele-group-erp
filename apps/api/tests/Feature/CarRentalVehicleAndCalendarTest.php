@@ -123,6 +123,24 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
         self::assertArrayNotHasKey('vin', $calendar['vehicle']);
     }
 
+    public function test_availability_only_returns_vehicles_marked_available(): void
+    {
+        [, $company, $site, $token] = $this->context(['rental.availability.read']);
+        $available = $this->vehicle($company, $site, 'SUV-AVAILABLE', 'suv');
+        $washing = $this->vehicle($company, $site, 'SUV-WASHING', 'suv');
+        $washing->forceFill(['operational_status' => 'washing'])->save();
+
+        $this->requestFor($token, $company)
+            ->getJson('/api/v1/car-rental/availability?' . http_build_query([
+                'site_id' => $site->id,
+                'pickup_at' => '2026-11-02T10:00:00-04:00',
+                'due_at' => '2026-11-05T10:00:00-04:00',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $available->id);
+    }
+
     public function test_vehicle_identifiers_are_normalized_and_unique_per_company(): void
     {
         [, $company, $site, $token] = $this->context(['rental.vehicles.manage']);

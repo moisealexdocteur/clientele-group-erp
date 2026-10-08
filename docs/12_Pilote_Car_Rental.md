@@ -1,8 +1,8 @@
 # Pilote Clientèle Car Rental
 
-## 1. Périmètre alpha.6
+## 1. Périmètre alpha.8
 
-L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. L’alpha.6 ajoute le lot suivant, sans donnée réelle :
+L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. Le périmètre alpha.8, sans donnée réelle, couvre :
 
 - les véhicules `suv`, `mid_suv` et `pickup` ;
 - la création d’un véhicule pour une adresse autorisée, avec code interne, kilométrage, catégorie et état opérationnel ;
@@ -19,6 +19,8 @@ L’alpha.5 reste la référence validée en préproduction pour l’authentific
 - la structure, encore sans workflow actif, des inspections avant/après location : odomètre, carburant, croquis, photos hashées et signatures hashées.
 
 Les véhicules, les réservations et le planning sont limités par société puis par adresse. Le planning ne retourne ni le nom, ni les coordonnées, ni l’identifiant du client.
+
+La disponibilité ne retourne que les véhicules actifs dont l’état opérationnel est `Disponible`. Les états `Préparation`, `Lavage`, `Garage` et `En circulation` les excluent de la location.
 
 ## 2. États métier
 
@@ -63,6 +65,6 @@ Une permission de société sans accès à l’adresse concernée est insuffisan
 5. stockage chiffré des preuves et photos, liens temporaires et antivirus ;
 6. recette sur une imprimante Epson TMIII 80 mm réelle.
 
-## 6. Hors périmètre alpha.6
+## 6. Hors périmètre alpha.8
 
 Le contrat, les inspections actives, les dépôts de garantie actifs, les reçus, l’impression thermique, le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Ils seront ajoutés dans des lots séparés après validation du flux de location sur données de test.
