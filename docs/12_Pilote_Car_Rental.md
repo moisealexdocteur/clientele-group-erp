@@ -1,10 +1,14 @@
 # Pilote Clientèle Car Rental
 
-## 1. Périmètre alpha.4
+## 1. Périmètre alpha.6
 
-L’alpha.4 pose le premier flux PWA/API, sans donnée réelle. Il couvre :
+L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. L’alpha.6 ajoute le lot suivant, sans donnée réelle :
 
 - les véhicules `suv`, `mid_suv` et `pickup` ;
+- la création d’un véhicule pour une adresse autorisée, avec code interne, kilométrage, catégorie et état opérationnel ;
+- le contrôle des codes internes, immatriculations et VIN à l’échelle de la société ;
+- la liste de flotte et le changement d’état `disponible`, `préparation`, `lavage`, `garage` ou `en circulation` ;
+- un planning tactile par période : réservations actives, dates de départ et de retour, adresse et état de la flotte ;
 - la disponibilité par adresse et la protection contre une double réservation ;
 - la réservation par un préposé, avec numéro de huit chiffres ;
 - un formulaire PWA qui oblige à sélectionner une société puis son adresse autorisée avant d’afficher les véhicules disponibles ;
@@ -13,6 +17,8 @@ L’alpha.4 pose le premier flux PWA/API, sans donnée réelle. Il couvre :
 - la soumission d’un paiement en espèces ou par virement Sogebank, suivie d’une approbation séparée ;
 - la structure, encore sans workflow actif, des dépôts de garantie en HTG ou USD et de la remise de passeport sans conserver son numéro ;
 - la structure, encore sans workflow actif, des inspections avant/après location : odomètre, carburant, croquis, photos hashées et signatures hashées.
+
+Les véhicules, les réservations et le planning sont limités par société puis par adresse. Le planning ne retourne ni le nom, ni les coordonnées, ni l’identifiant du client.
 
 ## 2. États métier
 
@@ -31,6 +37,9 @@ Le calendrier ne repose pas sur une simple étiquette. Pour une même société,
 | Permission | Utilisation |
 | --- | --- |
 | `rental.availability.read` | Voir les véhicules disponibles à son adresse autorisée |
+| `rental.vehicles.read` | Consulter les véhicules de ses adresses autorisées |
+| `rental.vehicles.manage` | Ajouter un véhicule ou modifier son état opérationnel |
+| `rental.calendar.read` | Consulter le planning des véhicules de ses adresses autorisées |
 | `rental.reservations.create` | Créer une réservation |
 | `rental.reservations.read` | Consulter une réservation de son adresse autorisée |
 | `rental.payments.submit` | Déclarer un paiement espèces ou soumettre une preuve Sogebank |
@@ -47,14 +56,13 @@ Une permission de société sans accès à l’adresse concernée est insuffisan
 
 ## 5. Étapes suivantes du pilote
 
-1. gestion des véhicules et calendrier tactile dans la PWA ;
-2. contrat PDF numéroté et QR de vérification ;
-3. workflow check-out avec inspection pré-location et signature ;
-4. workflow retour avec inspection post-location, carburant et kilométrage ;
-5. calcul final, décision sur dépôt, reçu client/administration et impression thermique ;
-6. stockage chiffré des preuves et photos, liens temporaires et antivirus ;
-7. recette sur une imprimante Epson TMIII 80 mm réelle.
+1. contrat PDF numéroté et QR de vérification ;
+2. workflow check-out avec inspection pré-location et signature ;
+3. workflow retour avec inspection post-location, carburant et kilométrage ;
+4. calcul final, décision sur dépôt, reçu client/administration et impression thermique ;
+5. stockage chiffré des preuves et photos, liens temporaires et antivirus ;
+6. recette sur une imprimante Epson TMIII 80 mm réelle.
 
-## 6. Hors périmètre alpha.4
+## 6. Hors périmètre alpha.6
 
-Le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Ils seront ajoutés après validation du flux de location sur données de test.
+Le contrat, les inspections actives, les dépôts de garantie actifs, les reçus, l’impression thermique, le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Ils seront ajoutés dans des lots séparés après validation du flux de location sur données de test.

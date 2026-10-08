@@ -480,7 +480,7 @@ h3 {
 
 .module-nav button {
   flex: 0 0 auto;
-  min-height: 42px;
+  min-height: 48px;
   border: 1px solid #d9dbe3;
   border-radius: 999px;
   background: #fefefe;
@@ -506,7 +506,7 @@ h3 {
 }
 
 .refresh-button {
-  min-height: 42px;
+  min-height: 48px;
   border: 1px solid #0e0e10;
   border-radius: 10px;
   background: transparent;
@@ -715,7 +715,7 @@ h3 {
 .reservation-form input,
 .reservation-form select {
   width: 100%;
-  min-height: 47px;
+  min-height: 48px;
   border: 1px solid #d8dbe5;
   border-radius: 10px;
   background: #fff;
@@ -783,7 +783,7 @@ h3 {
 }
 
 .category-choice button {
-  min-height: 44px;
+  min-height: 48px;
   border-radius: 10px;
   padding: 0 9px;
   font-size: 0.82rem;
@@ -806,7 +806,7 @@ h3 {
 
 .availability-button {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
   margin-top: 12px;
   border: 1px solid #0e0e10;
   border-radius: 10px;
@@ -956,9 +956,312 @@ h3 {
   line-height: 1.4;
 }
 
+.planning-workspace,
+.vehicle-management {
+  display: grid;
+  gap: 16px;
+  margin-top: 26px;
+}
+
+.planning-controls-card,
+.fleet-state-card,
+.calendar-list-card,
+.vehicle-list-card,
+.vehicle-create-card {
+  border: 1px solid #e6e7ed;
+  border-radius: 16px;
+  background: #fff;
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.planning-form,
+.vehicle-filter-form {
+  display: grid;
+  align-items: end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.planning-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.vehicle-filter-form {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.planning-form label,
+.vehicle-filter-form label,
+.vehicle-create-form label,
+.status-select {
+  display: grid;
+  gap: 7px;
+  color: #30313a;
+  font-size: 0.79rem;
+  font-weight: 780;
+}
+
+.planning-form input,
+.planning-form select,
+.vehicle-filter-form select,
+.vehicle-create-form input,
+.vehicle-create-form select,
+.status-select select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #d8dbe5;
+  border-radius: 10px;
+  background: #fff;
+  color: #0e0e10;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.planning-form select,
+.vehicle-filter-form select,
+.vehicle-create-form select,
+.status-select select {
+  cursor: pointer;
+}
+
+.planning-form input:focus,
+.planning-form select:focus,
+.vehicle-filter-form select:focus,
+.vehicle-create-form input:focus,
+.vehicle-create-form select:focus,
+.status-select select:focus {
+  border-color: #2222e6;
+  box-shadow: 0 0 0 3px rgba(34, 34, 230, 0.12);
+}
+
+.planning-form input:disabled,
+.planning-form select:disabled,
+.vehicle-filter-form select:disabled,
+.vehicle-create-form input:disabled,
+.vehicle-create-form select:disabled,
+.status-select select:disabled {
+  background: #f5f5f7;
+  color: #777985;
+  cursor: not-allowed;
+}
+
+.planning-submit,
+.vehicle-filter-submit {
+  width: 100%;
+}
+
+.planning-controls-card .rental-message,
+.vehicle-list-card .rental-message {
+  margin-top: 14px;
+}
+
+.fleet-state-card,
+.calendar-list-card {
+  background: #f8f8fa;
+}
+
+.fleet-grid,
+.managed-vehicle-grid {
+  display: grid;
+  gap: 11px;
+  margin-top: 18px;
+}
+
+.fleet-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.fleet-card,
+.managed-vehicle-card,
+.calendar-entry-card {
+  border: 1px solid #e1e3ea;
+  border-radius: 13px;
+  background: #fff;
+  padding: 15px;
+}
+
+.fleet-card {
+  display: grid;
+  gap: 10px;
+}
+
+.fleet-card > div,
+.calendar-entry-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fleet-card strong,
+.calendar-entry-card > strong {
+  display: block;
+  color: #252630;
+  font-size: 0.94rem;
+  line-height: 1.35;
+}
+
+.fleet-card small {
+  color: #656773;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.vehicle-code {
+  display: block;
+  color: #2222e6;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+}
+
+.status-chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.71rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.status-available {
+  background: #e9f7ef;
+  color: #17633b;
+}
+
+.status-preparation {
+  background: #fff3d6;
+  color: #7a5200;
+}
+
+.status-washing {
+  background: #e7f4ff;
+  color: #045d99;
+}
+
+.status-garage {
+  background: #fff0f0;
+  color: #9b1d1d;
+}
+
+.status-in_circulation,
+.reservation-checked_out {
+  background: #eeecff;
+  color: #4632a8;
+}
+
+.reservation-reserved {
+  background: #eef0ff;
+  color: #2526a2;
+}
+
+.calendar-entry-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.calendar-entry-card {
+  display: grid;
+  gap: 12px;
+}
+
+.calendar-entry-card dl,
+.managed-vehicle-card dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.calendar-entry-card dl div,
+.managed-vehicle-card dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.calendar-entry-card dt,
+.managed-vehicle-card dt {
+  color: #696b75;
+  font-size: 0.71rem;
+  font-weight: 750;
+}
+
+.calendar-entry-card dd,
+.managed-vehicle-card dd {
+  margin: 0;
+  color: #32333c;
+  font-size: 0.81rem;
+  line-height: 1.36;
+}
+
+.vehicle-management {
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+  align-items: start;
+}
+
+.managed-vehicle-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.managed-vehicle-card {
+  display: grid;
+  gap: 14px;
+}
+
+.managed-vehicle-card h4 {
+  margin: 4px 0 5px;
+  color: #252630;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.managed-vehicle-card p {
+  margin: 0;
+  color: #656773;
+  font-size: 0.77rem;
+  line-height: 1.4;
+}
+
+.vehicle-create-card {
+  background: #f8f8fa;
+}
+
+.vehicle-create-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.create-vehicle {
+  width: 100%;
+}
+
 @media (max-width: 880px) {
   .reservation-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .vehicle-management {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vehicle-filter-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vehicle-filter-submit {
+    grid-column: 1 / -1;
   }
 
   .reservation-summary {
@@ -974,6 +1277,10 @@ h3 {
 }
 
 @media (max-width: 680px) {
+  .application-shell {
+    padding: 12px 12px 30px;
+  }
+
   .topbar,
   .context-card,
   .workspace-heading,
@@ -1001,6 +1308,15 @@ h3 {
     min-height: auto;
   }
 
+  .access-card {
+    order: -1;
+  }
+
+  .access-intro {
+    order: 1;
+    padding: 26px 22px;
+  }
+
   .access-intro,
   .access-card,
   .company-choice {
@@ -1023,8 +1339,9 @@ h3 {
 
   .session-strip .text-button,
   .change-company {
-    width: 100%;
-    margin-left: 39px;
+    width: auto;
+    min-height: 48px;
+    margin-left: 0;
   }
 
   .foundation-badge {
@@ -1035,260 +1352,17 @@ h3 {
   .checklist-card,
   .two-columns,
   .three-columns,
-  .reservation-summary {
+  .reservation-summary,
+  .planning-form,
+  .vehicle-filter-form {
     grid-template-columns: 1fr;
+  }
+
+  .vehicle-filter-submit {
+    grid-column: auto;
   }
 
   .workspace {
     padding: 18px;
   }
 }
-
-/* Connexion : mobile-first, tactile et sans contenu promotionnel. */
-.environment-label {
-  color: #626470;
-  font-size: 0.78rem;
-  font-weight: 760;
-}
-
-.auth-page {
-  display: grid;
-  min-height: calc(100dvh - 152px);
-  place-items: center;
-  padding: clamp(12px, 4vh, 44px) 0;
-}
-
-.auth-card {
-  width: min(100%, 488px);
-  border: 1px solid #dfe1e8;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 12px 34px rgba(14, 14, 16, 0.06);
-  padding: clamp(24px, 4vw, 38px);
-}
-
-.auth-header {
-  max-width: 390px;
-}
-
-.auth-kicker {
-  margin: 0 0 8px;
-  color: #2222e6;
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.auth-header h1 {
-  margin: 0;
-  color: #0e0e10;
-  font-size: clamp(1.85rem, 5vw, 2.45rem);
-  line-height: 1.15;
-  letter-spacing: -0.04em;
-}
-
-.auth-header p:last-child {
-  margin: 10px 0 0;
-  color: #5b5c68;
-  font-size: 0.96rem;
-  line-height: 1.5;
-}
-
-.auth-form {
-  display: grid;
-  gap: 18px;
-  margin-top: 30px;
-}
-
-.auth-field {
-  display: grid;
-  gap: 8px;
-}
-
-.auth-field > label {
-  color: #30313a;
-  font-size: 0.86rem;
-  font-weight: 760;
-}
-
-.auth-field input {
-  width: 100%;
-  min-height: 54px;
-  border: 1px solid #cfd3df;
-  border-radius: 12px;
-  background: #fff;
-  color: #0e0e10;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 1rem;
-  outline: none;
-}
-
-.auth-field input:focus {
-  border-color: #2222e6;
-  box-shadow: 0 0 0 3px rgba(34, 34, 230, 0.14);
-}
-
-.auth-password {
-  position: relative;
-}
-
-.auth-password input {
-  padding-right: 92px;
-}
-
-.password-toggle {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  min-width: 76px;
-  min-height: 48px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: #2222e6;
-  padding: 0 10px;
-  font: inherit;
-  font-size: 0.84rem;
-  font-weight: 760;
-  cursor: pointer;
-}
-
-.password-toggle:focus-visible {
-  outline: 2px solid #2222e6;
-  outline-offset: -2px;
-}
-
-.auth-code-input {
-  letter-spacing: 0.2em;
-  text-align: center;
-  font-size: 1.3rem !important;
-  font-weight: 800;
-}
-
-.auth-message {
-  margin: 0;
-  border: 1px solid #cfd3df;
-  border-radius: 10px;
-  background: #f4f5f8;
-  color: #343640;
-  padding: 12px 14px;
-  font-size: 0.9rem;
-  line-height: 1.42;
-}
-
-.auth-message.error {
-  border-color: #f5c0c0;
-  background: #fff1f1;
-  color: #8b1111;
-}
-
-.auth-message.success {
-  border-color: #b9e4c8;
-  background: #edf9f1;
-  color: #1a5f39;
-}
-
-.auth-actions {
-  display: grid;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.auth-primary,
-.auth-link {
-  min-height: 54px;
-  border-radius: 12px;
-  font: inherit;
-  font-size: 0.95rem;
-  font-weight: 780;
-}
-
-.auth-primary {
-  width: 100%;
-  border: 1px solid #f70707;
-  background: #f70707;
-  color: #fff;
-  cursor: pointer;
-}
-
-.auth-primary:not(:disabled):hover,
-.auth-primary:not(:disabled):focus-visible {
-  border-color: #c60000;
-  background: #c60000;
-}
-
-.auth-primary:disabled,
-.auth-link:disabled,
-.password-toggle:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.auth-link {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: #2222e6;
-  cursor: pointer;
-  text-align: center;
-}
-
-.auth-link:not(:disabled):hover,
-.auth-link:not(:disabled):focus-visible {
-  text-decoration: underline;
-}
-
-@media (max-width: 680px) {
-  .application-shell {
-    width: 100%;
-    padding: 12px 16px max(20px, env(safe-area-inset-bottom));
-  }
-
-  .topbar {
-    flex-direction: row;
-    align-items: center;
-    padding-bottom: 12px;
-  }
-
-  .brand img {
-    width: 94px;
-  }
-
-  .environment-label {
-    border-radius: 999px;
-    background: #eef0ff;
-    color: #17188f;
-    padding: 7px 10px;
-    font-size: 0.72rem;
-  }
-
-  .auth-page {
-    min-height: calc(100dvh - 108px);
-    align-items: end;
-    padding: 8px 0 0;
-  }
-
-  .auth-card {
-    border-radius: 16px;
-    box-shadow: none;
-    padding: 24px 20px max(22px, env(safe-area-inset-bottom));
-  }
-
-  .auth-form {
-    gap: 16px;
-    margin-top: 24px;
-  }
-
-  .auth-field input,
-  .auth-primary,
-  .auth-link {
-    min-height: 56px;
-  }
-
-  .password-toggle {
-    min-height: 50px;
-  }
-}
-

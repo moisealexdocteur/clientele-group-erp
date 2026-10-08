@@ -65,6 +65,211 @@ final class CarRentalController extends Controller
         ]);
     }
 
+    public function vehicles(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+
+        $data = $request->validate([
+            'site_id' => ['nullable', 'uuid'],
+            'category' => ['nullable', Rule::in(CarRentalVehicle::CATEGORIES)],
+            'operational_status' => ['nullable', Rule::in(CarRentalVehicle::OPERATIONAL_STATUSES)],
+            'active' => ['nullable', 'boolean'],
+        ]);
+
+        $siteIds = ($data['site_id'] ?? null) === null
+            ? $this->siteAuthorizer->activeSiteIdsFor($company, $access)
+            : collect([$this->siteAuthorizer->siteFor($company, $access, $data['site_id'])->id]);
+
+        $vehicles = CarRentalVehicle::query()
+            ->where('company_id', $company->id)
+            ->whereIn('site_id', $siteIds)
+            ->when($data['category'] ?? null, static fn ($query, string $category) => $query->where('category', $category))
+            ->when(
+                array_key_exists('operational_status', $data),
+                static fn ($query) => $query->where('operational_status', $data['operational_status']),
+            )
+            ->when(
+                array_key_exists('active', $data),
+                static fn ($query) => $query->where('is_active', $data['active']),
+            )
+            ->with('site')
+            ->orderBy('code')
+            ->get();
+
+        return response()->json([
+            'data' => $vehicles->map(fn (CarRentalVehicle $vehicle): array => $this->vehiclePayload($vehicle)),
+        ]);
+    }
+
+    public function storeVehicle(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $request->merge([
+            'code' => $this->canonicalVehicleIdentifier($request->input('code')),
+            'registration_number' => $this->canonicalVehicleIdentifier($request->input('registration_number')),
+            'vin' => $this->canonicalVehicleIdentifier($request->input('vin')),
+        ]);
+
+        $data = $request->validate([
+            'site_id' => ['required', 'uuid'],
+            'code' => [
+                'required',
+                'string',
+                'max:32',
+                Rule::unique('car_rental_vehicles', 'code')
+                    ->where(fn ($query) => $query->where('company_id', $company->id)),
+            ],
+            'category' => ['required', Rule::in(CarRentalVehicle::CATEGORIES)],
+            'operational_status' => ['nullable', Rule::in(CarRentalVehicle::OPERATIONAL_STATUSES)],
+            'make' => ['nullable', 'string', 'max:64'],
+            'model' => ['nullable', 'string', 'max:64'],
+            'model_year' => ['nullable', 'integer', 'between:1900,2100'],
+            'registration_number' => [
+                'nullable',
+                'string',
+                'max:64',
+                Rule::unique('car_rental_vehicles', 'registration_number')
+                    ->where(fn ($query) => $query->where('company_id', $company->id)),
+            ],
+            'vin' => [
+                'nullable',
+                'string',
+                'max:64',
+                Rule::unique('car_rental_vehicles', 'vin')
+                    ->where(fn ($query) => $query->where('company_id', $company->id)),
+            ],
+            'latest_odometer_km' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $site = $this->siteAuthorizer->siteFor($company, $access, $data['site_id']);
+        $vehicle = CarRentalVehicle::query()->create([
+            'company_id' => $company->id,
+            'site_id' => $site->id,
+            'code' => $data['code'],
+            'category' => $data['category'],
+            'operational_status' => $data['operational_status'] ?? 'available',
+            'make' => $this->nullableTrimmed($data['make'] ?? null),
+            'model' => $this->nullableTrimmed($data['model'] ?? null),
+            'model_year' => $data['model_year'] ?? null,
+            'registration_number' => $this->nullableTrimmed($data['registration_number'] ?? null),
+            'vin' => $this->nullableTrimmed($data['vin'] ?? null),
+            'latest_odometer_km' => $data['latest_odometer_km'],
+            'is_active' => true,
+        ]);
+
+        $this->audit->record(
+            eventType: 'car_rental.vehicle_created',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalVehicle::class,
+            subjectId: $vehicle->id,
+            metadata: [
+                'code' => $vehicle->code,
+                'site_id' => $vehicle->site_id,
+                'category' => $vehicle->category,
+                'operational_status' => $vehicle->operational_status,
+            ],
+        );
+
+        return response()->json([
+            'data' => $this->vehiclePayload($vehicle->load('site')),
+        ], 201);
+    }
+
+    public function updateVehicleStatus(Request $request, string $vehicle): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'operational_status' => ['required', Rule::in(CarRentalVehicle::OPERATIONAL_STATUSES)],
+        ]);
+
+        $model = CarRentalVehicle::query()
+            ->where('company_id', $company->id)
+            ->whereKey($vehicle)
+            ->first();
+
+        abort_if($model === null, 404, 'Véhicule introuvable.');
+        $this->siteAuthorizer->siteFor($company, $access, $model->site_id);
+
+        $previousStatus = $model->operational_status;
+        $model->forceFill(['operational_status' => $data['operational_status']])->save();
+
+        if ($previousStatus !== $model->operational_status) {
+            $this->audit->record(
+                eventType: 'car_rental.vehicle_status_changed',
+                companyId: $company->id,
+                actorId: $actor?->id,
+                actorType: $actor === null ? 'SYSTEM' : 'USER',
+                subjectType: CarRentalVehicle::class,
+                subjectId: $model->id,
+                metadata: [
+                    'code' => $model->code,
+                    'site_id' => $model->site_id,
+                    'previous_status' => $previousStatus,
+                    'operational_status' => $model->operational_status,
+                ],
+            );
+        }
+
+        return response()->json([
+            'data' => $this->vehiclePayload($model->load('site')),
+        ]);
+    }
+
+    public function calendar(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+
+        $data = $request->validate([
+            'site_id' => ['nullable', 'uuid'],
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date'],
+        ]);
+
+        [$from, $to] = $this->interval($company, $data['from'], $data['to']);
+        $siteIds = ($data['site_id'] ?? null) === null
+            ? $this->siteAuthorizer->activeSiteIdsFor($company, $access)
+            : collect([$this->siteAuthorizer->siteFor($company, $access, $data['site_id'])->id]);
+
+        $reservations = CarRentalReservation::query()
+            ->where('company_id', $company->id)
+            ->whereIn('site_id', $siteIds)
+            ->whereIn('state', CarRentalReservation::ACTIVE_STATES)
+            ->where('pickup_at', '<', $to)
+            ->where('due_at', '>', $from)
+            ->with(['site', 'vehicle'])
+            ->orderBy('pickup_at')
+            ->get();
+
+        $vehicles = CarRentalVehicle::query()
+            ->where('company_id', $company->id)
+            ->whereIn('site_id', $siteIds)
+            ->where('is_active', true)
+            ->with('site')
+            ->orderBy('code')
+            ->get();
+
+        return response()->json([
+            'data' => $reservations->map(fn (CarRentalReservation $reservation): array => $this->calendarPayload($reservation)),
+            'vehicles' => $vehicles->map(fn (CarRentalVehicle $vehicle): array => $this->vehiclePayload($vehicle)),
+            'period' => [
+                'from' => $from->toIso8601String(),
+                'to' => $to->toIso8601String(),
+                'timezone' => $company->timezone,
+                'timezone_label' => $company->timezone_display_name,
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $company = $this->company($request);
@@ -369,7 +574,7 @@ final class CarRentalController extends Controller
 
         if ($due->lessThanOrEqualTo($pickup)) {
             throw ValidationException::withMessages([
-                'due_at' => 'Le retour prévu doit être après le début de la location.',
+                'due_at' => 'La date de fin doit être postérieure à la date de début.',
             ]);
         }
 
@@ -406,6 +611,12 @@ final class CarRentalController extends Controller
     {
         return [
             'id' => $vehicle->id,
+            'site_id' => $vehicle->site_id,
+            'site' => $vehicle->relationLoaded('site') && $vehicle->site !== null ? [
+                'id' => $vehicle->site->id,
+                'code' => $vehicle->site->code,
+                'name' => $vehicle->site->name,
+            ] : null,
             'code' => $vehicle->code,
             'category' => $vehicle->category,
             'operational_status' => $vehicle->operational_status,
@@ -413,7 +624,44 @@ final class CarRentalController extends Controller
             'model' => $vehicle->model,
             'model_year' => $vehicle->model_year,
             'latest_odometer_km' => $vehicle->latest_odometer_km,
+            'is_active' => $vehicle->is_active,
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function calendarPayload(CarRentalReservation $reservation): array
+    {
+        return [
+            'id' => $reservation->id,
+            'number' => $reservation->formattedNumber(),
+            'state' => $reservation->state,
+            'pickup_at' => $reservation->pickup_at?->toIso8601String(),
+            'due_at' => $reservation->due_at?->toIso8601String(),
+            'site' => $reservation->site === null ? null : [
+                'id' => $reservation->site->id,
+                'code' => $reservation->site->code,
+                'name' => $reservation->site->name,
+            ],
+            'vehicle' => $reservation->vehicle === null ? null : $this->vehiclePayload($reservation->vehicle),
+        ];
+    }
+
+    private function nullableTrimmed(?string $value): ?string
+    {
+        $value = $value === null ? null : trim($value);
+
+        return $value === '' ? null : $value;
+    }
+
+    private function canonicalVehicleIdentifier(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        $identifier = strtoupper(trim($value));
+
+        return $identifier === '' ? null : $identifier;
     }
 
     /** @return array<string, mixed> */

@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 type ApiStatus = 'checking' | 'online' | 'offline'
 type AuthView = 'sign-in' | 'verify' | 'reset-request' | 'reset-confirm' | 'authenticated'
-type AuthMessageKind = 'info' | 'error' | 'success'
 
 interface BootstrapResponse {
   application: {
@@ -62,16 +61,26 @@ interface CompanyContext {
 type RentalCategory = 'suv' | 'mid_suv' | 'pickup'
 type RentalLocation = 'site' | 'cap_haitien_airport' | 'custom'
 type KilometerPlan = 'limited' | 'unlimited'
+type VehicleOperationalStatus = 'available' | 'preparation' | 'washing' | 'garage' | 'in_circulation'
+
+interface RentalSite {
+  id: string
+  code: string
+  name: string
+}
 
 interface RentalVehicle {
   id: string
+  site_id: string
+  site: RentalSite | null
   code: string
   category: RentalCategory
-  operational_status: string
+  operational_status: VehicleOperationalStatus
   make: string | null
   model: string | null
   model_year: number | null
   latest_odometer_km: number
+  is_active: boolean
 }
 
 interface CarRentalAvailabilityResponse {
@@ -104,6 +113,31 @@ interface CarRentalReservation {
   } | null
 }
 
+interface CarRentalVehicleListResponse {
+  data: RentalVehicle[]
+}
+
+interface CarRentalCalendarEntry {
+  id: string
+  number: string
+  state: 'reserved' | 'checked_out'
+  pickup_at: string
+  due_at: string
+  site: RentalSite | null
+  vehicle: RentalVehicle | null
+}
+
+interface CarRentalCalendarResponse {
+  data: CarRentalCalendarEntry[]
+  vehicles: RentalVehicle[]
+  period: {
+    from: string
+    to: string
+    timezone: string
+    timezone_label: string
+  }
+}
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -120,13 +154,10 @@ const bootstrap = ref<BootstrapResponse | null>(null)
 const currentTime = ref(new Date())
 const authView = ref<AuthView>('sign-in')
 const authMessage = ref('')
-const authMessageKind = ref<AuthMessageKind>('info')
 const authBusy = ref(false)
 const email = ref('')
 const password = ref('')
 const passwordConfirmation = ref('')
-const passwordVisible = ref(false)
-const passwordConfirmationVisible = ref(false)
 const emailCode = ref('')
 const challengeId = ref('')
 const sessionToken = ref(sessionStorage.getItem('clientele.erp.session') ?? '')
@@ -138,6 +169,15 @@ const rentalMessage = ref('')
 const rentalError = ref(false)
 const availableVehicles = ref<RentalVehicle[]>([])
 const reservationCreated = ref<CarRentalReservation | null>(null)
+const vehicleBusy = ref(false)
+const vehicleMessage = ref('')
+const vehicleError = ref(false)
+const managedVehicles = ref<RentalVehicle[]>([])
+const calendarBusy = ref(false)
+const calendarMessage = ref('')
+const calendarError = ref(false)
+const calendarEntries = ref<CarRentalCalendarEntry[]>([])
+const calendarVehicles = ref<RentalVehicle[]>([])
 let clockTimer: number | undefined
 
 const reservationForm = reactive({
@@ -161,9 +201,34 @@ const reservationForm = reactive({
   additional_km_rate: '',
 })
 
+const vehicleForm = reactive({
+  site_id: '',
+  code: '',
+  category: 'suv' as RentalCategory,
+  operational_status: 'available' as VehicleOperationalStatus,
+  make: '',
+  model: '',
+  model_year: '',
+  registration_number: '',
+  vin: '',
+  latest_odometer_km: '0',
+})
+
+const vehicleFilters = reactive({
+  site_id: '',
+  operational_status: '',
+})
+
+const calendarForm = reactive({
+  site_id: '',
+  from: '',
+  to: '',
+})
+
 const sections = [
   'Accueil',
   'Réservations',
+  'Calendrier',
   'Locations',
   'Véhicules',
   'Inspections',
@@ -175,6 +240,19 @@ const categoryLabels: Record<RentalCategory, string> = {
   suv: 'SUV',
   mid_suv: 'Mid SUV',
   pickup: 'Pick-up',
+}
+
+const vehicleStatusLabels: Record<VehicleOperationalStatus, string> = {
+  available: 'Disponible',
+  preparation: 'Préparation',
+  washing: 'Lavage',
+  garage: 'Garage',
+  in_circulation: 'En circulation',
+}
+
+const reservationStateLabels: Record<CarRentalCalendarEntry['state'], string> = {
+  reserved: 'Réservée',
+  checked_out: 'En circulation',
 }
 
 const formattedCapHaitienTime = computed(() => {
@@ -192,7 +270,7 @@ const formattedCapHaitienTime = computed(() => {
     hour12: true,
   }).format(date)
 
-  return `${datePart} · ${timePart} (Cap-Haïtien, Haïti)`
+  return `${datePart} · ${timePart} · heure de Cap-Haïtien`
 })
 
 const statusLabel = computed(() => {
@@ -205,6 +283,16 @@ const statusLabel = computed(() => {
 const activeCompanyName = computed(() => activeContext.value?.company.name ?? '')
 
 const userInitial = computed(() => user.value?.name.slice(0, 1).toUpperCase() ?? '?')
+
+const canReadVehicles = computed(() => hasPermission('rental.vehicles.read'))
+const canManageVehicles = computed(() => hasPermission('rental.vehicles.manage'))
+const canReadCalendar = computed(() => hasPermission('rental.calendar.read'))
+const visibleSections = computed(() => sections.filter((section) => {
+  if (section === 'Véhicules') return canReadVehicles.value || canManageVehicles.value
+  if (section === 'Calendrier') return canReadCalendar.value
+
+  return true
+}))
 
 const activeSite = computed(() => (
   activeContext.value?.sites.find((site) => site.id === reservationForm.site_id) ?? null
@@ -261,7 +349,6 @@ async function verifyApi(): Promise<void> {
 
 async function signIn(): Promise<void> {
   authMessage.value = ''
-  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -278,10 +365,9 @@ async function signIn(): Promise<void> {
     password.value = ''
     emailCode.value = ''
     authView.value = 'verify'
-    authMessage.value = 'Un code à six chiffres a été envoyé à votre adresse personnelle.'
+    authMessage.value = 'Un code à six chiffres vient d’être envoyé à votre adresse personnelle.'
   } catch (error) {
     authMessage.value = messageFrom(error)
-    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -289,7 +375,6 @@ async function signIn(): Promise<void> {
 
 async function verifyEmailCode(): Promise<void> {
   authMessage.value = ''
-  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -309,7 +394,6 @@ async function verifyEmailCode(): Promise<void> {
     await loadSession()
   } catch (error) {
     authMessage.value = messageFrom(error)
-    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -317,7 +401,6 @@ async function verifyEmailCode(): Promise<void> {
 
 async function requestPasswordReset(): Promise<void> {
   authMessage.value = ''
-  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -334,7 +417,6 @@ async function requestPasswordReset(): Promise<void> {
     authMessage.value = result.message
   } catch (error) {
     authMessage.value = messageFrom(error)
-    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -342,7 +424,6 @@ async function requestPasswordReset(): Promise<void> {
 
 async function resetPassword(): Promise<void> {
   authMessage.value = ''
-  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -361,10 +442,8 @@ async function resetPassword(): Promise<void> {
     emailCode.value = ''
     authView.value = 'sign-in'
     authMessage.value = result.message
-    authMessageKind.value = 'success'
   } catch (error) {
     authMessage.value = messageFrom(error)
-    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -387,13 +466,11 @@ async function loadSession(): Promise<void> {
   } catch {
     clearSession()
     authMessage.value = 'Votre session a expiré. Connectez-vous de nouveau.'
-    authMessageKind.value = 'error'
   }
 }
 
 async function selectCompany(companyId: string): Promise<void> {
   authMessage.value = ''
-  authMessageKind.value = 'info'
   authBusy.value = true
 
   try {
@@ -403,9 +480,9 @@ async function selectCompany(companyId: string): Promise<void> {
     activeContext.value = context
     activeSection.value = 'Accueil'
     resetRentalForm(context.sites[0]?.id ?? '')
+    resetVehicleWorkspace(context.sites[0]?.id ?? '')
   } catch (error) {
     authMessage.value = messageFrom(error)
-    authMessageKind.value = 'error'
   } finally {
     authBusy.value = false
   }
@@ -428,25 +505,63 @@ function clearSession(): void {
   companies.value = []
   activeContext.value = null
   authView.value = 'sign-in'
-  authMessageKind.value = 'info'
-  passwordVisible.value = false
-  passwordConfirmationVisible.value = false
   activeSection.value = 'Accueil'
   resetRentalForm()
-}
-
-function showAuthView(view: Exclude<AuthView, 'authenticated'>): void {
-  authView.value = view
-  authMessage.value = ''
-  authMessageKind.value = 'info'
-  passwordVisible.value = false
-  passwordConfirmationVisible.value = false
+  resetVehicleWorkspace()
 }
 
 function contextHeaders(): HeadersInit {
   const companyId = activeContext.value?.company.id
 
   return companyId === undefined ? {} : { 'X-Clientele-Company-Id': companyId }
+}
+
+function hasPermission(permission: string): boolean {
+  const permissions = activeContext.value?.access.permissions
+  const allowed = Array.isArray(permissions) ? permissions : (permissions?.allow ?? [])
+
+  return allowed.includes('*') || allowed.includes(permission)
+}
+
+function capHaitienDateInput(dayOffset = 0): string {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() + dayOffset)
+
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Port-au-Prince',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  )
+
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function formatCapHaitienDateTime(value: string): string {
+  const date = new Date(value)
+  const datePart = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'America/Port-au-Prince',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+  const timePart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Port-au-Prince',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date)
+
+  return `${datePart} · ${timePart}`
+}
+
+function vehicleDisplayName(vehicle: RentalVehicle): string {
+  return [vehicle.make, vehicle.model].filter((value): value is string => Boolean(value)).join(' ') || 'Modèle non renseigné'
 }
 
 function resetRentalForm(siteId = ''): void {
@@ -476,6 +591,37 @@ function resetRentalForm(siteId = ''): void {
   rentalError.value = false
 }
 
+function resetVehicleWorkspace(siteId = ''): void {
+  Object.assign(vehicleForm, {
+    site_id: siteId,
+    code: '',
+    category: 'suv',
+    operational_status: 'available',
+    make: '',
+    model: '',
+    model_year: '',
+    registration_number: '',
+    vin: '',
+    latest_odometer_km: '0',
+  })
+  Object.assign(vehicleFilters, {
+    site_id: siteId,
+    operational_status: '',
+  })
+  Object.assign(calendarForm, {
+    site_id: '',
+    from: capHaitienDateInput(),
+    to: capHaitienDateInput(7),
+  })
+  managedVehicles.value = []
+  calendarEntries.value = []
+  calendarVehicles.value = []
+  vehicleMessage.value = ''
+  vehicleError.value = false
+  calendarMessage.value = ''
+  calendarError.value = false
+}
+
 function onReservationSiteChanged(): void {
   reservationForm.vehicle_id = ''
   availableVehicles.value = []
@@ -495,7 +641,7 @@ async function loadAvailability(): Promise<void> {
 
   if (!reservationForm.site_id || !reservationForm.pickup_at || !reservationForm.due_at) {
     rentalError.value = true
-    rentalMessage.value = 'Sélectionnez le site, la date de départ et la date de retour avant de vérifier la disponibilité.'
+    rentalMessage.value = 'Choisissez l’adresse de l’opération, la date de départ et la date de retour avant de vérifier la disponibilité.'
     return
   }
 
@@ -534,13 +680,13 @@ async function createReservation(): Promise<void> {
 
   if (!reservationForm.site_id || !reservationForm.customer_name.trim() || !reservationForm.pickup_at || !reservationForm.due_at || !reservationForm.daily_rate) {
     rentalError.value = true
-    rentalMessage.value = 'Renseignez le site, le client, les dates et le tarif avant d’enregistrer la réservation.'
+    rentalMessage.value = 'Complétez l’adresse, le client, les dates et le tarif avant d’enregistrer la réservation.'
     return
   }
 
   if (!reservationForm.vehicle_id && !reservationForm.category) {
     rentalError.value = true
-    rentalMessage.value = 'Sélectionnez une catégorie ou un véhicule disponible.'
+    rentalMessage.value = 'Choisissez une catégorie ou un véhicule disponible.'
     return
   }
 
@@ -584,7 +730,7 @@ async function createReservation(): Promise<void> {
     })
 
     reservationCreated.value = result.data
-    rentalMessage.value = `Réservation ${result.data.number} créée.`
+    rentalMessage.value = `Réservation ${result.data.number} créée et journalisée.`
     rentalError.value = false
     availableVehicles.value = availableVehicles.value.filter((vehicle) => vehicle.id !== result.data.vehicle?.id)
     reservationForm.vehicle_id = ''
@@ -596,10 +742,201 @@ async function createReservation(): Promise<void> {
   }
 }
 
+async function loadVehicles(): Promise<void> {
+  vehicleMessage.value = ''
+  vehicleError.value = false
+
+  if (!canReadVehicles.value) {
+    vehicleError.value = true
+    vehicleMessage.value = 'Vous n’êtes pas autorisé à consulter les véhicules.'
+    return
+  }
+
+  vehicleBusy.value = true
+
+  try {
+    const parameters = new URLSearchParams()
+    if (vehicleFilters.site_id) parameters.set('site_id', vehicleFilters.site_id)
+    if (vehicleFilters.operational_status) parameters.set('operational_status', vehicleFilters.operational_status)
+
+    const result = await requestApi<CarRentalVehicleListResponse>(`/api/v1/car-rental/vehicles?${parameters}`, {
+      headers: contextHeaders(),
+    })
+    managedVehicles.value = result.data
+    vehicleMessage.value = result.data.length === 0
+      ? 'Aucun véhicule ne correspond aux critères sélectionnés.'
+      : `${result.data.length} véhicule${result.data.length > 1 ? 's' : ''} affiché${result.data.length > 1 ? 's' : ''}.`
+  } catch (error) {
+    vehicleError.value = true
+    vehicleMessage.value = messageFrom(error)
+    managedVehicles.value = []
+  } finally {
+    vehicleBusy.value = false
+  }
+}
+
+async function createVehicle(): Promise<void> {
+  vehicleMessage.value = ''
+  vehicleError.value = false
+
+  if (!canManageVehicles.value) {
+    vehicleError.value = true
+    vehicleMessage.value = 'Vous n’êtes pas autorisé à ajouter un véhicule.'
+    return
+  }
+
+  if (!vehicleForm.site_id || !vehicleForm.code.trim() || vehicleForm.latest_odometer_km === '') {
+    vehicleError.value = true
+    vehicleMessage.value = 'Renseignez l’adresse, le code interne et le kilométrage actuel.'
+    return
+  }
+
+  vehicleBusy.value = true
+
+  try {
+    const result = await requestApi<{ data: RentalVehicle }>('/api/v1/car-rental/vehicles', {
+      method: 'POST',
+      headers: contextHeaders(),
+      body: JSON.stringify({
+        site_id: vehicleForm.site_id,
+        code: vehicleForm.code.trim(),
+        category: vehicleForm.category,
+        operational_status: vehicleForm.operational_status,
+        make: vehicleForm.make.trim() || undefined,
+        model: vehicleForm.model.trim() || undefined,
+        model_year: vehicleForm.model_year === '' ? undefined : Number(vehicleForm.model_year),
+        registration_number: vehicleForm.registration_number.trim() || undefined,
+        vin: vehicleForm.vin.trim() || undefined,
+        latest_odometer_km: Number(vehicleForm.latest_odometer_km),
+      }),
+    })
+
+    const siteId = vehicleForm.site_id
+    Object.assign(vehicleForm, {
+      code: '',
+      category: 'suv',
+      operational_status: 'available',
+      make: '',
+      model: '',
+      model_year: '',
+      registration_number: '',
+      vin: '',
+      latest_odometer_km: '0',
+      site_id: siteId,
+    })
+    vehicleMessage.value = `Véhicule ${result.data.code} enregistré.`
+
+    if (!vehicleFilters.site_id || vehicleFilters.site_id === result.data.site_id) {
+      managedVehicles.value = [
+        result.data,
+        ...managedVehicles.value.filter((vehicle) => vehicle.id !== result.data.id),
+      ].sort((left, right) => left.code.localeCompare(right.code, 'fr'))
+    }
+  } catch (error) {
+    vehicleError.value = true
+    vehicleMessage.value = messageFrom(error)
+  } finally {
+    vehicleBusy.value = false
+  }
+}
+
+function isVehicleOperationalStatus(value: string): value is VehicleOperationalStatus {
+  return Object.prototype.hasOwnProperty.call(vehicleStatusLabels, value)
+}
+
+function onVehicleStatusSelected(vehicle: RentalVehicle, event: Event): void {
+  const status = (event.target as HTMLSelectElement).value
+
+  if (isVehicleOperationalStatus(status)) {
+    void updateVehicleStatus(vehicle, status)
+  }
+}
+
+async function updateVehicleStatus(vehicle: RentalVehicle, status: VehicleOperationalStatus): Promise<void> {
+  vehicleMessage.value = ''
+  vehicleError.value = false
+
+  if (!canManageVehicles.value) {
+    vehicleError.value = true
+    vehicleMessage.value = 'Vous n’êtes pas autorisé à modifier l’état d’un véhicule.'
+    return
+  }
+
+  if (vehicle.operational_status === status) {
+    return
+  }
+
+  vehicleBusy.value = true
+
+  try {
+    const result = await requestApi<{ data: RentalVehicle }>(`/api/v1/car-rental/vehicles/${vehicle.id}/operational-status`, {
+      method: 'PATCH',
+      headers: contextHeaders(),
+      body: JSON.stringify({ operational_status: status }),
+    })
+    managedVehicles.value = managedVehicles.value.map((item) => item.id === result.data.id ? result.data : item)
+    calendarVehicles.value = calendarVehicles.value.map((item) => item.id === result.data.id ? result.data : item)
+    vehicleMessage.value = `État de ${result.data.code} mis à jour : ${vehicleStatusLabels[result.data.operational_status]}.`
+  } catch (error) {
+    vehicleError.value = true
+    vehicleMessage.value = messageFrom(error)
+  } finally {
+    vehicleBusy.value = false
+  }
+}
+
+async function loadCalendar(): Promise<void> {
+  calendarMessage.value = ''
+  calendarError.value = false
+
+  if (!canReadCalendar.value) {
+    calendarError.value = true
+    calendarMessage.value = 'Vous n’êtes pas autorisé à consulter le planning des véhicules.'
+    return
+  }
+
+  if (!calendarForm.from || !calendarForm.to) {
+    calendarError.value = true
+    calendarMessage.value = 'Choisissez une date de début et une date de fin.'
+    return
+  }
+
+  calendarBusy.value = true
+
+  try {
+    const parameters = new URLSearchParams({
+      from: calendarForm.from,
+      to: calendarForm.to,
+    })
+    if (calendarForm.site_id) parameters.set('site_id', calendarForm.site_id)
+
+    const result = await requestApi<CarRentalCalendarResponse>(`/api/v1/car-rental/calendar?${parameters}`, {
+      headers: contextHeaders(),
+    })
+    calendarEntries.value = result.data
+    calendarVehicles.value = result.vehicles
+    calendarMessage.value = result.data.length === 0
+      ? 'Aucune réservation active ne chevauche cette période.'
+      : `${result.data.length} réservation${result.data.length > 1 ? 's' : ''} active${result.data.length > 1 ? 's' : ''} sur la période.`
+  } catch (error) {
+    calendarError.value = true
+    calendarMessage.value = messageFrom(error)
+    calendarEntries.value = []
+    calendarVehicles.value = []
+  } finally {
+    calendarBusy.value = false
+  }
+}
+
+function openSection(section: string): void {
+  activeSection.value = section
+}
+
 function changeCompany(): void {
   activeContext.value = null
   activeSection.value = 'Accueil'
   resetRentalForm()
+  resetVehicleWorkspace()
 }
 
 function kioskLabel(): string {
@@ -611,7 +948,7 @@ function messageFrom(error: unknown): string {
     return error.message
   }
 
-  return 'Impossible de joindre le serveur. Vérifiez votre connexion Internet, puis réessayez.'
+  return 'La connexion au serveur a échoué. Vérifiez Internet puis réessayez.'
 }
 
 function onOnline(): void {
@@ -651,163 +988,121 @@ onBeforeUnmount(() => {
         <span>ERP</span>
       </a>
 
-      <div v-if="authView === 'authenticated'" class="status-group">
+      <div class="status-group">
         <span class="city">Cap-Haïtien, Haïti</span>
         <span class="timestamp">{{ formattedCapHaitienTime }}</span>
         <span class="connection" :class="apiStatus">
           <i aria-hidden="true"></i>{{ statusLabel }}
         </span>
       </div>
-      <span v-else class="environment-label">
-        {{ bootstrap?.application.environment === 'staging' ? 'Préproduction' : 'Clientèle Group ERP' }}
-      </span>
     </header>
 
     <div v-if="isOffline" class="offline-notice" role="status">
-La connexion Internet est requise pour ouvrir une session.
+      Vous êtes hors ligne. La connexion et les opérations nécessitant le serveur ne sont pas disponibles.
     </div>
 
-    <section v-if="authView !== 'authenticated'" class="auth-page" aria-labelledby="auth-title">
-      <section class="auth-card" aria-live="polite">
+    <section v-if="authView !== 'authenticated'" class="access-layout" aria-labelledby="access-title">
+      <div class="access-intro">
+        <p class="eyebrow">Accès personnel obligatoire</p>
+        <h1 id="access-title">Connexion sécurisée</h1>
+        <p>
+          Connectez-vous avec un compte individuel. Les sociétés, les adresses et les données clients
+          ne sont accessibles qu’après authentification.
+        </p>
+        <ul class="access-points">
+          <li><span>01</span> Compte personnel</li>
+          <li><span>02</span> Code de vérification par courriel</li>
+          <li><span>03</span> Accès limité à la société et à l’adresse autorisées</li>
+        </ul>
+      </div>
+
+      <section class="access-card" aria-live="polite">
         <template v-if="authView === 'sign-in'">
-          <header class="auth-header">
-            <p class="auth-kicker">Connexion</p>
-            <h1 id="auth-title">Se connecter</h1>
-            <p>Saisissez votre adresse courriel et votre mot de passe.</p>
-          </header>
+          <p class="eyebrow">Connexion</p>
+          <h2>Se connecter</h2>
+          <p class="access-description">Saisissez votre adresse courriel personnelle et votre mot de passe.</p>
 
-          <form class="auth-form" @submit.prevent="signIn">
-            <div class="auth-field">
-              <label for="sign-in-email">Adresse courriel</label>
-              <input id="sign-in-email" v-model.trim="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required :disabled="authBusy" />
-            </div>
-
-            <div class="auth-field">
-              <label for="sign-in-password">Mot de passe</label>
-              <div class="auth-password">
-                <input id="sign-in-password" v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="current-password" required :disabled="authBusy" />
-                <button type="button" class="password-toggle" :disabled="authBusy" @click="passwordVisible = !passwordVisible">
-                  {{ passwordVisible ? 'Masquer' : 'Afficher' }}
-                </button>
-              </div>
-            </div>
-
-            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
-              {{ authMessage }}
-            </p>
-
-            <div class="auth-actions">
-              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-                {{ authBusy ? 'Connexion en cours…' : 'Se connecter' }}
-              </button>
-              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('reset-request')">
-                Mot de passe oublié ?
-              </button>
-            </div>
+          <form class="access-form" @submit.prevent="signIn">
+            <label>
+              Adresse courriel personnelle
+              <input v-model.trim="email" type="email" autocomplete="username" required :disabled="authBusy" />
+            </label>
+            <label>
+              Mot de passe
+              <input v-model="password" type="password" autocomplete="current-password" required :disabled="authBusy" />
+            </label>
+            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
+            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+              {{ authBusy ? 'Vérification…' : 'Continuer' }}
+            </button>
+            <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'reset-request'; authMessage = ''">
+              J’ai oublié mon mot de passe
+            </button>
           </form>
         </template>
 
         <template v-else-if="authView === 'verify'">
-          <header class="auth-header">
-            <p class="auth-kicker">Vérification</p>
-            <h1 id="auth-title">Confirmer votre identité</h1>
-            <p>Saisissez le code à six chiffres envoyé par courriel.</p>
-          </header>
+          <p class="eyebrow">Vérification en deux étapes</p>
+          <h2>Vérifier votre identité</h2>
+          <p class="access-description">Saisissez le code envoyé à {{ email }}. Il est valable 10 minutes.</p>
 
-          <form class="auth-form" @submit.prevent="verifyEmailCode">
-            <div class="auth-field">
-              <label for="email-code">Code de vérification</label>
-              <input id="email-code" v-model.trim="emailCode" class="auth-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
-            </div>
-
-            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
-              {{ authMessage }}
-            </p>
-
-            <div class="auth-actions">
-              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-                {{ authBusy ? 'Vérification en cours…' : 'Valider le code' }}
-              </button>
-              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('sign-in')">
-                Retour à la connexion
-              </button>
-            </div>
+          <form class="access-form" @submit.prevent="verifyEmailCode">
+            <label>
+              Code à six chiffres
+              <input v-model.trim="emailCode" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
+            </label>
+            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
+            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+              {{ authBusy ? 'Ouverture…' : 'Ouvrir la session' }}
+            </button>
+            <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'sign-in'; authMessage = ''">
+              Revenir à la connexion
+            </button>
           </form>
         </template>
 
         <template v-else-if="authView === 'reset-request'">
-          <header class="auth-header">
-            <p class="auth-kicker">Mot de passe oublié</p>
-            <h1 id="auth-title">Réinitialiser le mot de passe</h1>
-            <p>Un code est envoyé si cette adresse correspond à un compte actif.</p>
-          </header>
+          <p class="eyebrow">Réinitialisation</p>
+          <h2>Recevoir un code</h2>
+          <p class="access-description">Un code sera envoyé si cette adresse correspond à un compte actif.</p>
 
-          <form class="auth-form" @submit.prevent="requestPasswordReset">
-            <div class="auth-field">
-              <label for="reset-email">Adresse courriel</label>
-              <input id="reset-email" v-model.trim="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required :disabled="authBusy" />
-            </div>
-
-            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
-              {{ authMessage }}
-            </p>
-
-            <div class="auth-actions">
-              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-                {{ authBusy ? 'Envoi en cours…' : 'Envoyer le code' }}
-              </button>
-              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('sign-in')">
-                Retour à la connexion
-              </button>
-            </div>
+          <form class="access-form" @submit.prevent="requestPasswordReset">
+            <label>
+              Adresse courriel personnelle
+              <input v-model.trim="email" type="email" autocomplete="username" required :disabled="authBusy" />
+            </label>
+            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
+            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+              {{ authBusy ? 'Envoi…' : 'Envoyer le code' }}
+            </button>
+            <button class="text-button" type="button" :disabled="authBusy" @click="authView = 'sign-in'; authMessage = ''">
+              Revenir à la connexion
+            </button>
           </form>
         </template>
 
         <template v-else-if="authView === 'reset-confirm'">
-          <header class="auth-header">
-            <p class="auth-kicker">Nouveau mot de passe</p>
-            <h1 id="auth-title">Définir un nouveau mot de passe</h1>
-            <p>Utilisez au moins 12 caractères, avec majuscule, minuscule, chiffre et symbole.</p>
-          </header>
+          <p class="eyebrow">Nouveau mot de passe</p>
+          <h2>Confirmer le code</h2>
+          <p class="access-description">Choisissez un mot de passe de 12 caractères ou plus, avec majuscule, chiffre et symbole.</p>
 
-          <form class="auth-form" @submit.prevent="resetPassword">
-            <div class="auth-field">
-              <label for="reset-code">Code de vérification</label>
-              <input id="reset-code" v-model.trim="emailCode" class="auth-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
-            </div>
-
-            <div class="auth-field">
-              <label for="new-password">Nouveau mot de passe</label>
-              <div class="auth-password">
-                <input id="new-password" v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="new-password" required :disabled="authBusy" />
-                <button type="button" class="password-toggle" :disabled="authBusy" @click="passwordVisible = !passwordVisible">
-                  {{ passwordVisible ? 'Masquer' : 'Afficher' }}
-                </button>
-              </div>
-            </div>
-
-            <div class="auth-field">
-              <label for="password-confirmation">Confirmer le mot de passe</label>
-              <div class="auth-password">
-                <input id="password-confirmation" v-model="passwordConfirmation" :type="passwordConfirmationVisible ? 'text' : 'password'" autocomplete="new-password" required :disabled="authBusy" />
-                <button type="button" class="password-toggle" :disabled="authBusy" @click="passwordConfirmationVisible = !passwordConfirmationVisible">
-                  {{ passwordConfirmationVisible ? 'Masquer' : 'Afficher' }}
-                </button>
-              </div>
-            </div>
-
-            <p v-if="authMessage" id="auth-message" class="auth-message" :class="authMessageKind" :role="authMessageKind === 'error' ? 'alert' : 'status'">
-              {{ authMessage }}
-            </p>
-
-            <div class="auth-actions">
-              <button class="auth-primary" type="submit" :disabled="authBusy || apiStatus !== 'online'">
-                {{ authBusy ? 'Enregistrement en cours…' : 'Enregistrer le mot de passe' }}
-              </button>
-              <button class="auth-link" type="button" :disabled="authBusy" @click="showAuthView('sign-in')">
-                Retour à la connexion
-              </button>
-            </div>
+          <form class="access-form" @submit.prevent="resetPassword">
+            <label>
+              Code à six chiffres
+              <input v-model.trim="emailCode" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required :disabled="authBusy" />
+            </label>
+            <label>
+              Nouveau mot de passe
+              <input v-model="password" type="password" autocomplete="new-password" required :disabled="authBusy" />
+            </label>
+            <label>
+              Confirmer le nouveau mot de passe
+              <input v-model="passwordConfirmation" type="password" autocomplete="new-password" required :disabled="authBusy" />
+            </label>
+            <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
+            <button class="primary-button" type="submit" :disabled="authBusy || apiStatus !== 'online'">
+              {{ authBusy ? 'Enregistrement…' : 'Réinitialiser le mot de passe' }}
+            </button>
           </form>
         </template>
       </section>
@@ -816,8 +1111,8 @@ La connexion Internet est requise pour ouvrir une session.
     <template v-else>
       <section v-if="!activeContext" class="company-choice" aria-labelledby="company-choice-title">
         <p class="eyebrow">Session ouverte · {{ user?.name }}</p>
-        <h1 id="company-choice-title">Sélectionnez une société</h1>
-        <p>Votre sélection détermine les données, sites et fonctions disponibles pendant cette session.</p>
+        <h1 id="company-choice-title">Sélectionnez la société à utiliser.</h1>
+        <p>Cette sélection détermine les données, les sites et les fonctions autorisés pour cette session.</p>
         <div v-if="companies.length" class="company-grid">
           <button v-for="company in companies" :key="company.id" class="company-button" type="button" :disabled="authBusy" @click="selectCompany(company.id)">
             <span>{{ company.code }}</span>
@@ -825,9 +1120,9 @@ La connexion Internet est requise pour ouvrir une session.
             <small>Rôle : {{ company.role_key }}</small>
           </button>
         </div>
-        <p v-else class="form-message">Aucune société n’est actuellement attribuée à votre compte. Contactez l’administrateur.</p>
+        <p v-else class="form-message">Aucune société active n’est encore attribuée à votre compte.</p>
         <p v-if="authMessage" class="form-message">{{ authMessage }}</p>
-        <button class="text-button" type="button" @click="logout">Se déconnecter</button>
+        <button class="text-button" type="button" @click="logout">Fermer la session</button>
       </section>
 
       <template v-else>
@@ -835,7 +1130,7 @@ La connexion Internet est requise pour ouvrir une session.
           <span class="avatar" aria-hidden="true">{{ userInitial }}</span>
           <span><strong>{{ user?.name }}</strong> · {{ activeCompanyName }}</span>
           <button class="text-button change-company" type="button" @click="changeCompany">Changer de société</button>
-          <button class="text-button" type="button" @click="logout">Se déconnecter</button>
+          <button class="text-button" type="button" @click="logout">Fermer la session</button>
         </section>
 
         <section class="context-card" aria-labelledby="context-title">
@@ -851,11 +1146,11 @@ La connexion Internet est requise pour ouvrir une session.
 
         <nav class="module-nav" aria-label="Modules du pilote Location de véhicules">
           <button
-            v-for="section in sections"
+            v-for="section in visibleSections"
             :key="section"
             type="button"
             :class="{ active: activeSection === section }"
-            @click="activeSection = section"
+            @click="openSection(section)"
           >
             {{ section }}
           </button>
@@ -876,10 +1171,10 @@ La connexion Internet est requise pour ouvrir une session.
             <div class="notice-card">
               <span class="notice-icon" aria-hidden="true">01</span>
               <div>
-                <h3>Réservations par société et site</h3>
+                <h3>Réservations sécurisées par société et adresse</h3>
                 <p>
-                  Cette session est limitée à la société et aux sites autorisés. Vous pouvez consulter la disponibilité
-                  et créer une réservation.
+                  La session est limitée à la société choisie et aux adresses autorisées. Le premier flux
+                  permet maintenant de vérifier la disponibilité et de créer une réservation numérotée.
                 </p>
               </div>
             </div>
@@ -904,8 +1199,8 @@ La connexion Internet est requise pour ouvrir une session.
 
             <div class="checklist-card">
               <div>
-                <p class="eyebrow">État du système</p>
-                <h3>Fonctions disponibles</h3>
+                <p class="eyebrow">État de la fondation</p>
+                <h3>Contrôles déjà disponibles</h3>
               </div>
               <ul>
                 <li><span>✓</span> Code par courriel personnel et session révocable</li>
@@ -922,10 +1217,10 @@ La connexion Internet est requise pour ouvrir une session.
               <section class="reservation-form-card" aria-labelledby="reservation-title">
                 <div class="section-intro">
                   <p class="eyebrow">Nouvelle réservation</p>
-                  <h3 id="reservation-title">Créer une réservation</h3>
+                  <h3 id="reservation-title">Réserver à partir d’une adresse réelle</h3>
                   <p>
-                    Les véhicules affichés sont limités à la société et au site sélectionnés.
-                    Le système empêche les réservations qui se chevauchent.
+                    Les véhicules proposés appartiennent uniquement à la société et à l’adresse de travail
+                    sélectionnées. Une réservation concurrente est refusée par le serveur.
                   </p>
                 </div>
 
@@ -933,9 +1228,9 @@ La connexion Internet est requise pour ouvrir une session.
                   <fieldset>
                     <legend>1 · Lieu et période</legend>
                     <label>
-                      Site
+                      Adresse de l’opération
                       <select v-model="reservationForm.site_id" required :disabled="rentalBusy" @change="onReservationSiteChanged">
-                        <option value="" disabled>Sélectionnez un site</option>
+                        <option value="" disabled>Choisissez une adresse autorisée</option>
                         <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
                           {{ site.name }} · {{ site.address }}
                         </option>
@@ -972,7 +1267,7 @@ La connexion Internet est requise pour ouvrir une session.
                       </button>
                     </div>
                     <button class="availability-button" type="button" :disabled="rentalBusy || apiStatus !== 'online'" @click="loadAvailability">
-                      {{ rentalBusy ? 'Vérification…' : 'Vérifier la disponibilité' }}
+                      {{ rentalBusy ? 'Vérification…' : 'Voir les véhicules disponibles' }}
                     </button>
                     <div v-if="availableVehicles.length" class="vehicle-list" aria-label="Véhicules disponibles">
                       <button
@@ -989,11 +1284,11 @@ La connexion Internet est requise pour ouvrir une session.
                         <small>{{ categoryLabels[vehicle.category] }} · {{ vehicle.latest_odometer_km.toLocaleString('fr-FR') }} km</small>
                       </button>
                     </div>
-                    <p v-else class="field-help">Sélectionnez la période puis vérifiez la disponibilité.</p>
+                    <p v-else class="field-help">Sélectionnez une période puis vérifiez les disponibilités avant de choisir le véhicule.</p>
                   </fieldset>
 
                   <fieldset>
-                    <legend>3 · Client et location</legend>
+                    <legend>3 · Client et locations</legend>
                     <div class="two-columns">
                       <label>
                         Type de client
@@ -1020,12 +1315,12 @@ La connexion Internet est requise pour ouvrir une session.
                   </fieldset>
 
                   <fieldset>
-                    <legend>4 · Lieux et tarif</legend>
+                    <legend>4 · Départ, retour et tarif</legend>
                     <div class="two-columns">
                       <label>
                         Lieu de départ
                         <select v-model="reservationForm.pickup_location_type" :disabled="rentalBusy">
-                          <option value="site">Site</option>
+                          <option value="site">Adresse de l’opération</option>
                           <option value="cap_haitien_airport">Aéroport International du Cap-Haïtien</option>
                           <option value="custom">Autre lieu précisé</option>
                         </select>
@@ -1033,7 +1328,7 @@ La connexion Internet est requise pour ouvrir une session.
                       <label>
                         Lieu de retour
                         <select v-model="reservationForm.dropoff_location_type" :disabled="rentalBusy">
-                          <option value="site">Site</option>
+                          <option value="site">Adresse de l’opération</option>
                           <option value="cap_haitien_airport">Aéroport International du Cap-Haïtien</option>
                           <option value="custom">Autre lieu précisé</option>
                         </select>
@@ -1083,14 +1378,14 @@ La connexion Internet est requise pour ouvrir une session.
 
                   <p v-if="rentalMessage" class="rental-message" :class="{ error: rentalError }" role="status">{{ rentalMessage }}</p>
                   <button class="primary-button create-reservation" type="submit" :disabled="rentalBusy || apiStatus !== 'online'">
-                    {{ rentalBusy ? 'Enregistrement…' : 'Créer la réservation' }}
+                    {{ rentalBusy ? 'Enregistrement…' : 'Créer la réservation numérotée' }}
                   </button>
                 </form>
               </section>
 
               <aside class="reservation-summary" aria-label="Résumé de sécurité de la réservation">
                 <p class="eyebrow">Contrôles actifs</p>
-                <h3>Vérifications</h3>
+                <h3>Ce que le système vérifie</h3>
                 <ul>
                   <li><span>✓</span> La société sélectionnée par la session</li>
                   <li><span>✓</span> L’adresse précise autorisée à l’utilisateur</li>
@@ -1098,7 +1393,7 @@ La connexion Internet est requise pour ouvrir une session.
                   <li><span>✓</span> Une référence à huit chiffres journalisée</li>
                 </ul>
                 <p class="summary-note">
-                  Les dépôts, contrats et inspections seront ajoutés dans les prochains lots.
+                  Le dépôt de garantie, le contrat et les inspections sont volontairement séparés : ils seront ajoutés sans exposer les données d’une autre société.
                 </p>
 
                 <div v-if="reservationCreated" class="reservation-created">
@@ -1112,10 +1407,243 @@ La connexion Internet est requise pour ouvrir une session.
             </div>
           </template>
 
+          <template v-else-if="activeSection === 'Calendrier'">
+            <div class="planning-workspace">
+              <section class="planning-controls-card" aria-labelledby="calendar-title">
+                <div class="section-intro">
+                  <p class="eyebrow">Planning global</p>
+                  <h3 id="calendar-title">Calendrier des véhicules</h3>
+                  <p>
+                    Consultez les réservations actives et l’état de la flotte pour les adresses autorisées.
+                    Les informations clients ne sont pas affichées dans ce planning.
+                  </p>
+                </div>
+
+                <form class="planning-form" @submit.prevent="loadCalendar">
+                  <label>
+                    Adresse
+                    <select v-model="calendarForm.site_id" :disabled="calendarBusy">
+                      <option value="">Toutes les adresses autorisées</option>
+                      <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
+                        {{ site.name }} · {{ site.address }}
+                      </option>
+                    </select>
+                  </label>
+                  <label>
+                    Début
+                    <input v-model="calendarForm.from" type="date" required :disabled="calendarBusy" />
+                  </label>
+                  <label>
+                    Fin
+                    <input v-model="calendarForm.to" type="date" required :disabled="calendarBusy" />
+                  </label>
+                  <button class="primary-button planning-submit" type="submit" :disabled="calendarBusy || apiStatus !== 'online'">
+                    {{ calendarBusy ? 'Actualisation…' : 'Afficher le planning' }}
+                  </button>
+                </form>
+                <p v-if="calendarMessage" class="rental-message" :class="{ error: calendarError }" role="status">
+                  {{ calendarMessage }}
+                </p>
+              </section>
+
+              <section class="fleet-state-card" aria-labelledby="fleet-status-title">
+                <div class="section-intro">
+                  <p class="eyebrow">État de flotte</p>
+                  <h3 id="fleet-status-title">Véhicules actifs</h3>
+                </div>
+                <div v-if="calendarVehicles.length" class="fleet-grid">
+                  <article v-for="vehicle in calendarVehicles" :key="vehicle.id" class="fleet-card">
+                    <div>
+                      <span class="vehicle-code">{{ vehicle.code }}</span>
+                      <strong>{{ vehicleDisplayName(vehicle) }}</strong>
+                    </div>
+                    <span class="status-chip" :class="`status-${vehicle.operational_status}`">
+                      {{ vehicleStatusLabels[vehicle.operational_status] }}
+                    </span>
+                    <small>{{ vehicle.site?.name ?? 'Adresse non disponible' }} · {{ categoryLabels[vehicle.category] }}</small>
+                  </article>
+                </div>
+                <p v-else class="field-help">Affichez le planning pour consulter l’état des véhicules actifs.</p>
+              </section>
+
+              <section class="calendar-list-card" aria-labelledby="calendar-list-title">
+                <div class="section-intro">
+                  <p class="eyebrow">Réservations sur la période</p>
+                  <h3 id="calendar-list-title">Occupations planifiées</h3>
+                </div>
+                <div v-if="calendarEntries.length" class="calendar-entry-list">
+                  <article v-for="entry in calendarEntries" :key="entry.id" class="calendar-entry-card">
+                    <div class="calendar-entry-heading">
+                      <span class="vehicle-code">{{ entry.vehicle?.code ?? 'Véhicule non disponible' }}</span>
+                      <span class="status-chip" :class="`reservation-${entry.state}`">
+                        {{ reservationStateLabels[entry.state] }}
+                      </span>
+                    </div>
+                    <strong>Réservation {{ entry.number }}</strong>
+                    <dl>
+                      <div>
+                        <dt>Départ</dt>
+                        <dd>{{ formatCapHaitienDateTime(entry.pickup_at) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Retour</dt>
+                        <dd>{{ formatCapHaitienDateTime(entry.due_at) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Adresse</dt>
+                        <dd>{{ entry.site?.name ?? 'Non disponible' }}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                </div>
+                <p v-else class="field-help">Aucune réservation active n’est affichée pour le moment.</p>
+              </section>
+            </div>
+          </template>
+
+          <template v-else-if="activeSection === 'Véhicules'">
+            <div class="vehicle-management">
+              <section class="vehicle-list-card" aria-labelledby="vehicle-list-title">
+                <div class="section-intro">
+                  <p class="eyebrow">Flotte</p>
+                  <h3 id="vehicle-list-title">Véhicules par adresse</h3>
+                  <p>La liste est limitée aux adresses autorisées pour la société active.</p>
+                </div>
+
+                <form class="vehicle-filter-form" @submit.prevent="loadVehicles">
+                  <label>
+                    Adresse
+                    <select v-model="vehicleFilters.site_id" :disabled="vehicleBusy">
+                      <option value="">Toutes les adresses autorisées</option>
+                      <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
+                        {{ site.name }} · {{ site.address }}
+                      </option>
+                    </select>
+                  </label>
+                  <label>
+                    État opérationnel
+                    <select v-model="vehicleFilters.operational_status" :disabled="vehicleBusy">
+                      <option value="">Tous les états</option>
+                      <option v-for="(label, status) in vehicleStatusLabels" :key="status" :value="status">{{ label }}</option>
+                    </select>
+                  </label>
+                  <button class="refresh-button vehicle-filter-submit" type="submit" :disabled="vehicleBusy || apiStatus !== 'online'">
+                    {{ vehicleBusy ? 'Actualisation…' : 'Afficher les véhicules' }}
+                  </button>
+                </form>
+                <p v-if="vehicleMessage" class="rental-message" :class="{ error: vehicleError }" role="status">
+                  {{ vehicleMessage }}
+                </p>
+
+                <div v-if="managedVehicles.length" class="managed-vehicle-grid">
+                  <article v-for="vehicle in managedVehicles" :key="vehicle.id" class="managed-vehicle-card">
+                    <div>
+                      <span class="vehicle-code">{{ vehicle.code }}</span>
+                      <h4>{{ vehicleDisplayName(vehicle) }}</h4>
+                      <p>{{ vehicle.site?.name ?? 'Adresse non disponible' }} · {{ categoryLabels[vehicle.category] }}</p>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Kilométrage</dt>
+                        <dd>{{ vehicle.latest_odometer_km.toLocaleString('fr-FR') }} km</dd>
+                      </div>
+                      <div v-if="vehicle.model_year">
+                        <dt>Année</dt>
+                        <dd>{{ vehicle.model_year }}</dd>
+                      </div>
+                    </dl>
+                    <label class="status-select">
+                      État opérationnel
+                      <select
+                        :value="vehicle.operational_status"
+                        :disabled="vehicleBusy || !canManageVehicles"
+                        @change="onVehicleStatusSelected(vehicle, $event)"
+                      >
+                        <option v-for="(label, status) in vehicleStatusLabels" :key="status" :value="status">{{ label }}</option>
+                      </select>
+                    </label>
+                  </article>
+                </div>
+                <p v-else class="field-help">Utilisez les critères puis sélectionnez « Afficher les véhicules ».</p>
+              </section>
+
+              <section v-if="canManageVehicles" class="vehicle-create-card" aria-labelledby="vehicle-create-title">
+                <div class="section-intro">
+                  <p class="eyebrow">Nouveau véhicule</p>
+                  <h3 id="vehicle-create-title">Ajouter à la flotte</h3>
+                  <p>Le code interne, l’immatriculation et le VIN sont contrôlés au niveau de la société.</p>
+                </div>
+
+                <form class="vehicle-create-form" @submit.prevent="createVehicle">
+                  <label>
+                    Adresse
+                    <select v-model="vehicleForm.site_id" required :disabled="vehicleBusy">
+                      <option value="" disabled>Choisissez une adresse autorisée</option>
+                      <option v-for="site in activeContext.sites" :key="site.id" :value="site.id">
+                        {{ site.name }} · {{ site.address }}
+                      </option>
+                    </select>
+                  </label>
+                  <div class="two-columns">
+                    <label>
+                      Code interne
+                      <input v-model.trim="vehicleForm.code" type="text" maxlength="32" required :disabled="vehicleBusy" />
+                    </label>
+                    <label>
+                      Catégorie
+                      <select v-model="vehicleForm.category" :disabled="vehicleBusy">
+                        <option v-for="(label, category) in categoryLabels" :key="category" :value="category">{{ label }}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="two-columns">
+                    <label>
+                      Marque
+                      <input v-model.trim="vehicleForm.make" type="text" maxlength="64" :disabled="vehicleBusy" />
+                    </label>
+                    <label>
+                      Modèle
+                      <input v-model.trim="vehicleForm.model" type="text" maxlength="64" :disabled="vehicleBusy" />
+                    </label>
+                  </div>
+                  <div class="three-columns">
+                    <label>
+                      Année
+                      <input v-model="vehicleForm.model_year" type="number" inputmode="numeric" min="1900" max="2100" :disabled="vehicleBusy" />
+                    </label>
+                    <label>
+                      Kilométrage actuel
+                      <input v-model="vehicleForm.latest_odometer_km" type="number" inputmode="numeric" min="0" step="1" required :disabled="vehicleBusy" />
+                    </label>
+                    <label>
+                      État initial
+                      <select v-model="vehicleForm.operational_status" :disabled="vehicleBusy">
+                        <option v-for="(label, status) in vehicleStatusLabels" :key="status" :value="status">{{ label }}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="two-columns">
+                    <label>
+                      Immatriculation (facultatif)
+                      <input v-model.trim="vehicleForm.registration_number" type="text" maxlength="64" :disabled="vehicleBusy" />
+                    </label>
+                    <label>
+                      VIN (facultatif)
+                      <input v-model.trim="vehicleForm.vin" type="text" maxlength="64" :disabled="vehicleBusy" />
+                    </label>
+                  </div>
+                  <button class="primary-button create-vehicle" type="submit" :disabled="vehicleBusy || apiStatus !== 'online'">
+                    {{ vehicleBusy ? 'Enregistrement…' : 'Enregistrer le véhicule' }}
+                  </button>
+                </form>
+              </section>
+            </div>
+          </template>
+
           <template v-else>
             <div class="empty-state">
-              <span class="empty-state-number">{{ String(sections.indexOf(activeSection)).padStart(2, '0') }}</span>
-              <h3>{{ activeSection }} arrive dans le lot Car Rental</h3>
+              <span class="empty-state-number">{{ String(visibleSections.indexOf(activeSection)).padStart(2, '0') }}</span>
+              <h3>{{ activeSection }} sera disponible dans un prochain lot Car Rental</h3>
               <p>
                 Cet écran est volontairement vide : aucune réservation, véhicule, inspection,
                 dépôt ou rapport fictif ne sera créé avant la configuration validée de la société et du site.
@@ -1126,8 +1654,8 @@ La connexion Internet est requise pour ouvrir une session.
       </template>
     </template>
 
-    <footer v-if="authView === 'authenticated'" class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.4' }}</span>
+    <footer class="application-footer">
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.6' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>
