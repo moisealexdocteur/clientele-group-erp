@@ -54,8 +54,10 @@ jobs:
       - name: Signaler les tests en échec
         if: failure()
         run: |
-          grep -nE "FAILED|Failed asserting|Expected|Exception|Error|at tests/|\.php:[0-9]+" test-output.txt \
-            | head -60 \
+          sed -e 's/\x1b\[[0-9;]*m//g' test-output.txt \
+            | awk '/FAILED/ { show = 45 } show > 0 { print; show-- }' \
+            | grep -v '^[[:space:]]*$' \
+            | head -90 \
             | while IFS= read -r line; do echo "::error::${line}"; done
 
   web:
