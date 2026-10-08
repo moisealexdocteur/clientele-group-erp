@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { createCashRegister, createSite, updateCompany } from '../../api/system'
 import { useSystemStore } from '../../stores/system'
+import { useSessionStore } from '../../stores/session'
 import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
 import { useRequest } from '../../composables/useRequest'
@@ -16,6 +17,7 @@ import StatusPill from '../../components/ui/StatusPill.vue'
 const props = defineProps<{ companyId: string }>()
 
 const system = useSystemStore()
+const session = useSessionStore()
 const app = useAppStore()
 const ui = useUiStore()
 const loading = useRequest()
@@ -118,6 +120,8 @@ async function saveTerms(): Promise<void> {
   }))
   if (!result) return
   await system.load()
+  // La société active reprend immédiatement les nouvelles conditions.
+  if (session.context?.company.id === props.companyId) await session.refreshContext().catch(() => undefined)
   termsOpen.value = false
   ui.toast('Conditions du contrat enregistrées. Elles s’appliquent aux prochaines remises.')
 }

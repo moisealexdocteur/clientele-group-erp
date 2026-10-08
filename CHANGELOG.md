@@ -18,6 +18,11 @@ Cycle Car Rental complet. Détail : `docs/25_Retour_croquis_depot_et_facture_0.6
 ### Corrigé
 
 - Courriels : l'image est présentée comme une illustration de catégorie, jamais comme la photo du véhicule.
+## 0.5.1-alpha.1 - 2026-10-08
+
+### Corrigé
+
+- Mise en circulation : les conditions du contrat saisies après la connexion n'étaient pas reconnues. L'écran relit maintenant la configuration de la société à l'ouverture, et l'enregistrement des conditions met à jour la société active immédiatement.
 
 ## 0.5.0-alpha.1 - 2026-10-10
 

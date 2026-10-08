@@ -92,7 +92,11 @@ const licenseExpiresBeforeReturn = computed(() =>
 )
 
 onMounted(async () => {
-  const result = await loading.run(() => fetchReservation(props.reservationId))
+  // Les conditions du contrat peuvent avoir été saisies après la connexion.
+  const [result] = await Promise.all([
+    loading.run(() => fetchReservation(props.reservationId)),
+    session.refreshContext().catch(() => undefined),
+  ])
   if (!result) return
   const data = result.data
   reservation.value = data
