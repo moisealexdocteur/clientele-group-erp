@@ -9,6 +9,8 @@ final class AuditEvent extends Model
 {
     use HasUuids;
 
+    public $timestamps = false;
+
     public $incrementing = false;
 
     protected $keyType = 'string';
