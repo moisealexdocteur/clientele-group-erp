@@ -50,12 +50,13 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 | docs/10_Profil_KVM1_et_sites.md | Profil KVM1, inventaire des caisses et seuils d'évolution |
 | docs/11_Identite_visuelle_et_experience_mobile.md | Logo, couleurs et règles mobile-first |
 | docs/12_Pilote_Car_Rental.md | Périmètre, permissions et critères du pilote Car Rental |
+| docs/21_Flotte_car_rental_references_publiques_alpha12.md | Références publiques de flotte et procédure de validation |
 
 ## État du projet
 
-Version : 0.2.0-alpha.4
+Version : 0.2.0-alpha.12
 
-Cette préversion contient le cadrage produit, le routage HTTPS, l'authentification à double étape par courriel, la réinitialisation de mot de passe, les rôles locaux, le choix obligatoire de société/site et l'audit sécurisé. Le pilote Car Rental possède maintenant son premier flux PWA/API : véhicules, disponibilité, réservation, soumission de paiement Sogebank et structures de dépôt/inspection encore inactives. Aucun module n'est encore prêt pour la production et aucune donnée réelle ne doit être chargée.
+Cette préversion contient le routage HTTPS, l'authentification à double étape par courriel, la réinitialisation de mot de passe, les rôles locaux, le choix obligatoire de société/site et l'audit sécurisé. Le pilote Car Rental couvre les véhicules, le planning, les réservations, les notifications client, les papiers de flotte et les références publiques contrôlées. Aucun module n'est prêt pour la production sans recette métier, imprimante réelle et données validées.
 
 ## Règles de version
 

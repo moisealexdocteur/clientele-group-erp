@@ -27,6 +27,33 @@ final class CarRentalVehicle extends Model
         'normal',
     ];
 
+    /**
+     * Images publiques de référence. Elles ne remplacent jamais les photos
+     * d'inspection ni les documents du véhicule.
+     *
+     * @var array<string, array{key: string, url: string, label: string, source_url: string}>
+     */
+    public const REFERENCE_PHOTOS = [
+        'nissan-frontier-aa-85177' => [
+            'key' => 'nissan-frontier-aa-85177',
+            'url' => '/fleet/nissan-frontier-aa-85177.jpg',
+            'label' => 'Photo de référence — publication Clientèle Group',
+            'source_url' => 'https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr',
+        ],
+        'suzuki-jimny-lo-01727' => [
+            'key' => 'suzuki-jimny-lo-01727',
+            'url' => '/fleet/suzuki-jimny-lo-01727.jpg',
+            'label' => 'Photo de référence — publication Clientèle Group',
+            'source_url' => 'https://www.tiktok.com/@clientele_group/video/7679127374331481352?lang=fr',
+        ],
+        'great-wall-poer-dm-00849' => [
+            'key' => 'great-wall-poer-dm-00849',
+            'url' => '/fleet/great-wall-poer-dm-00849.jpg',
+            'label' => 'Photo de référence — publication Clientèle Group',
+            'source_url' => 'https://www.tiktok.com/@clientele_group/photo/7618667507980782866?lang=fr',
+        ],
+    ];
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -42,6 +69,7 @@ final class CarRentalVehicle extends Model
         'model_year',
         'registration_number',
         'registration_status',
+        'reference_photo_key',
         'vin',
         'latest_odometer_km',
         'is_active',
@@ -79,5 +107,15 @@ final class CarRentalVehicle extends Model
     public function registrationEvents(): HasMany
     {
         return $this->hasMany(CarRentalVehicleRegistrationEvent::class, 'vehicle_id');
+    }
+
+    /** @return array{key: string, url: string, label: string, source_url: string}|null */
+    public function referencePhoto(): ?array
+    {
+        if ($this->reference_photo_key === null) {
+            return null;
+        }
+
+        return self::REFERENCE_PHOTOS[$this->reference_photo_key] ?? null;
     }
 }

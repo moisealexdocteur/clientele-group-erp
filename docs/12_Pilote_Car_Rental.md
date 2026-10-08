@@ -1,11 +1,14 @@
 # Pilote Clientèle Car Rental
 
-## 1. Périmètre alpha.11
+## 1. Périmètre alpha.12
 
-L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. Le périmètre alpha.11, sans donnée réelle, couvre :
+L’alpha.5 reste la référence validée en préproduction pour l’authentification, le courriel de vérification et le socle de sécurité. Le périmètre alpha.12, sans donnée réelle, couvre :
 
 - les véhicules `suv`, `mid_suv` et `pickup` ;
 - la création d’un véhicule pour une adresse autorisée, avec plaque en cours, kilométrage, catégorie et état opérationnel ;
+- l’affectation par défaut de toute la flotte actuelle à l’adresse `Pont Parois, Route Nationale 6` ;
+- le préremplissage contrôlé de la flotte depuis les références publiques validées, sans création automatique et avec vérification explicite des fiches incomplètes ;
+- l’affichage d’une photo de référence publique sur une fiche véhicule lorsque cette photo a été validée et versionnée ;
 - l’utilisation de la plaque en cours comme identifiant du véhicule, sans code interne distinct ;
 - les types de plaque `Démonstration`, `Location` et `Normale` ;
 - le remplacement contrôlé d’une plaque, avec conservation de l’ancienne plaque dans l’historique du véhicule ;
@@ -80,6 +83,6 @@ Une permission de société sans accès à l’adresse concernée est insuffisan
 6. stockage chiffré des preuves et photos, liens temporaires et antivirus ;
 7. recette sur une imprimante Epson TMIII 80 mm réelle.
 
-## 6. Hors périmètre alpha.11
+## 6. Hors périmètre alpha.12
 
 Le contrat signé, les inspections actives, les dépôts de garantie actifs, les factures et reçus PDF, l’impression thermique, le calcul fiscal haïtien final, la paie, les rapports comptables, l’intégration bancaire, l’API WhatsApp et les cartes de crédit ne sont pas encore actifs. Les courriels de facture et les pièces jointes PDF sont donc préparés par le code mais ne sont pas déclenchés avant ces modules.

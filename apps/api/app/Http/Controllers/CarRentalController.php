@@ -137,6 +137,7 @@ final class CarRentalController extends Controller
                     ->where(fn ($query) => $query->where('company_id', $company->id)),
             ],
             'registration_status' => ['required', Rule::in(CarRentalVehicle::REGISTRATION_STATUSES)],
+            'reference_photo_key' => ['nullable', 'string', Rule::in(array_keys(CarRentalVehicle::REFERENCE_PHOTOS))],
             'vin' => [
                 'nullable',
                 'string',
@@ -159,6 +160,7 @@ final class CarRentalController extends Controller
             'model_year' => $data['model_year'] ?? null,
             'registration_number' => $data['registration_number'],
             'registration_status' => $data['registration_status'],
+            'reference_photo_key' => $data['reference_photo_key'] ?? null,
             'vin' => $this->nullableTrimmed($data['vin'] ?? null),
             'latest_odometer_km' => $data['latest_odometer_km'],
             'is_active' => true,
@@ -176,6 +178,7 @@ final class CarRentalController extends Controller
                 'site_id' => $vehicle->site_id,
                 'category' => $vehicle->category,
                 'operational_status' => $vehicle->operational_status,
+                'has_reference_photo' => $vehicle->reference_photo_key !== null,
             ],
         );
 
@@ -1343,6 +1346,7 @@ final class CarRentalController extends Controller
             'make' => $vehicle->make,
             'model' => $vehicle->model,
             'model_year' => $vehicle->model_year,
+            'reference_photo' => $vehicle->referencePhoto(),
             'latest_odometer_km' => $vehicle->latest_odometer_km,
             'is_active' => $vehicle->is_active,
         ];
@@ -1439,6 +1443,7 @@ final class CarRentalController extends Controller
             'registration_number.unique' => 'Cette plaque est déjà utilisée par un autre véhicule de cette société.',
             'registration_status.required' => 'Sélectionnez le type de plaque.',
             'registration_status.in' => 'Sélectionnez « Démonstration », « Location » ou « Normale ».',
+            'reference_photo_key.in' => 'La photo de référence sélectionnée n’est pas disponible.',
             'vin.max' => 'Le VIN ne peut pas dépasser 64 caractères.',
             'vin.unique' => 'Ce VIN est déjà utilisé par un autre véhicule de cette société.',
             'latest_odometer_km.required' => 'Saisissez le kilométrage actuel.',
