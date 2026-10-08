@@ -2,6 +2,12 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.5.1-alpha.1 - 2026-10-08
+
+### Corrigé
+
+- Mise en circulation : les conditions du contrat saisies après la connexion n'étaient pas reconnues. L'écran relit maintenant la configuration de la société à l'ouverture, et l'enregistrement des conditions met à jour la société active immédiatement.
+
 ## 0.5.0-alpha.1 - 2026-10-10
 
 Livraison 2 des retours de recette. Détail : `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`.
