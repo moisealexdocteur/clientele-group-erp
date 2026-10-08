@@ -2,6 +2,22 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.12 - 2026-10-08
+
+### Ajouté
+
+- Catalogue de préremplissage Car Rental issu des publications publiques fournies pour la flotte Clientèle Group.
+- Références visibles : Nissan Frontier `AA-85177`, Suzuki Jimny `LO-01727` et Great Wall Poer `DM-00849`, avec photo de référence versionnée.
+- Fiches à vérifier avant enregistrement : Suzuki Jimny `LO-01724`, BAIC BJ40 `DM-00437` et Great Wall Poer `DM-00835`.
+- La photo de référence choisie est conservée sur la fiche véhicule et renvoyée par l’API de flotte.
+- Documentation de provenance, limites et recette dans `docs/21_Flotte_car_rental_references_publiques_alpha12.md`.
+
+### Sécurité et intégrité
+
+- Les véhicules du catalogue ne sont jamais créés automatiquement : l’adresse autorisée et le kilométrage relevé restent obligatoires.
+- Les années, VIN, documents, kilométrages et états opérationnels ne sont pas déduits des publications publiques.
+- L’API n’accepte qu’une clé d’image présente dans la liste versionnée. Une URL ou un fichier arbitraire ne peut pas être injecté dans une fiche véhicule.
+
 ## 0.2.0-alpha.11 - 2026-10-08
 
 ### Ajouté

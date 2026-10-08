@@ -185,6 +185,46 @@ final class CarRentalVehicleAndCalendarTest extends TestCase
             ->assertCreated();
     }
 
+
+    public function test_a_catalog_reference_photo_is_limited_to_the_versioned_public_fleet_images(): void
+    {
+        [, $company, $site, $token] = $this->context(['rental.vehicles.manage']);
+
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/vehicles', [
+                'site_id' => $site->id,
+                'category' => 'pickup',
+                'make' => 'Nissan',
+                'model' => 'Frontier',
+                'registration_number' => 'AA-85177',
+                'registration_status' => 'normal',
+                'reference_photo_key' => 'nissan-frontier-aa-85177',
+                'latest_odometer_km' => 15420,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.reference_photo.key', 'nissan-frontier-aa-85177')
+            ->assertJsonPath('data.reference_photo.url', '/fleet/nissan-frontier-aa-85177.jpg')
+            ->assertJsonPath('data.reference_photo.label', 'Photo de référence — publication Clientèle Group');
+
+        $this->assertDatabaseHas('car_rental_vehicles', [
+            'company_id' => $company->id,
+            'registration_number' => 'AA-85177',
+            'reference_photo_key' => 'nissan-frontier-aa-85177',
+        ]);
+
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/vehicles', [
+                'site_id' => $site->id,
+                'category' => 'pickup',
+                'registration_number' => 'AA-85178',
+                'registration_status' => 'normal',
+                'reference_photo_key' => 'image-non-autorisée',
+                'latest_odometer_km' => 15421,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reference_photo_key');
+    }
+
     public function test_a_demonstration_plate_can_be_replaced_by_a_rental_plate_and_remains_in_the_vehicle_history(): void
     {
         [, $company, $site, $token] = $this->context(['rental.vehicles.manage']);

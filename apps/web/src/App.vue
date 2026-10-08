@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { clienteleFleetCatalog, type FleetCatalogVehicle } from './data/clienteleFleetCatalog'
 
 type ApiStatus = 'checking' | 'online' | 'offline'
 type AuthView = 'sign-in' | 'verify' | 'reset-request' | 'reset-confirm' | 'authenticated'
@@ -88,6 +89,12 @@ interface RentalVehicle {
   is_active: boolean
   registration_number?: string
   registration_status?: VehicleRegistrationStatus
+  reference_photo?: {
+    key: string
+    url: string
+    label: string
+    source_url: string
+  } | null
   document_statuses?: Array<{
     type: VehicleDocumentType
     status: VehicleDocumentStatus
@@ -287,6 +294,8 @@ const reservationCreated = ref<CarRentalReservation | null>(null)
 const vehicleBusy = ref(false)
 const vehicleMessage = ref('')
 const vehicleError = ref(false)
+const fleetCatalogMessage = ref('')
+const vehicleCreateSection = ref<HTMLElement | null>(null)
 const managedVehicles = ref<RentalVehicle[]>([])
 const selectedVehicle = ref<RentalVehicle | null>(null)
 const selectedVehicleDocuments = ref<RentalVehicleDocument[]>([])
@@ -360,8 +369,9 @@ const vehicleForm = reactive({
   model_year: '',
   registration_number: '',
   registration_status: 'normal' as VehicleRegistrationStatus,
+  reference_photo_key: '',
   vin: '',
-  latest_odometer_km: '0',
+  latest_odometer_km: '',
 })
 
 const vehicleRegistrationForm = reactive({
@@ -1550,9 +1560,11 @@ function resetVehicleWorkspace(siteId = ''): void {
     model_year: '',
     registration_number: '',
     registration_status: 'normal',
+    reference_photo_key: '',
     vin: '',
-    latest_odometer_km: '0',
+    latest_odometer_km: '',
   })
+  fleetCatalogMessage.value = ''
   selectedVehicle.value = null
   selectedVehicleDocuments.value = []
   vehicleDocumentsMessage.value = ''
@@ -2083,6 +2095,7 @@ async function createVehicle(): Promise<void> {
         model_year: vehicleForm.model_year === '' ? undefined : Number(vehicleForm.model_year),
         registration_number: vehicleForm.registration_number.trim(),
         registration_status: vehicleForm.registration_status,
+        reference_photo_key: vehicleForm.reference_photo_key || undefined,
         vin: vehicleForm.vin.trim() || undefined,
         latest_odometer_km: Number(vehicleForm.latest_odometer_km),
       }),
@@ -2097,10 +2110,12 @@ async function createVehicle(): Promise<void> {
       model_year: '',
       registration_number: '',
       registration_status: 'normal',
+      reference_photo_key: '',
       vin: '',
-      latest_odometer_km: '0',
+      latest_odometer_km: '',
       site_id: siteId,
     })
+    fleetCatalogMessage.value = ''
     vehicleMessage.value = `Véhicule ${result.data.registration_number ?? result.data.code} enregistré.`
 
     if (!vehicleFilters.site_id || vehicleFilters.site_id === result.data.site_id) {
@@ -2116,6 +2131,28 @@ async function createVehicle(): Promise<void> {
   } finally {
     vehicleBusy.value = false
   }
+}
+
+
+function prefillVehicleFromCatalog(candidate: FleetCatalogVehicle): void {
+  Object.assign(vehicleForm, {
+    category: candidate.category,
+    operational_status: 'available',
+    make: candidate.make,
+    model: candidate.model,
+    model_year: '',
+    registration_number: candidate.registrationNumber,
+    registration_status: candidate.registrationStatus,
+    reference_photo_key: candidate.referencePhoto?.key ?? '',
+    vin: '',
+    latest_odometer_km: '',
+  })
+
+  fleetCatalogMessage.value = candidate.requiresReview
+    ? 'Informations préremplies. Vérifiez la plaque et le modèle avant l’enregistrement, puis renseignez l’adresse et le kilométrage actuel.'
+    : 'Informations préremplies. Renseignez l’adresse et le kilométrage actuel avant l’enregistrement.'
+
+  vehicleCreateSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function isVehicleOperationalStatus(value: string): value is VehicleOperationalStatus {
@@ -3497,6 +3534,36 @@ onBeforeUnmount(() => {
 
           <template v-else-if="activeSection === 'Véhicules'">
             <div class="vehicle-management">
+              <section v-if="canManageVehicles" class="vehicle-reference-card" aria-labelledby="vehicle-reference-title">
+                <div class="section-intro">
+                  <p class="eyebrow">Références de flotte</p>
+                  <h3 id="vehicle-reference-title">Véhicules identifiés dans les publications</h3>
+                  <p>Ces fiches préremplissent uniquement les informations visibles. Elles ne créent pas de véhicule. Renseignez toujours l’adresse et le kilométrage réel avant l’enregistrement.</p>
+                </div>
+
+                <div class="vehicle-reference-grid">
+                  <article v-for="candidate in clienteleFleetCatalog" :key="candidate.registrationNumber" class="vehicle-reference-item">
+                    <img
+                      v-if="candidate.referencePhoto"
+                      class="vehicle-reference-image"
+                      :src="candidate.referencePhoto.url"
+                      :alt="candidate.referencePhoto.alt"
+                    />
+                    <div class="vehicle-reference-content">
+                      <span class="vehicle-code">Plaque · {{ registrationStatusLabels[candidate.registrationStatus] }}</span>
+                      <h4>{{ candidate.registrationNumber }}</h4>
+                      <p>{{ candidate.make }} {{ candidate.model }} · {{ categoryLabels[candidate.category] }}</p>
+                      <p v-if="candidate.requiresReview" class="vehicle-reference-warning">{{ candidate.reviewMessage }}</p>
+                      <p v-else class="vehicle-reference-note">Plaque et modèle relevés dans la publication.</p>
+                      <a class="vehicle-reference-source" :href="candidate.sourceUrl" target="_blank" rel="noreferrer noopener">Voir la publication source</a>
+                    </div>
+                    <button class="secondary-button vehicle-reference-action" type="button" :disabled="vehicleBusy" @click="prefillVehicleFromCatalog(candidate)">
+                      Préremplir la fiche
+                    </button>
+                  </article>
+                </div>
+              </section>
+
               <section class="vehicle-list-card" aria-labelledby="vehicle-list-title">
                 <div class="section-intro">
                   <p class="eyebrow">Flotte</p>
@@ -3531,11 +3598,18 @@ onBeforeUnmount(() => {
 
                 <div v-if="managedVehicles.length" class="managed-vehicle-grid">
                   <article v-for="vehicle in managedVehicles" :key="vehicle.id" class="managed-vehicle-card" :class="{ selected: selectedVehicle?.id === vehicle.id }">
+                    <img
+                      v-if="vehicle.reference_photo"
+                      class="managed-vehicle-photo"
+                      :src="vehicle.reference_photo.url"
+                      :alt="`${vehicle.reference_photo.label} — ${vehicle.registration_number ?? vehicle.code}`"
+                    />
                     <div>
                       <span class="vehicle-code">Plaque · {{ registrationStatusLabels[vehicle.registration_status ?? 'normal'] }}</span>
                       <h4>{{ vehicle.registration_number ?? vehicle.code }}</h4>
                       <p>{{ vehicleDisplayName(vehicle) }}</p>
                       <p>{{ vehicle.site?.name ?? 'Adresse non disponible' }} · {{ categoryLabels[vehicle.category] }}</p>
+                      <p v-if="vehicle.reference_photo" class="vehicle-reference-caption">{{ vehicle.reference_photo.label }}</p>
                     </div>
                     <dl>
                       <div>
@@ -3575,12 +3649,14 @@ onBeforeUnmount(() => {
                 <p v-else class="field-help">Aucun véhicule ne correspond aux critères sélectionnés.</p>
               </section>
 
-              <section v-if="canManageVehicles" class="vehicle-create-card" aria-labelledby="vehicle-create-title">
+              <section v-if="canManageVehicles" ref="vehicleCreateSection" class="vehicle-create-card" aria-labelledby="vehicle-create-title">
                 <div class="section-intro">
-                  <p class="eyebrow">Nouveau véhicule</p>
-                  <h3 id="vehicle-create-title">Ajouter à la flotte</h3>
-                  <p>La plaque en cours identifie le véhicule. Sélectionnez son type : Démonstration, Location ou Normale.</p>
+                  <p class="eyebrow">Véhicule</p>
+                  <h3 id="vehicle-create-title">Ajouter un véhicule</h3>
+                  <p>La plaque actuelle est l’identifiant du véhicule. Sélectionnez son type, puis renseignez l’adresse et le kilométrage relevé.</p>
                 </div>
+
+                <p v-if="fleetCatalogMessage" class="rental-message" role="status">{{ fleetCatalogMessage }}</p>
 
                 <form class="vehicle-create-form" @submit.prevent="createVehicle">
                   <label>
@@ -3604,7 +3680,7 @@ onBeforeUnmount(() => {
                       </select>
                     </label>
                   </div>
-                  <p class="field-help">Utilisez la plaque affichée sur le véhicule. Le système ne demande pas de code interne distinct.</p>
+                  <p class="field-help">Utilisez la plaque affichée sur le véhicule. Aucun code interne distinct n’est demandé.</p>
                   <label>
                     Catégorie
                     <select v-model="vehicleForm.category" :disabled="vehicleBusy">
@@ -3763,7 +3839,7 @@ onBeforeUnmount(() => {
     </div>
 
     <footer class="application-footer">
-      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.11' }}</span>
+      <span>Clientèle Group ERP · {{ bootstrap?.application.version ?? '0.2.0-alpha.12' }}</span>
       <span>HTG · USD · Cap-Haïtien, Haïti</span>
     </footer>
   </main>
