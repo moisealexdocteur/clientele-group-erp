@@ -219,8 +219,12 @@ final class CarRentalCustomerNotificationService
             return 'À confirmer';
         }
 
+        $timezone = filled($company->timezone)
+            ? $company->timezone
+            : 'America/Port-au-Prince';
+
         return $value
-            ->setTimezone($company->timezone)
+            ->setTimezone($timezone)
             ->translatedFormat('d F Y h:i A') . ' · Cap-Haïtien, Haïti';
     }
 
