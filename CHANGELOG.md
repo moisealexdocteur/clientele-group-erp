@@ -2,29 +2,36 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.2.0-alpha.6 - 2026-10-08
+
+### Ajouté
+
+- Gestion des véhicules Car Rental par société et adresse autorisée : code interne, catégorie, kilométrage et état opérationnel.
+- Planning par période qui affiche les réservations actives et l’état de la flotte, sans données clients.
+- Permissions distinctes pour consulter les véhicules, gérer les véhicules et consulter le planning.
+- Contraintes par société pour le code interne, l’immatriculation et le VIN, avec normalisation des identifiants.
+- Journalisation de la création d’un véhicule et de chaque changement d’état.
+- Tests d’accès par adresse, de non-divulgation dans le planning et d’unicité des identifiants.
+
+### Modifié
+
+- L’écran de connexion mobile présente le formulaire avant le contenu descriptif et utilise des commandes tactiles d’au moins 48 px.
+- Les textes de connexion et de vérification utilisent un vocabulaire direct et explicite en français.
+
+### Limites connues
+
+- Le planning est une vue opérationnelle par période. Le contrat, le check-out, les inspections, le dépôt, le retour, les reçus et l’impression thermique restent à réaliser.
+
 ## 0.2.0-alpha.5 - 2026-10-08
 
 ### Corrigé
 
-- L’écran de connexion n’utilise plus de contenu promotionnel ni de mise en page à deux colonnes.
-- Les erreurs d’identifiant sont formulées de manière standard : « Adresse courriel ou mot de passe incorrect. ».
-- La commande de création du premier propriétaire indique maintenant toutes les exigences du mot de passe avant qu’un compte soit créé.
-- L’application, le worker et le scheduler disposent d’une sortie réseau SMTP dédiée ; PostgreSQL et Redis restent sur le réseau isolé.
+- Rendu du courriel de code de connexion : le modèle d’authentification par courriel est envoyé correctement.
 
-### Ajouté
+### Vérifié
 
-- Écran de connexion, vérification et réinitialisation mobile-first : une colonne, commandes tactiles de 54 à 56 px, boutons explicites et affichage/masquage du mot de passe.
-- Commande `php artisan system:test-smtp adresse@example.com` pour valider le courriel transactionnel sans exposer le secret SMTP.
-- Procédure documentée de création du compte propriétaire, test SMTP et dépannage dans `docs/13_Acces_initial_et_courriel.md`.
-
-### Sécurité
-
-- Le test SMTP affiche seulement l’état de la configuration et masque le secret dans le détail d’erreur.
-- Le code de sécurité demeure envoyé uniquement par un transport de courriel déclaré sûr.
-
-### Limites connues
-
-- L’envoi réel dépend de la résolution DNS et de la configuration SMTP du VPS de préproduction. Il doit être validé avant toute recette de connexion humaine.
+- Préproduction : routage HTTPS, santé API, PostgreSQL, Redis, SMTP et connexion propriétaire avec code envoyé par courriel.
+- La référence technique validée est conservée dans `baseline/0.2.0-alpha.5-preprod` et documentée dans `docs/15_Registre_validation_preproduction_0_2_0_alpha_5.md`.
 
 ## 0.2.0-alpha.4 - 2026-10-07
 
