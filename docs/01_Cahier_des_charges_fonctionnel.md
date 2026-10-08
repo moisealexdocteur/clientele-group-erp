@@ -278,6 +278,14 @@ Tous les rapports respectent les permissions. Un utilisateur voit seulement les 
 - Une caisse ne peut pas être clôturée définitivement tant que les opérations critiques ne sont pas synchronisées ou explicitement remises à un superviseur.
 - Le stock hors ligne est contrôlé par une quantité autorisée et une réserve de sécurité afin de limiter les surventes.
 
-## 16. Hors périmètre initial
+## 16. Importations en lot Excel
+
+L’application fournit des modèles Excel `.xlsx` versionnés et téléchargeables pour importer par lot les produits, inventaires, utilisateurs, véhicules, chambres d’hôtel, clients, fournisseurs et transactions autorisées.
+
+Chaque import impose le contexte société et site, une validation complète avant écriture, un aperçu des erreurs par ligne, une confirmation explicite, une protection contre le double import et un rapport de résultat. Les mots de passe, données sensibles inter-sociétés et transactions finalisées ne sont jamais importés sans un mécanisme d’autorisation et de journalisation prévu à cet effet.
+
+Les règles détaillées, les colonnes de modèles et les critères d’acceptation sont définis dans [14_Importations_en_lot_Excel.md](14_Importations_en_lot_Excel.md).
+
+## 17. Hors périmètre initial
 
 Les éléments suivants ne seront ajoutés qu'après étude spécifique : intégration bancaire automatique, passerelle de carte choisie, facturation électronique gouvernementale, intégration de pompe à carburant, paie avec calcul légal automatique non validé, intégration de balance réseau, synchronisation avec ERP tiers et application mobile native.
