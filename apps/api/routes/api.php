@@ -115,6 +115,9 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/reservations/{reservation}/check-out', [CarRentalController::class, 'checkOutReservation'])
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.check-out');
+            Route::post('/reservations/{reservation}/contract', [CarRentalController::class, 'attachContract'])
+                ->middleware('company.permission:rental.reservations.manage')
+                ->name('api.v1.car-rental.reservations.contract');
             Route::post('/reservations/{reservation}/extend', [CarRentalController::class, 'extendReservation'])
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.extend');

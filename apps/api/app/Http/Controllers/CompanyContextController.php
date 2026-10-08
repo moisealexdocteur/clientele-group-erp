@@ -55,6 +55,7 @@ final class CompanyContextController extends Controller
                     'tax_identification_number' => $company->tax_identification_number,
                     'address' => $company->legal_address,
                     'phone_numbers' => $company->phone_numbers,
+                    'rental_contract_terms' => $company->rental_contract_terms,
                 ],
             ],
             'access' => [

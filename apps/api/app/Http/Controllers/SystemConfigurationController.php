@@ -184,11 +184,19 @@ final class SystemConfigurationController extends Controller
             'tax_identification_number' => ['nullable', 'string', 'max:64'],
             'legal_address' => ['nullable', 'string', 'max:1000'],
             'phone_numbers' => ['nullable', 'string', 'max:160'],
+            'rental_contract_terms' => ['sometimes', 'nullable', 'string', 'max:40000'],
         ], $this->companyValidationMessages());
 
         $owner = $this->owner($request);
+        // Les conditions du contrat ne sont modifiées que si elles sont envoyées.
+        $termsProvided = array_key_exists('rental_contract_terms', $data);
 
-        return $this->companyContext->within($company->id, function () use ($company, $data, $owner): JsonResponse {
+        return $this->companyContext->within($company->id, function () use ($company, $data, $owner, $termsProvided): JsonResponse {
+            if ($termsProvided) {
+                $company->forceFill([
+                    'rental_contract_terms' => $this->trimmedOrNull($data['rental_contract_terms'] ?? null),
+                ]);
+            }
             $company->forceFill([
                 'legal_name' => trim($data['legal_name']),
                 'display_name' => trim($data['display_name']),
@@ -943,6 +951,7 @@ final class SystemConfigurationController extends Controller
             'code.unique' => 'Ce code de société est déjà utilisé. Choisissez un autre code.',
             'legal_name.required' => 'Saisissez la dénomination légale.',
             'legal_name.max' => 'La dénomination légale ne peut pas dépasser 255 caractères.',
+            'rental_contract_terms.max' => 'Les conditions du contrat ne peuvent pas dépasser 40 000 caractères.',
             'display_name.required' => 'Saisissez le nom affiché.',
             'display_name.max' => 'Le nom affiché ne peut pas dépasser 255 caractères.',
             'base_currency.required' => 'Sélectionnez la devise de base.',
@@ -1019,6 +1028,7 @@ final class SystemConfigurationController extends Controller
             'tax_identification_number' => $company->tax_identification_number,
             'legal_address' => $company->legal_address,
             'phone_numbers' => $company->phone_numbers,
+            'rental_contract_terms' => $company->rental_contract_terms,
             'sites' => $company->relationLoaded('sites')
                 ? $company->sites->map(fn (Site $site): array => $this->sitePayload($site))->values()
                 : [],

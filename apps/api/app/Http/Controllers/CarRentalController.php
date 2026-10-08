@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CarRentalInspection;
 use App\Models\CarRentalPayment;
 use App\Models\CarRentalReservation;
 use App\Models\CarRentalSecurityDeposit;
@@ -25,12 +26,19 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 final class CarRentalController extends Controller
 {
     private const AIRPORT_SERVICE_FEE_USD = '20.00';
+
+    /**
+     * Pays dont les permis sont délivrés par un État, une province ou un
+     * territoire. Ailleurs (Haïti, France, etc.), le permis est national.
+     */
+    private const LICENSE_SUBDIVISION_COUNTRIES = ['US', 'CA', 'MX', 'AU', 'BR', 'IN'];
 
     public function __construct(
         private readonly CarRentalAvailabilityService $availability,
@@ -1053,15 +1061,84 @@ final class CarRentalController extends Controller
         $access = $this->access($request);
         $actor = $request->user();
 
+        $request->merge([
+            'driver_license_country' => is_string($request->input('driver_license_country'))
+                ? strtoupper(trim($request->input('driver_license_country')))
+                : $request->input('driver_license_country'),
+        ]);
         $data = $request->validate([
             'expected_lock_version' => ['required', 'integer', 'min:0'],
             'driver_full_name' => ['required', 'string', 'max:160'],
             'driver_license_number' => ['required', 'string', 'max:128'],
             'driver_license_expires_at' => ['required', 'date_format:Y-m-d'],
+            'driver_license_country' => ['required', 'string', 'regex:/^[A-Z]{2}$/'],
+            'driver_license_subdivision' => [
+                Rule::requiredIf(fn (): bool => in_array($request->input('driver_license_country'), self::LICENSE_SUBDIVISION_COUNTRIES, true)),
+                'nullable',
+                'string',
+                'max:64',
+            ],
+            'driver_license_front_file_id' => ['required', 'uuid'],
+            'driver_license_back_file_id' => ['required', 'uuid'],
             'driver_license_verified' => ['accepted'],
+            'additional_driver_name' => ['nullable', 'string', 'max:160'],
+            'additional_driver_license_number' => ['nullable', 'required_with:additional_driver_name', 'string', 'max:128'],
+            'odometer_km' => ['required', 'integer', 'min:0', 'max:9999999'],
+            'fuel_level_percent' => ['required', 'integer', Rule::in(CarRentalInspection::FUEL_LEVELS)],
+            'accessories' => ['present', 'array'],
+            'accessories.*' => ['string', Rule::in(CarRentalInspection::ACCESSORIES)],
+            'damage_notes' => ['nullable', 'string', 'max:2000'],
+            'inspection_photo_file_ids' => ['nullable', 'array', 'max:12'],
+            'inspection_photo_file_ids.*' => ['uuid'],
+            'terms_accepted' => ['accepted'],
+            'customer_signature_file_id' => ['required', 'uuid'],
+            'company_signature_file_id' => ['required', 'uuid'],
+            'company_signer_name' => ['required', 'string', 'max:160'],
+        ], [
+            'driver_license_country.required' => 'Choisissez le pays qui a délivré le permis.',
+            'driver_license_country.regex' => 'Choisissez le pays qui a délivré le permis.',
+            'driver_license_subdivision.required' => 'Indiquez l’État ou la province qui a délivré le permis.',
+            'driver_license_front_file_id.required' => 'Ajoutez la photo du recto du permis.',
+            'driver_license_back_file_id.required' => 'Ajoutez la photo du verso du permis.',
+            'driver_license_verified.accepted' => 'Confirmez la vérification de l’original du permis.',
+            'additional_driver_license_number.required_with' => 'Saisissez le numéro de permis du conducteur additionnel.',
+            'odometer_km.required' => 'Saisissez le kilométrage au compteur.',
+            'fuel_level_percent.required' => 'Indiquez le niveau de carburant.',
+            'fuel_level_percent.in' => 'Indiquez le niveau de carburant.',
+            'terms_accepted.accepted' => 'Le client doit accepter les conditions du contrat.',
+            'customer_signature_file_id.required' => 'La signature du client est requise.',
+            'company_signature_file_id.required' => 'La signature pour le loueur est requise.',
+            'company_signer_name.required' => 'Saisissez le nom de la personne qui signe pour le loueur.',
         ]);
 
-        $model = DB::transaction(function () use ($company, $access, $reservation, $data): CarRentalReservation {
+        if (! filled($company->rental_contract_terms)) {
+            throw ValidationException::withMessages([
+                'contract_terms' => 'Les conditions du contrat de location ne sont pas configurées. Le propriétaire doit les saisir dans la configuration de la société.',
+            ]);
+        }
+
+        $licenseFront = $this->files->find($company, $data['driver_license_front_file_id'], StoredFile::PURPOSE_DRIVER_LICENSE_FRONT, 'driver_license_front_file_id');
+        $licenseBack = $this->files->find($company, $data['driver_license_back_file_id'], StoredFile::PURPOSE_DRIVER_LICENSE_BACK, 'driver_license_back_file_id');
+        $customerSignature = $this->files->find($company, $data['customer_signature_file_id'], StoredFile::PURPOSE_SIGNATURE, 'customer_signature_file_id');
+        $companySignature = $this->files->find($company, $data['company_signature_file_id'], StoredFile::PURPOSE_SIGNATURE, 'company_signature_file_id');
+        $inspectionPhotoIds = [];
+
+        foreach (array_values(array_unique($data['inspection_photo_file_ids'] ?? [])) as $index => $photoId) {
+            $inspectionPhotoIds[] = $this->files->find($company, $photoId, StoredFile::PURPOSE_INSPECTION_PHOTO, "inspection_photo_file_ids.{$index}")->id;
+        }
+
+        $model = DB::transaction(function () use (
+            $company,
+            $access,
+            $reservation,
+            $data,
+            $actor,
+            $licenseFront,
+            $licenseBack,
+            $customerSignature,
+            $companySignature,
+            $inspectionPhotoIds,
+        ): CarRentalReservation {
             $model = $this->reservationFor($company, $access, $reservation, [], true);
 
             if ($model->state !== 'reserved') {
@@ -1129,7 +1206,20 @@ final class CarRentalController extends Controller
                 ]);
             }
 
+            $odometer = (int) $data['odometer_km'];
+
+            if ($odometer < (int) $vehicle->latest_odometer_km) {
+                throw ValidationException::withMessages([
+                    'odometer_km' => sprintf(
+                        'Le kilométrage ne peut pas être inférieur au dernier relevé du véhicule (%s km).',
+                        number_format((int) $vehicle->latest_odometer_km, 0, ',', ' '),
+                    ),
+                ]);
+            }
+
             $now = now()->utc();
+            $accessories = array_values(array_intersect(CarRentalInspection::ACCESSORIES, $data['accessories']));
+
             $model->forceFill([
                 'state' => 'checked_out',
                 'checked_out_at' => $now,
@@ -1138,9 +1228,46 @@ final class CarRentalController extends Controller
                 'driver_license_number' => $this->nullableTrimmed($data['driver_license_number']),
                 'driver_license_expires_at' => $licenseExpiration,
                 'driver_license_verified_at' => $now,
+                'driver_license_country' => $data['driver_license_country'],
+                'driver_license_subdivision' => in_array($data['driver_license_country'], self::LICENSE_SUBDIVISION_COUNTRIES, true)
+                    ? $this->nullableTrimmed($data['driver_license_subdivision'] ?? null)
+                    : null,
+                'driver_license_front_file_id' => $licenseFront->id,
+                'driver_license_back_file_id' => $licenseBack->id,
+                'additional_driver_name' => $this->nullableTrimmed($data['additional_driver_name'] ?? null),
+                'additional_driver_license_number' => filled($data['additional_driver_name'] ?? null)
+                    ? $this->nullableTrimmed($data['additional_driver_license_number'] ?? null)
+                    : null,
+                'contract_snapshot' => $this->contractSnapshot($company, $vehicle),
                 'lock_version' => $model->lock_version + 1,
             ])->save();
-            $vehicle->forceFill(['operational_status' => 'in_circulation'])->save();
+
+            CarRentalInspection::query()->updateOrCreate(
+                ['company_id' => $company->id, 'reservation_id' => $model->id, 'stage' => 'pre_rental'],
+                [
+                    'vehicle_id' => $vehicle->id,
+                    'inspector_user_id' => $actor?->id,
+                    'status' => 'finalized',
+                    'inspected_at' => $now,
+                    'odometer_km' => $odometer,
+                    'fuel_level_percent' => (int) $data['fuel_level_percent'],
+                    'accessories' => $accessories,
+                    'notes' => $this->nullableTrimmed($data['damage_notes'] ?? null),
+                    'photo_file_ids' => $inspectionPhotoIds,
+                    'company_signer_name' => trim($data['company_signer_name']),
+                    'customer_signed_at' => $now,
+                    'company_signed_at' => $now,
+                    'customer_signature_file_id' => $customerSignature->id,
+                    'company_signature_file_id' => $companySignature->id,
+                    'customer_signature_sha256' => $customerSignature->sha256,
+                    'company_signature_sha256' => $companySignature->sha256,
+                ],
+            );
+
+            $vehicle->forceFill([
+                'operational_status' => 'in_circulation',
+                'latest_odometer_km' => $odometer,
+            ])->save();
 
             return $model->load(['site', 'vehicle', 'customerProfile', 'payments', 'securityDeposits']);
         });
@@ -1157,8 +1284,14 @@ final class CarRentalController extends Controller
                 'site_id' => $model->site_id,
                 'vehicle_id' => $model->vehicle_id,
                 'driver_license_verified' => true,
+                'driver_license_country' => $model->driver_license_country,
+                'driver_license_documents_sha256' => [$licenseFront->sha256, $licenseBack->sha256],
                 'approved_rental_payment_verified' => true,
                 'security_deposit_requirement_verified' => true,
+                'checkout_odometer_km' => (int) $data['odometer_km'],
+                'checkout_fuel_level_percent' => (int) $data['fuel_level_percent'],
+                'customer_signature_sha256' => $customerSignature->sha256,
+                'company_signature_sha256' => $companySignature->sha256,
             ],
         );
 
@@ -2095,10 +2228,152 @@ final class CarRentalController extends Controller
     }
 
     /** @return array<string, mixed> */
+    /**
+     * Copie figée de ce qui figure au contrat : identité du loueur,
+     * conditions générales et caractéristiques du véhicule au moment de
+     * la signature. Une modification ultérieure ne change pas le contrat.
+     *
+     * @return array<string, mixed>
+     */
+    private function contractSnapshot(Company $company, CarRentalVehicle $vehicle): array
+    {
+        return [
+            'lessor' => [
+                'name' => $company->legal_name,
+                'display_name' => $company->display_name,
+                'representative' => $company->legal_representative,
+                'tax_identification_number' => $company->tax_identification_number,
+                'address' => $company->legal_address,
+                'phone_numbers' => $company->phone_numbers,
+            ],
+            'terms' => (string) $company->rental_contract_terms,
+            'terms_sha256' => hash('sha256', (string) $company->rental_contract_terms),
+            'vehicle' => [
+                'make' => $vehicle->make,
+                'model' => $vehicle->model,
+                'model_year' => $vehicle->model_year,
+                'registration_number' => $vehicle->registration_number ?: $vehicle->code,
+                'vin' => $vehicle->vin,
+                'color' => $vehicle->color,
+                'fuel_type' => $vehicle->fuel_type,
+                'transmission' => $vehicle->transmission,
+                'engine_displacement_cc' => $vehicle->engine_displacement_cc,
+                'doors' => $vehicle->doors,
+                'category' => $vehicle->category,
+            ],
+            'timezone' => $company->timezone,
+        ];
+    }
+
+    private function fileUrl(?string $fileId): ?string
+    {
+        return $fileId === null ? null : '/api/v1/car-rental/files/' . $fileId;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function checkoutInspectionPayload(CarRentalReservation $reservation, bool $includeSignatures): ?array
+    {
+        $inspection = $reservation->relationLoaded('inspections')
+            ? $reservation->inspections->firstWhere('stage', 'pre_rental')
+            : $reservation->inspections()->where('stage', 'pre_rental')->first();
+
+        if (! $inspection instanceof CarRentalInspection || $inspection->status !== 'finalized') {
+            return null;
+        }
+
+        return [
+            'inspected_at' => $inspection->inspected_at?->toIso8601String(),
+            'odometer_km' => $inspection->odometer_km,
+            'fuel_level_percent' => $inspection->fuel_level_percent === null ? null : (int) round((float) $inspection->fuel_level_percent),
+            'accessories' => $inspection->accessories ?? [],
+            'damage_notes' => $includeSignatures ? $inspection->notes : null,
+            'photo_urls' => array_map(fn (string $id): string => (string) $this->fileUrl($id), $inspection->photo_file_ids ?? []),
+            'company_signer_name' => $inspection->company_signer_name,
+            'customer_signed_at' => $inspection->customer_signed_at?->toIso8601String(),
+            'company_signed_at' => $inspection->company_signed_at?->toIso8601String(),
+            'customer_signature_url' => $includeSignatures ? $this->fileUrl($inspection->customer_signature_file_id) : null,
+            'company_signature_url' => $includeSignatures ? $this->fileUrl($inspection->company_signature_file_id) : null,
+        ];
+    }
+
+    /**
+     * Rattache le contrat PDF signé, généré à partir de la copie figée.
+     * Le contrat est définitif : il ne peut pas être remplacé.
+     */
+    public function attachContract(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'file_id' => ['required', 'uuid'],
+            'send_to_customer' => ['sometimes', 'boolean'],
+        ]);
+
+        $file = $this->files->find($company, $data['file_id'], StoredFile::PURPOSE_RENTAL_CONTRACT, 'file_id');
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $file): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+
+            if (! in_array($model->state, ['checked_out', 'completed'], true) || $model->contract_snapshot === null) {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Le contrat ne peut être émis qu’après la mise en circulation signée.',
+                ]);
+            }
+
+            if ($model->contract_file_id !== null) {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Le contrat signé de cette réservation est déjà émis.',
+                ]);
+            }
+
+            $model->forceFill([
+                'contract_file_id' => $file->id,
+                'contract_issued_at' => now()->utc(),
+            ])->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections']);
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.contract_issued',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalReservation::class,
+            subjectId: $model->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'contract_sha256' => $file->sha256,
+                'terms_sha256' => $model->contract_snapshot['terms_sha256'] ?? null,
+            ],
+        );
+
+        $sent = false;
+
+        // Le contrat contient la plaque et le numéro de permis : il n'est
+        // envoyé par courriel que sur demande explicite.
+        if (($data['send_to_customer'] ?? false) === true) {
+            $content = Storage::disk($file->disk)->get($file->path);
+            $sent = is_string($content) && $this->customerNotifications->notifySignedContract($company, $model, [[
+                'name' => 'Contrat-' . $model->reservation_number . '.pdf',
+                'content' => $content,
+                'mime' => 'application/pdf',
+            ]]);
+        }
+
+        return response()->json([
+            'data' => $this->reservationPayload($model, $access),
+            'customer_notification_sent' => $sent,
+        ]);
+    }
+
     private function reservationPayload(CarRentalReservation $reservation, ?CompanyUserAccess $access = null): array
     {
         // Les coordonnées du client ne sont renvoyées qu'aux rôles qui gèrent la réservation.
         $includeContact = $access?->allows('rental.reservations.manage') ?? false;
+        $includeDocuments = $access?->allows('rental.documents.sensitive') ?? false;
 
         $airportPickupFee = (float) $reservation->airport_pickup_fee_usd;
         $airportDropoffFee = (float) $reservation->airport_dropoff_fee_usd;
@@ -2156,6 +2431,26 @@ final class CarRentalController extends Controller
                 ? $reservation->securityDeposits->map(fn (CarRentalSecurityDeposit $deposit): array => $this->securityDepositPayload($deposit))
                 : null,
             'checkout_requirements' => $this->checkoutRequirements($reservation),
+            'driver_license' => $includeContact && $reservation->driver_license_country !== null ? [
+                'country' => $reservation->driver_license_country,
+                'subdivision' => $reservation->driver_license_subdivision,
+                'number' => $reservation->driver_license_number,
+                'expires_at' => $reservation->driver_license_expires_at?->format('Y-m-d'),
+                'front_url' => $includeDocuments ? $this->fileUrl($reservation->driver_license_front_file_id) : null,
+                'back_url' => $includeDocuments ? $this->fileUrl($reservation->driver_license_back_file_id) : null,
+            ] : null,
+            'additional_driver' => $includeContact && filled($reservation->additional_driver_name) ? [
+                'name' => $reservation->additional_driver_name,
+                'license_number' => $reservation->additional_driver_license_number,
+            ] : null,
+            'checkout_inspection' => in_array($reservation->state, ['checked_out', 'completed'], true)
+                ? $this->checkoutInspectionPayload($reservation, $includeContact)
+                : null,
+            'contract' => [
+                'issued_at' => $reservation->contract_issued_at?->toIso8601String(),
+                'file_url' => $includeContact ? $this->fileUrl($reservation->contract_file_id) : null,
+                'snapshot' => $includeContact ? $reservation->contract_snapshot : null,
+            ],
         ];
     }
 
@@ -2205,6 +2500,7 @@ final class CarRentalController extends Controller
             ->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount);
 
         return [
+            'contract_terms_configured' => filled(Company::query()->whereKey($reservation->company_id)->value('rental_contract_terms')),
             'driver_license_verified' => $reservation->driver_license_verified_at !== null,
             'minimum_security_deposit_configured' => $reservation->minimum_security_deposit_usd !== null,
             'approved_rental_payment' => $payments->contains(

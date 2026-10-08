@@ -551,9 +551,10 @@ final class CarRentalReservationTest extends TestCase
             ->assertJsonPath('data.status', 'approved');
     }
 
-    public function test_check_out_requires_an_approved_payment_a_held_deposit_and_a_verified_driver_license(): void
+    public function test_check_out_requires_payment_deposit_international_license_checkout_sheet_and_signatures(): void
     {
         Mail::fake();
+        Storage::fake('local');
 
         [, $company, $site, $token] = $this->context([
             'rental.reservations.create',
@@ -570,14 +571,37 @@ final class CarRentalReservationTest extends TestCase
             ->assertCreated()
             ->json('data');
 
+        $checkout = [
+            'expected_lock_version' => $reservation['lock_version'],
+            'driver_full_name' => 'Jean Pierre',
+            'driver_license_number' => 'HT-123456',
+            'driver_license_expires_at' => '2027-01-01',
+            'driver_license_country' => 'ht',
+            'driver_license_front_file_id' => $this->upload($token, $company, $site, 'driver_license_front'),
+            'driver_license_back_file_id' => $this->upload($token, $company, $site, 'driver_license_back'),
+            'driver_license_verified' => true,
+            'odometer_km' => 150,
+            'fuel_level_percent' => 100,
+            'accessories' => ['spare_tire', 'jack'],
+            'damage_notes' => 'Rayure légère sur le pare-chocs arrière.',
+            'inspection_photo_file_ids' => [$this->upload($token, $company, $site, 'inspection_photo')],
+            'terms_accepted' => true,
+            'customer_signature_file_id' => $this->upload($token, $company, $site, 'signature'),
+            'company_signature_file_id' => $this->upload($token, $company, $site, 'signature'),
+            'company_signer_name' => 'Agent Comptoir',
+        ];
+        $url = "/api/v1/car-rental/reservations/{$reservation['id']}/check-out";
+
+        // Les conditions du contrat doivent être configurées avant toute remise.
         $this->requestFor($token, $company)
-            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/check-out", [
-                'expected_lock_version' => $reservation['lock_version'],
-                'driver_full_name' => 'Jean Pierre',
-                'driver_license_number' => 'HT-123456',
-                'driver_license_expires_at' => '2027-01-01',
-                'driver_license_verified' => true,
-            ])
+            ->postJson($url, $checkout)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('contract_terms');
+
+        $company->forceFill(['rental_contract_terms' => "Article 1 - Objet\nTexte de test."])->save();
+
+        $this->requestFor($token, $company)
+            ->postJson($url, $checkout)
             ->assertUnprocessable()
             ->assertJsonValidationErrors('payment');
 
@@ -595,29 +619,58 @@ final class CarRentalReservationTest extends TestCase
         $this->approvePayment($token, $company, $reservation['id'], $depositPayment['id']);
 
         $this->requestFor($token, $company)
-            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/check-out", [
-                'expected_lock_version' => $reservation['lock_version'],
-                'driver_full_name' => 'Jean Pierre',
-                'driver_license_number' => 'HT-123456',
-                'driver_license_expires_at' => '2027-01-01',
-                'driver_license_verified' => false,
-            ])
+            ->postJson($url, [...$checkout, 'driver_license_verified' => false])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('driver_license_verified');
 
+        // Un permis américain est délivré par un État : la subdivision est obligatoire.
         $this->requestFor($token, $company)
-            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/check-out", [
-                'expected_lock_version' => $reservation['lock_version'],
-                'driver_full_name' => 'Jean Pierre',
-                'driver_license_number' => 'HT-123456',
-                'driver_license_expires_at' => '2027-01-01',
-                'driver_license_verified' => true,
-            ])
+            ->postJson($url, [...$checkout, 'driver_license_country' => 'US'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('driver_license_subdivision');
+
+        $this->requestFor($token, $company)
+            ->postJson($url, [...$checkout, 'customer_signature_file_id' => null, 'terms_accepted' => false])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['customer_signature_file_id', 'terms_accepted']);
+
+        // Une photo d’inspection ne peut pas servir de recto du permis.
+        $this->requestFor($token, $company)
+            ->postJson($url, [...$checkout, 'driver_license_front_file_id' => $this->upload($token, $company, $site, 'inspection_photo')])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('driver_license_front_file_id');
+
+        $this->requestFor($token, $company)
+            ->postJson($url, [...$checkout, 'odometer_km' => 50])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('odometer_km');
+
+        $checkedOut = $this->requestFor($token, $company)
+            ->postJson($url, $checkout)
             ->assertOk()
             ->assertJsonPath('data.state', 'checked_out')
             ->assertJsonPath('data.driver_license_verified', true)
-            ->assertJsonMissingPath('data.driver_license_number');
+            ->assertJsonPath('data.driver_license.country', 'HT')
+            ->assertJsonPath('data.driver_license.subdivision', null)
+            ->assertJsonPath('data.driver_license.front_url', null)
+            ->assertJsonPath('data.checkout_inspection.odometer_km', 150)
+            ->assertJsonPath('data.checkout_inspection.fuel_level_percent', 100)
+            ->assertJsonPath('data.checkout_inspection.accessories', ['spare_tire', 'jack'])
+            ->assertJsonPath('data.checkout_inspection.company_signer_name', 'Agent Comptoir')
+            ->assertJsonPath('data.contract.snapshot.terms', "Article 1 - Objet\nTexte de test.")
+            ->assertJsonPath('data.contract.file_url', null)
+            ->assertJsonMissingPath('data.driver_license_number')
+            ->json('data');
 
+        $this->assertNotNull($checkedOut['checkout_inspection']['customer_signature_url']);
+        $this->assertSame(150, $vehicle->fresh()->latest_odometer_km);
+        $this->assertDatabaseHas('car_rental_inspections', [
+            'company_id' => $company->id,
+            'reservation_id' => $reservation['id'],
+            'stage' => 'pre_rental',
+            'status' => 'finalized',
+            'odometer_km' => 150,
+        ]);
         $this->assertDatabaseHas('car_rental_security_deposits', [
             'company_id' => $company->id,
             'reservation_id' => $reservation['id'],
@@ -626,11 +679,44 @@ final class CarRentalReservationTest extends TestCase
             'currency' => 'USD',
             'amount' => '250.00',
         ]);
-        $this->assertDatabaseHas('car_rental_reservations', [
-            'id' => $reservation['id'],
-            'state' => 'checked_out',
-            'driver_full_name' => 'Jean Pierre',
-        ]);
+
+        // Une modification ultérieure des conditions ne change pas le contrat signé.
+        $company->forceFill(['rental_contract_terms' => 'Nouvelle version'])->save();
+
+        $contractFile = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'rental_contract',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('contrat.pdf', "%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n"),
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/contract", ['file_id' => $contractFile, 'send_to_customer' => true])
+            ->assertOk()
+            ->assertJsonPath('data.contract.file_url', '/api/v1/car-rental/files/' . $contractFile)
+            ->assertJsonPath('data.contract.snapshot.terms', "Article 1 - Objet\nTexte de test.")
+            ->assertJsonPath('customer_notification_sent', true);
+
+        Mail::assertSent(CarRentalCustomerNotificationMail::class, static fn (CarRentalCustomerNotificationMail $mail): bool => count($mail->pdfAttachments) === 1);
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/contract", ['file_id' => $contractFile])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reservation');
+    }
+
+    private function upload(string $token, Company $company, Site $site, string $purpose): string
+    {
+        return $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => $purpose,
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('image.png', $this->pngBytes()),
+            ])
+            ->assertCreated()
+            ->json('data.id');
     }
 
     /**

@@ -16,7 +16,10 @@ const props = withDefaults(defineProps<{
   help?: string
   error?: string
   disabled?: boolean
+  /** Affiche l'astérisque des champs obligatoires. */
+  required?: boolean
 }>(), {
+  required: false,
   accept: 'image/jpeg,image/png,image/webp',
   help: '',
   error: '',
@@ -85,7 +88,7 @@ onBeforeUnmount(resetPreview)
 
 <template>
   <div class="field capture">
-    <span class="field-label">{{ label }}</span>
+    <span class="field-label">{{ label }}<span v-if="required" class="required" aria-hidden="true">*</span></span>
 
     <div v-if="preview || fileName" class="capture-preview">
       <img v-if="preview" :src="preview" alt="Aperçu du fichier ajouté" />

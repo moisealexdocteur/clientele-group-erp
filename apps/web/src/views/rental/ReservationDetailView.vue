@@ -30,6 +30,9 @@ import SheetDialog from '../../components/ui/SheetDialog.vue'
 import StatusPill from '../../components/ui/StatusPill.vue'
 import VehicleThumb from '../../components/rental/VehicleThumb.vue'
 import CheckoutPanel from '../../components/rental/CheckoutPanel.vue'
+import PrivateImage from '../../components/ui/PrivateImage.vue'
+import { accessoryLabels, fuelLevelLabel } from '../../lib/labels'
+import { licenseIssuer } from '../../lib/countries'
 
 /*
  * Détail d'une réservation. Chaque action est une tâche distincte, ouverte
@@ -74,6 +77,7 @@ const paymentForm = reactive({
 })
 const canGrantCredit = computed(() => session.can('rental.payments.credit'))
 const notifying = ref(false)
+const issuing = ref(false)
 
 async function load(): Promise<void> {
   const result = await loading.run(() => fetchReservation(props.reservationId))
@@ -251,11 +255,43 @@ async function approve(payment: CarRentalPayment): Promise<void> {
   ui.toast('Paiement approuvé.')
 }
 
-function onCheckedOut(next: CarRentalReservation, notified: boolean): void {
-  replace(next)
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-  ui.toast(notified ? 'Location mise en circulation. Le courriel client a été envoyé.' : 'Location mise en circulation.')
+/* ---------- Contrat signé ---------- */
+
+const canIssueContract = computed(() =>
+  canManage.value
+  && reservation.value !== null
+  && ['checked_out', 'completed'].includes(reservation.value.state)
+  && Boolean(reservation.value.contract?.snapshot)
+  && !reservation.value.contract?.file_url,
+)
+
+async function openContract(): Promise<void> {
+  const path = reservation.value?.contract?.file_url
+  if (!path) return
+  try {
+    window.open(await privateFileUrl(path), '_blank', 'noopener')
+  } catch {
+    ui.toast('Le contrat ne peut pas être affiché avec vos droits.', 'danger')
+  }
 }
+
+async function createContract(): Promise<void> {
+  if (!reservation.value) return
+  issuing.value = true
+  try {
+    replace(await (await import('../../components/rental/issueContract')).issueContract(reservation.value))
+    ui.toast('Contrat signé enregistré.')
+  } catch (error) {
+    ui.toast(error instanceof Error ? error.message : 'Le contrat n’a pas pu être créé.', 'danger')
+  } finally {
+    issuing.value = false
+  }
+}
+
+const accessoriesText = computed(() => {
+  const list = reservation.value?.checkout_inspection?.accessories ?? []
+  return list.length ? list.map((item) => accessoryLabels[item]).join(', ') : 'Aucun'
+})
 
 const kilometerText = computed(() => {
   const value = reservation.value
@@ -317,7 +353,6 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
           v-if="isReserved && canManage"
           :reservation="reservation"
           :can-submit-payment="canSubmitPayment"
-          @done="onCheckedOut"
           @add-payment="openPayment"
         />
 
@@ -359,6 +394,72 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
             </li>
           </ul>
           <p v-else class="text-muted">Aucun paiement enregistré.</p>
+        </section>
+
+        <section v-if="reservation.contract?.file_url || canIssueContract" class="panel" aria-labelledby="contract-title">
+          <div class="panel-header">
+            <div>
+              <h2 id="contract-title" class="title-section">Contrat de location</h2>
+              <p v-if="reservation.contract?.issued_at" class="text-secondary text-small">Signé et enregistré le {{ formatDateTime(reservation.contract.issued_at) }}</p>
+              <p v-else class="text-secondary text-small">Les signatures sont enregistrées. Le PDF n’a pas encore été créé.</p>
+            </div>
+          </div>
+          <button v-if="reservation.contract?.file_url" class="btn btn-secondary" type="button" @click="openContract">Ouvrir le contrat PDF</button>
+          <button v-else class="btn btn-primary" type="button" :disabled="issuing || !app.canReachServer" @click="createContract">
+            {{ issuing ? 'Création en cours' : 'Créer le contrat PDF' }}
+          </button>
+        </section>
+
+        <section v-if="reservation.checkout_inspection" class="panel" aria-labelledby="sheet-title">
+          <h2 id="sheet-title" class="title-section">Fiche de sortie</h2>
+          <dl class="facts">
+            <div>
+              <dt>Kilométrage au départ</dt>
+              <dd>{{ reservation.checkout_inspection.odometer_km?.toLocaleString('fr-FR') ?? '-' }} km</dd>
+            </div>
+            <div>
+              <dt>Carburant</dt>
+              <dd>{{ fuelLevelLabel(reservation.checkout_inspection.fuel_level_percent) }}</dd>
+            </div>
+            <div>
+              <dt>Accessoires remis</dt>
+              <dd>{{ accessoriesText }}</dd>
+            </div>
+            <div v-if="reservation.checkout_inspection.damage_notes">
+              <dt>Dommages constatés</dt>
+              <dd>{{ reservation.checkout_inspection.damage_notes }}</dd>
+            </div>
+            <div v-if="reservation.checkout_inspection.company_signer_name">
+              <dt>Contrôle et signature</dt>
+              <dd>{{ reservation.checkout_inspection.company_signer_name }}</dd>
+            </div>
+          </dl>
+          <div v-if="reservation.checkout_inspection.photo_urls.length" class="doc-photos">
+            <PrivateImage v-for="url in reservation.checkout_inspection.photo_urls" :key="url" :path="url" alt="Photo de l’état du véhicule au départ" />
+          </div>
+        </section>
+
+        <section v-if="reservation.driver_license" class="panel" aria-labelledby="license-title">
+          <h2 id="license-title" class="title-section">Permis de conduire</h2>
+          <dl class="facts">
+            <div>
+              <dt>Numéro</dt>
+              <dd class="mono">{{ reservation.driver_license.number ?? '-' }}</dd>
+            </div>
+            <div>
+              <dt>Délivré par</dt>
+              <dd>{{ licenseIssuer(reservation.driver_license.country, reservation.driver_license.subdivision) }}</dd>
+            </div>
+            <div v-if="reservation.additional_driver">
+              <dt>Conducteur additionnel</dt>
+              <dd>{{ reservation.additional_driver.name }} - {{ reservation.additional_driver.license_number }}</dd>
+            </div>
+          </dl>
+          <div v-if="reservation.driver_license.front_url || reservation.driver_license.back_url" class="doc-photos">
+            <PrivateImage v-if="reservation.driver_license.front_url" :path="reservation.driver_license.front_url" alt="Recto du permis de conduire" />
+            <PrivateImage v-if="reservation.driver_license.back_url" :path="reservation.driver_license.back_url" alt="Verso du permis de conduire" />
+          </div>
+          <p v-else class="text-muted text-small">Les photos du permis sont visibles seulement par les rôles autorisés.</p>
         </section>
       </div>
 
@@ -512,7 +613,8 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
         <FileCapture
           purpose="payment_proof"
           :site-id="reservation.site_id"
-          label="Reçu de virement Sogebank *"
+          label="Reçu de virement Sogebank"
+          required
           accept="image/jpeg,image/png,image/webp,application/pdf"
           help="Photo nette du reçu ou fichier PDF, 10 Mo au plus."
           :error="action.fieldErrors.value.proof_file_id"
@@ -624,6 +726,20 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.doc-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.doc-photos :deep(img) {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
 }
 
 .detail-contact {

@@ -1,6 +1,8 @@
 import type {
   CarRentalUserRole,
+  FuelLevel,
   FuelType,
+  RentalAccessory,
   RentalCategory,
   RentalLocation,
   ReservationCancellationReason,
@@ -113,4 +115,30 @@ export const fuelTypeLabels: Record<FuelType, string> = {
 export const transmissionLabels: Record<Transmission, string> = {
   manual: 'Manuelle',
   automatic: 'Automatique',
+}
+
+export const fuelLevelLabels: Record<FuelLevel, string> = {
+  10: 'Réserve',
+  25: '1/4',
+  50: '1/2',
+  75: '3/4',
+  100: 'Plein',
+}
+
+export const accessoryLabels: Record<RentalAccessory, string> = {
+  spare_tire: 'Roue de secours',
+  jack: 'Cric',
+  wheel_wrench: 'Clé de roue',
+  warning_triangle: 'Triangle de signalisation',
+  first_aid_kit: 'Trousse de secours',
+  fire_extinguisher: 'Extincteur',
+  vehicle_documents: 'Documents du véhicule',
+  floor_mats: 'Tapis de sol',
+  radio: 'Radio',
+  phone_charger: 'Chargeur de téléphone',
+}
+
+export function fuelLevelLabel(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'Non relevé'
+  return fuelLevelLabels[value as FuelLevel] ?? `${value} %`
 }

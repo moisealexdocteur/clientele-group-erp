@@ -2,6 +2,25 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.5.0-alpha.1 - 2026-10-10
+
+Livraison 2 des retours de recette. Détail : `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`.
+
+### Ajouté
+
+- Écran de mise en circulation en trois étapes : permis, fiche de sortie, signatures. Le bouton final reste grisé tant qu'un élément manque.
+- Permis international : pays émetteur (ISO 3166, en français), État ou province seulement pour les pays concernés (États-Unis, Canada, Mexique, Australie, Brésil, Inde), photos recto et verso obligatoires, conducteur additionnel.
+- Fiche de sortie : kilométrage (jamais inférieur au dernier relevé, met à jour la fiche véhicule), carburant, accessoires, dommages et jusqu'à 12 photos.
+- Signatures tactiles du locataire et du loueur, enregistrées en PNG privé avec empreinte SHA-256.
+- Contrat PDF A4 signé, construit à partir d'une copie figée (loueur, conditions, véhicule), stocké en privé et rattaché définitivement à la réservation. Reconstruction possible depuis le détail si la création échoue.
+- Conditions du contrat de location saisies par le propriétaire dans la configuration de la société. Une remise est refusée tant qu'elles sont vides.
+- Détail de la réservation : contrat, fiche de sortie et permis, selon les droits.
+
+### Sécurité
+
+- Le contrat n'est pas envoyé par courriel automatiquement : il contient la plaque et le numéro de permis.
+- Photos du permis visibles seulement avec `rental.documents.sensitive`.
+
 ## 0.4.0-alpha.1 - 2026-10-09
 
 Livraison 1 des retours de recette. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md`.
