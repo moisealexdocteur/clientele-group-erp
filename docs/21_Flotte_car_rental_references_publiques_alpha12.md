@@ -4,7 +4,7 @@
 
 Les publications publiques transmises par le propriétaire servent à préremplir la flotte Car Rental. Elles ne remplacent pas les contrôles opérationnels. Aucun véhicule n’est créé automatiquement par ce catalogue.
 
-Avant l’enregistrement, le préposé doit toujours sélectionner une adresse autorisée et saisir le kilométrage réel relevé. Il renseigne ensuite les papiers, l’assurance OAVCT et le permis de vitres teintées dans la fiche du véhicule.
+Avant l’enregistrement, le préposé doit utiliser l’adresse **Pont Parois, Route Nationale 6** et saisir le kilométrage réel relevé. Lorsque cette adresse existe dans la société active, le catalogue la sélectionne automatiquement. Si elle n’est pas encore configurée, le formulaire exige sa création ou sa sélection avant l’enregistrement. Il renseigne ensuite les papiers, l’assurance OAVCT et le permis de vitres teintées dans la fiche du véhicule.
 
 ## Sources fournies
 

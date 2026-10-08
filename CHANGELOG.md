@@ -7,6 +7,7 @@ Toutes les modifications notables de ce projet sont documentées ici.
 ### Ajouté
 
 - Catalogue de préremplissage Car Rental issu des publications publiques fournies pour la flotte Clientèle Group.
+- Adresse d’affectation par défaut de la flotte actuelle : `Pont Parois, Route Nationale 6`.
 - Références visibles : Nissan Frontier `AA-85177`, Suzuki Jimny `LO-01727` et Great Wall Poer `DM-00849`, avec photo de référence versionnée.
 - Fiches à vérifier avant enregistrement : Suzuki Jimny `LO-01724`, BAIC BJ40 `DM-00437` et Great Wall Poer `DM-00835`.
 - La photo de référence choisie est conservée sur la fiche véhicule et renvoyée par l’API de flotte.

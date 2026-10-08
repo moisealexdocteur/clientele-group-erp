@@ -6,6 +6,7 @@ L’alpha.5 reste la référence validée en préproduction pour l’authentific
 
 - les véhicules `suv`, `mid_suv` et `pickup` ;
 - la création d’un véhicule pour une adresse autorisée, avec plaque en cours, kilométrage, catégorie et état opérationnel ;
+- l’affectation par défaut de toute la flotte actuelle à l’adresse `Pont Parois, Route Nationale 6` ;
 - le préremplissage contrôlé de la flotte depuis les références publiques validées, sans création automatique et avec vérification explicite des fiches incomplètes ;
 - l’affichage d’une photo de référence publique sur une fiche véhicule lorsque cette photo a été validée et versionnée ;
 - l’utilisation de la plaque en cours comme identifiant du véhicule, sans code interne distinct ;

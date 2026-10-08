@@ -31,6 +31,8 @@ const CLIENTELE_FLEET_SECOND_VIDEO = 'https://www.tiktok.com/@sully.simon68/vide
  * l'utilisateur doit contrôler la plaque sur le véhicule et saisir les
  * données opérationnelles réelles avant l'enregistrement.
  */
+export const CLIENTELE_CAR_RENTAL_FLEET_ADDRESS = 'Pont Parois, Route Nationale 6'
+
 export const clienteleFleetCatalog: FleetCatalogVehicle[] = [
   {
     registrationNumber: 'AA-85177',

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { clienteleFleetCatalog, type FleetCatalogVehicle } from './data/clienteleFleetCatalog'
+import {
+  CLIENTELE_CAR_RENTAL_FLEET_ADDRESS,
+  clienteleFleetCatalog,
+  type FleetCatalogVehicle,
+} from './data/clienteleFleetCatalog'
 
 type ApiStatus = 'checking' | 'online' | 'offline'
 type AuthView = 'sign-in' | 'verify' | 'reset-request' | 'reset-confirm' | 'authenticated'
@@ -2135,7 +2139,13 @@ async function createVehicle(): Promise<void> {
 
 
 function prefillVehicleFromCatalog(candidate: FleetCatalogVehicle): void {
+  const normalizedFleetAddress = normalizeFleetSiteText(CLIENTELE_CAR_RENTAL_FLEET_ADDRESS)
+  const defaultFleetSite = activeContext.value?.sites.find((site) => (
+    normalizeFleetSiteText(`${site.name} ${site.address}`).includes(normalizedFleetAddress)
+  ))
+
   Object.assign(vehicleForm, {
+    site_id: defaultFleetSite?.id ?? '',
     category: candidate.category,
     operational_status: 'available',
     make: candidate.make,
@@ -2148,11 +2158,24 @@ function prefillVehicleFromCatalog(candidate: FleetCatalogVehicle): void {
     latest_odometer_km: '',
   })
 
+  const siteMessage = defaultFleetSite === undefined
+    ? `Créez ou sélectionnez l’adresse « ${CLIENTELE_CAR_RENTAL_FLEET_ADDRESS} », puis saisissez le kilométrage actuel.`
+    : `L’adresse « ${CLIENTELE_CAR_RENTAL_FLEET_ADDRESS} » a été sélectionnée. Saisissez le kilométrage actuel.`
+
   fleetCatalogMessage.value = candidate.requiresReview
-    ? 'Informations préremplies. Vérifiez la plaque et le modèle avant l’enregistrement, puis renseignez l’adresse et le kilométrage actuel.'
-    : 'Informations préremplies. Renseignez l’adresse et le kilométrage actuel avant l’enregistrement.'
+    ? `Informations préremplies. Vérifiez la plaque et le modèle avant l’enregistrement. ${siteMessage}`
+    : `Informations préremplies. ${siteMessage}`
 
   vehicleCreateSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function normalizeFleetSiteText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
 }
 
 function isVehicleOperationalStatus(value: string): value is VehicleOperationalStatus {
@@ -3538,7 +3561,7 @@ onBeforeUnmount(() => {
                 <div class="section-intro">
                   <p class="eyebrow">Références de flotte</p>
                   <h3 id="vehicle-reference-title">Véhicules identifiés dans les publications</h3>
-                  <p>Ces fiches préremplissent uniquement les informations visibles. Elles ne créent pas de véhicule. Renseignez toujours l’adresse et le kilométrage réel avant l’enregistrement.</p>
+                  <p>Adresse de la flotte : Pont Parois, Route Nationale 6. Ces fiches préremplissent uniquement les informations visibles. Elles ne créent pas de véhicule.</p>
                 </div>
 
                 <div class="vehicle-reference-grid">
@@ -3653,7 +3676,7 @@ onBeforeUnmount(() => {
                 <div class="section-intro">
                   <p class="eyebrow">Véhicule</p>
                   <h3 id="vehicle-create-title">Ajouter un véhicule</h3>
-                  <p>La plaque actuelle est l’identifiant du véhicule. Sélectionnez son type, puis renseignez l’adresse et le kilométrage relevé.</p>
+                  <p>La plaque actuelle est l’identifiant du véhicule. Pour la flotte actuelle, utilisez Pont Parois, Route Nationale 6, puis renseignez le kilométrage relevé.</p>
                 </div>
 
                 <p v-if="fleetCatalogMessage" class="rental-message" role="status">{{ fleetCatalogMessage }}</p>
