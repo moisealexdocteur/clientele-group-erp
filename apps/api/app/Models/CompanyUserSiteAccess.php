@@ -10,6 +10,8 @@ final class CompanyUserSiteAccess extends Model
 {
     use HasUuids;
 
+    protected $table = 'company_user_site_access';
+
     public $incrementing = false;
 
     protected $keyType = 'string';
