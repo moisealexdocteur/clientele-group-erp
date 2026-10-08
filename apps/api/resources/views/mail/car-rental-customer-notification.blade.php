@@ -37,7 +37,7 @@
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td align="center" style="padding:0 16px 14px;color:#6b6d78;font-size:12px;line-height:1.4;">Image indicative du véhicule</td>
+                                        <td align="center" style="padding:0 16px 14px;color:#6b6d78;font-size:12px;line-height:1.4;">Illustration de catégorie, pas une photo du véhicule</td>
                                     </tr>
                                 </table>
                             @endif

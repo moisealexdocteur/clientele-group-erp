@@ -28,6 +28,9 @@ final class CarRentalSecurityDeposit extends Model
         'amount',
         'held_at',
         'released_at',
+        'applied_amount',
+        'settlement_note',
+        'settled_by',
     ];
 
     protected function casts(): array
@@ -36,6 +39,8 @@ final class CarRentalSecurityDeposit extends Model
             'amount' => 'decimal:2',
             'held_at' => 'immutable_datetime',
             'released_at' => 'immutable_datetime',
+            'applied_amount' => 'decimal:2',
+            'settlement_note' => 'encrypted',
         ];
     }
 

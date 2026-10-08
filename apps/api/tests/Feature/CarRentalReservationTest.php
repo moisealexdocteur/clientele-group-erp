@@ -707,6 +707,177 @@ final class CarRentalReservationTest extends TestCase
             ->assertJsonValidationErrors('reservation');
     }
 
+    public function test_return_records_the_sheet_and_charges_then_deposit_settlement_and_invoice(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+            'rental.reservations.read',
+            'rental.reservations.manage',
+            'rental.payments.submit',
+            'rental.payments.approve',
+            'rental.deposits.settle',
+            'rental.invoices.issue',
+        ]);
+        $company->forceFill(['rental_contract_terms' => 'Article 1 - Objet'])->save();
+        $vehicle = $this->vehicle($company, $site, 'SUV-RETURN', 'suv');
+        $reservation = $this->checkedOutReservation($token, $company, $site, $vehicle);
+        $url = "/api/v1/car-rental/reservations/{$reservation['id']}/return";
+        $return = [
+            'expected_lock_version' => $reservation['lock_version'],
+            'odometer_km' => 500,
+            'fuel_level_percent' => 75,
+            'accessories' => ['spare_tire', 'jack'],
+            'damage_notes' => 'Rayure sur la portière avant gauche.',
+            'damage_marks' => [['x' => 0.2, 'y' => 0.3, 'kind' => 'scratch', 'note' => 'Portière']],
+            'apply_cleaning_fee' => true,
+            'apply_extra_km' => true,
+        ];
+
+        $this->requestFor($token, $company)
+            ->postJson($url, [...$return, 'odometer_km' => 120])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('odometer_km');
+
+        $this->requestFor($token, $company)
+            ->postJson($url, [...$return, 'damage_marks' => [['x' => 2, 'y' => 0.3, 'kind' => 'scratch']]])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('damage_marks.0.x');
+
+        // Un agent sans droit de règlement ne peut pas ajouter de frais libres.
+        $agentToken = $this->additionalUser($company, ['rental.reservations.manage', 'rental.reservations.read']);
+        $this->requestFor($agentToken, $company)
+            ->postJson($url, [...$return, 'other_charges' => [['label' => 'Rétroviseur', 'amount' => '80.00']]])
+            ->assertForbidden();
+
+        // 350 km parcourus, 300 inclus : 50 km à 0,50 USD.
+        $this->requestFor($token, $company)
+            ->postJson($url, $return)
+            ->assertOk()
+            ->assertJsonPath('data.state', 'completed')
+            ->assertJsonPath('data.return_inspection.odometer_km', 500)
+            ->assertJsonPath('data.return_inspection.fuel_level_percent', 75)
+            ->assertJsonPath('data.return_inspection.damage_marks.0.kind', 'scratch')
+            ->assertJsonPath('data.additional_charges.0.code', 'cleaning')
+            ->assertJsonPath('data.additional_charges.0.amount', '20.00')
+            ->assertJsonPath('data.additional_charges.1.code', 'extra_km')
+            ->assertJsonPath('data.additional_charges.1.amount', '25.00');
+
+        $this->assertSame(500, $vehicle->fresh()->latest_odometer_km);
+        $this->assertSame('preparation', $vehicle->fresh()->operational_status);
+
+        $invoiceUrl = "/api/v1/car-rental/reservations/{$reservation['id']}/invoice";
+        $this->requestFor($token, $company)
+            ->postJson($invoiceUrl)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reservation');
+
+        $settlementUrl = "/api/v1/car-rental/reservations/{$reservation['id']}/deposit-settlement";
+        $this->requestFor($token, $company)
+            ->postJson($settlementUrl, ['retained_amount_usd' => 45])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reason');
+        $this->requestFor($token, $company)
+            ->postJson($settlementUrl, ['retained_amount_usd' => 300, 'reason' => 'Frais'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('retained_amount_usd');
+        $this->requestFor($token, $company)
+            ->postJson($settlementUrl, ['retained_amount_usd' => 45, 'reason' => 'Nettoyage et kilométrage'])
+            ->assertOk()
+            ->assertJsonPath('data.security_deposits.0.status', 'partially_applied')
+            ->assertJsonPath('data.security_deposits.0.applied_amount', '45.00');
+
+        // Frais aéroport non choisis : 3 jours × 130 + nettoyage 20 + kilomètres 25 = 435 ;
+        // payé 390 ; dépôt retenu 45 ; solde nul.
+        $invoice = $this->requestFor($token, $company)
+            ->postJson($invoiceUrl)
+            ->assertCreated()
+            ->assertJsonPath('data.invoice.number', '0000 0001')
+            ->assertJsonPath('data.invoice.total', '435.00')
+            ->assertJsonPath('data.invoice.balance_due', '0.00')
+            ->assertJsonPath('data.invoice.snapshot.totals.paid', '390.00')
+            ->assertJsonPath('data.invoice.snapshot.totals.deposit_applied', '45.00')
+            ->assertJsonPath('data.invoice.snapshot.deposit.released_usd', '205.00')
+            ->json('data.invoice');
+
+        self::assertStringNotContainsString('SUV-RETURN', json_encode($invoice['snapshot'], JSON_THROW_ON_ERROR));
+
+        $this->requestFor($token, $company)
+            ->postJson($invoiceUrl)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reservation');
+
+        $file = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'rental_invoice',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('facture.pdf', "%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n"),
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->requestFor($token, $company)
+            ->postJson("{$invoiceUrl}/file", ['file_id' => $file])
+            ->assertOk()
+            ->assertJsonPath('data.invoice.file_url', '/api/v1/car-rental/files/' . $file)
+            ->assertJsonPath('customer_notification_sent', true);
+
+        Mail::assertSent(
+            CarRentalCustomerNotificationMail::class,
+            static fn (CarRentalCustomerNotificationMail $mail): bool => count($mail->pdfAttachments) === 1
+                && str_starts_with($mail->pdfAttachments[0]['name'], 'Facture-'),
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function checkedOutReservation(string $token, Company $company, Site $site, CarRentalVehicle $vehicle): array
+    {
+        $reservation = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->json('data');
+
+        $cashRegister = CashRegister::query()->create([
+            'company_id' => $company->id,
+            'site_id' => $site->id,
+            'code' => 'CAR-RET',
+            'name' => 'Caisse Car Rental',
+            'is_active' => true,
+        ]);
+        $rental = $this->submitCashPayment($token, $company, $reservation['id'], $cashRegister->id, 'rental', '390.00');
+        $this->approvePayment($token, $company, $reservation['id'], $rental['id']);
+        $deposit = $this->submitCashPayment($token, $company, $reservation['id'], $cashRegister->id, 'security_deposit', '250.00');
+        $this->approvePayment($token, $company, $reservation['id'], $deposit['id']);
+
+        return $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/check-out", [
+                'expected_lock_version' => $reservation['lock_version'],
+                'driver_full_name' => 'Jean Pierre',
+                'driver_license_number' => 'HT-123456',
+                'driver_license_expires_at' => '2028-01-01',
+                'driver_license_country' => 'HT',
+                'driver_license_front_file_id' => $this->upload($token, $company, $site, 'driver_license_front'),
+                'driver_license_back_file_id' => $this->upload($token, $company, $site, 'driver_license_back'),
+                'driver_license_verified' => true,
+                'odometer_km' => 150,
+                'fuel_level_percent' => 100,
+                'accessories' => ['spare_tire', 'jack'],
+                'damage_marks' => [['x' => 0.8, 'y' => 0.5, 'kind' => 'dent']],
+                'terms_accepted' => true,
+                'customer_signature_file_id' => $this->upload($token, $company, $site, 'signature'),
+                'company_signature_file_id' => $this->upload($token, $company, $site, 'signature'),
+                'company_signer_name' => 'Agent Comptoir',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.checkout_inspection.damage_marks.0.kind', 'dent')
+            ->json('data');
+    }
+
     private function upload(string $token, Company $company, Site $site, string $purpose): string
     {
         return $this->requestFor($token, $company)

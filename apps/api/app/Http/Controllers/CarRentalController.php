@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CarRentalInspection;
+use App\Models\CarRentalInvoice;
 use App\Models\CarRentalPayment;
 use App\Models\CarRentalReservation;
 use App\Models\CarRentalSecurityDeposit;
@@ -39,6 +40,12 @@ final class CarRentalController extends Controller
      * territoire. Ailleurs (Haïti, France, etc.), le permis est national.
      */
     private const LICENSE_SUBDIVISION_COUNTRIES = ['US', 'CA', 'MX', 'AU', 'BR', 'IN'];
+
+    /** Frais de nettoyage confirmés par la direction, appliqués seulement sur décision au retour. */
+    private const CLEANING_FEE_USD = '20.00';
+
+    /** Types de dommages notés sur le croquis. */
+    private const DAMAGE_KINDS = ['scratch', 'dent', 'chip', 'broken', 'other'];
 
     public function __construct(
         private readonly CarRentalAvailabilityService $availability,
@@ -823,7 +830,7 @@ final class CarRentalController extends Controller
             $company,
             $access,
             $reservation,
-            ['vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections.photos'],
+            ['vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections.photos', 'invoice'],
         );
 
         return response()->json([
@@ -1090,6 +1097,7 @@ final class CarRentalController extends Controller
             'damage_notes' => ['nullable', 'string', 'max:2000'],
             'inspection_photo_file_ids' => ['nullable', 'array', 'max:12'],
             'inspection_photo_file_ids.*' => ['uuid'],
+            ...$this->damageMarkRules(),
             'terms_accepted' => ['accepted'],
             'customer_signature_file_id' => ['required', 'uuid'],
             'company_signature_file_id' => ['required', 'uuid'],
@@ -1121,11 +1129,7 @@ final class CarRentalController extends Controller
         $licenseBack = $this->files->find($company, $data['driver_license_back_file_id'], StoredFile::PURPOSE_DRIVER_LICENSE_BACK, 'driver_license_back_file_id');
         $customerSignature = $this->files->find($company, $data['customer_signature_file_id'], StoredFile::PURPOSE_SIGNATURE, 'customer_signature_file_id');
         $companySignature = $this->files->find($company, $data['company_signature_file_id'], StoredFile::PURPOSE_SIGNATURE, 'company_signature_file_id');
-        $inspectionPhotoIds = [];
-
-        foreach (array_values(array_unique($data['inspection_photo_file_ids'] ?? [])) as $index => $photoId) {
-            $inspectionPhotoIds[] = $this->files->find($company, $photoId, StoredFile::PURPOSE_INSPECTION_PHOTO, "inspection_photo_file_ids.{$index}")->id;
-        }
+        $inspectionPhotoIds = $this->inspectionPhotoIds($company, $data['inspection_photo_file_ids'] ?? []);
 
         $model = DB::transaction(function () use (
             $company,
@@ -1253,6 +1257,7 @@ final class CarRentalController extends Controller
                     'fuel_level_percent' => (int) $data['fuel_level_percent'],
                     'accessories' => $accessories,
                     'notes' => $this->nullableTrimmed($data['damage_notes'] ?? null),
+                    'damage_sketch' => $this->damageMarks($data),
                     'photo_file_ids' => $inspectionPhotoIds,
                     'company_signer_name' => trim($data['company_signer_name']),
                     'customer_signed_at' => $now,
@@ -1398,8 +1403,10 @@ final class CarRentalController extends Controller
     }
 
     /**
-     * Enregistre le retour réel. Le contrat initial et son tarif restent
-     * inchangés : aucune remise ou aucun remboursement n'est créé ici.
+     * Enregistre le retour réel avec la fiche de retour : kilométrage,
+     * carburant, accessoires, dommages et croquis. Le tarif initial reste
+     * inchangé (un retour anticipé conserve le montant prévu). Les frais
+     * supplémentaires ne sont appliqués que s'ils sont cochés au retour.
      */
     public function completeReturn(Request $request, string $reservation): JsonResponse
     {
@@ -1409,9 +1416,38 @@ final class CarRentalController extends Controller
 
         $data = $request->validate([
             'expected_lock_version' => ['required', 'integer', 'min:0'],
+            'odometer_km' => ['required', 'integer', 'min:0', 'max:9999999'],
+            'fuel_level_percent' => ['required', 'integer', Rule::in(CarRentalInspection::FUEL_LEVELS)],
+            'accessories' => ['present', 'array'],
+            'accessories.*' => ['string', Rule::in(CarRentalInspection::ACCESSORIES)],
+            'damage_notes' => ['nullable', 'string', 'max:2000'],
+            ...$this->damageMarkRules(),
+            'inspection_photo_file_ids' => ['nullable', 'array', 'max:12'],
+            'inspection_photo_file_ids.*' => ['uuid'],
+            'apply_cleaning_fee' => ['sometimes', 'boolean'],
+            'apply_extra_km' => ['sometimes', 'boolean'],
+            'other_charges' => ['nullable', 'array', 'max:5'],
+            'other_charges.*.label' => ['required', 'string', 'max:80'],
+            'other_charges.*.amount' => ['required', 'numeric', 'min:0.01', 'max:99999'],
+            'customer_signature_file_id' => ['nullable', 'uuid'],
+        ], [
+            'odometer_km.required' => 'Saisissez le kilométrage au retour.',
+            'fuel_level_percent.required' => 'Indiquez le niveau de carburant au retour.',
+            'fuel_level_percent.in' => 'Indiquez le niveau de carburant au retour.',
+            'other_charges.*.label.required' => 'Indiquez le motif de chaque frais.',
+            'other_charges.*.amount.min' => 'Le montant d’un frais doit être supérieur à zéro.',
         ]);
 
-        $model = DB::transaction(function () use ($company, $access, $reservation, $data): CarRentalReservation {
+        if (($data['other_charges'] ?? []) !== [] && ! $access->allows('rental.deposits.settle')) {
+            return response()->json(['message' => 'Votre rôle ne permet pas d’ajouter d’autres frais. Demandez à un administrateur.'], 403);
+        }
+
+        $customerSignature = filled($data['customer_signature_file_id'] ?? null)
+            ? $this->files->find($company, $data['customer_signature_file_id'], StoredFile::PURPOSE_SIGNATURE, 'customer_signature_file_id')
+            : null;
+        $photoIds = $this->inspectionPhotoIds($company, $data['inspection_photo_file_ids'] ?? []);
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $data, $actor, $customerSignature, $photoIds): CarRentalReservation {
             $model = $this->reservationFor($company, $access, $reservation, [], true);
 
             if ($model->state !== 'checked_out') {
@@ -1422,15 +1458,57 @@ final class CarRentalController extends Controller
 
             $this->assertLockVersion($model, $data['expected_lock_version']);
             $vehicle = $this->vehicleForReservation($company, $model);
+            $checkout = $model->inspections()->where('stage', 'pre_rental')->first();
+            $departureKm = $checkout instanceof CarRentalInspection && $checkout->odometer_km !== null
+                ? (int) $checkout->odometer_km
+                : (int) $vehicle->latest_odometer_km;
+            $returnKm = (int) $data['odometer_km'];
+
+            if ($returnKm < $departureKm) {
+                throw ValidationException::withMessages([
+                    'odometer_km' => sprintf(
+                        'Le kilométrage au retour ne peut pas être inférieur au kilométrage au départ (%s km).',
+                        number_format($departureKm, 0, ',', ' '),
+                    ),
+                ]);
+            }
+
+            $charges = $this->returnCharges($model, $returnKm - $departureKm, $data);
+            $now = now()->utc();
+
+            CarRentalInspection::query()->updateOrCreate(
+                ['company_id' => $company->id, 'reservation_id' => $model->id, 'stage' => 'post_rental'],
+                [
+                    'vehicle_id' => $vehicle->id,
+                    'inspector_user_id' => $actor?->id,
+                    'status' => 'finalized',
+                    'inspected_at' => $now,
+                    'odometer_km' => $returnKm,
+                    'fuel_level_percent' => (int) $data['fuel_level_percent'],
+                    'accessories' => array_values(array_intersect(CarRentalInspection::ACCESSORIES, $data['accessories'])),
+                    'notes' => $this->nullableTrimmed($data['damage_notes'] ?? null),
+                    'damage_sketch' => $this->damageMarks($data),
+                    'photo_file_ids' => $photoIds,
+                    'company_signer_name' => $actor?->name,
+                    'company_signed_at' => $now,
+                    'customer_signed_at' => $customerSignature === null ? null : $now,
+                    'customer_signature_file_id' => $customerSignature?->id,
+                    'customer_signature_sha256' => $customerSignature?->sha256,
+                ],
+            );
 
             $model->forceFill([
                 'state' => 'completed',
-                'returned_at' => now()->utc(),
+                'returned_at' => $now,
+                'additional_charges' => $charges,
                 'lock_version' => $model->lock_version + 1,
             ])->save();
-            $vehicle->forceFill(['operational_status' => 'preparation'])->save();
+            $vehicle->forceFill([
+                'operational_status' => 'preparation',
+                'latest_odometer_km' => max($returnKm, (int) $vehicle->latest_odometer_km),
+            ])->save();
 
-            return $model->load(['site', 'vehicle', 'customerProfile']);
+            return $model->load(['site', 'vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections']);
         });
 
         $this->audit->record(
@@ -1446,6 +1524,13 @@ final class CarRentalController extends Controller
                 'vehicle_id' => $model->vehicle_id,
                 'billing_recalculated' => false,
                 'vehicle_status' => 'preparation',
+                'return_odometer_km' => (int) $data['odometer_km'],
+                'return_fuel_level_percent' => (int) $data['fuel_level_percent'],
+                'damage_mark_count' => count($this->damageMarks($data)),
+                'additional_charges' => array_map(
+                    static fn (array $charge): array => ['code' => $charge['code'], 'amount' => $charge['amount']],
+                    $model->additional_charges ?? [],
+                ),
             ],
         );
 
@@ -1459,6 +1544,105 @@ final class CarRentalController extends Controller
             'data' => $this->reservationPayload($model, $access),
             'customer_notification_sent' => $customerNotificationSent,
         ]);
+    }
+
+    /**
+     * Frais retenus au retour, dans la devise de la réservation. Aucun frais
+     * n'est appliqué sans case cochée : nettoyage (20 USD) et kilométrage
+     * supplémentaire selon le prix au kilomètre du contrat.
+     *
+     * @param array<string, mixed> $data
+     * @return array<int, array{code: string, label: string, amount: string}>
+     */
+    private function returnCharges(CarRentalReservation $reservation, int $drivenKm, array $data): array
+    {
+        $charges = [];
+
+        if (($data['apply_cleaning_fee'] ?? false) === true) {
+            if ($reservation->currency !== 'USD') {
+                throw ValidationException::withMessages([
+                    'apply_cleaning_fee' => 'Les frais de nettoyage de 20 USD s’appliquent à une location en USD. Utilisez « Autres frais » pour une location en HTG.',
+                ]);
+            }
+
+            $charges[] = ['code' => 'cleaning', 'label' => 'Frais de nettoyage', 'amount' => self::CLEANING_FEE_USD];
+        }
+
+        if (($data['apply_extra_km'] ?? false) === true) {
+            $extra = $this->extraKilometers($reservation, $drivenKm);
+
+            if ($extra === 0 || $reservation->additional_km_rate === null) {
+                throw ValidationException::withMessages([
+                    'apply_extra_km' => 'Aucun kilométrage supplémentaire facturable pour cette location.',
+                ]);
+            }
+
+            $charges[] = [
+                'code' => 'extra_km',
+                'label' => sprintf('Kilométrage supplémentaire : %d km', $extra),
+                'amount' => number_format($extra * (float) $reservation->additional_km_rate, 2, '.', ''),
+            ];
+        }
+
+        foreach ($data['other_charges'] ?? [] as $charge) {
+            $charges[] = [
+                'code' => 'other',
+                'label' => trim((string) $charge['label']),
+                'amount' => number_format((float) $charge['amount'], 2, '.', ''),
+            ];
+        }
+
+        return $charges;
+    }
+
+    private function extraKilometers(CarRentalReservation $reservation, int $drivenKm): int
+    {
+        if ($reservation->kilometer_plan !== 'limited' || $reservation->included_km === null) {
+            return 0;
+        }
+
+        return max(0, $drivenKm - (int) $reservation->included_km);
+    }
+
+    /** @return array<string, array<int, mixed>> */
+    private function damageMarkRules(): array
+    {
+        return [
+            'damage_marks' => ['nullable', 'array', 'max:30'],
+            'damage_marks.*.x' => ['required', 'numeric', 'between:0,1'],
+            'damage_marks.*.y' => ['required', 'numeric', 'between:0,1'],
+            'damage_marks.*.kind' => ['required', Rule::in(self::DAMAGE_KINDS)],
+            'damage_marks.*.note' => ['nullable', 'string', 'max:120'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<int, array{x: float, y: float, kind: string, note: string|null}>
+     */
+    private function damageMarks(array $data): array
+    {
+        return array_values(array_map(fn (array $mark): array => [
+            'x' => round((float) $mark['x'], 4),
+            'y' => round((float) $mark['y'], 4),
+            'kind' => (string) $mark['kind'],
+            'note' => $this->nullableTrimmed($mark['note'] ?? null),
+        ], $data['damage_marks'] ?? []));
+    }
+
+    /**
+     * @param array<int, string> $ids
+     * @return array<int, string>
+     */
+    private function inspectionPhotoIds(Company $company, array $ids): array
+    {
+        $found = [];
+
+        foreach (array_values(array_unique($ids)) as $index => $photoId) {
+            $found[] = $this->files->find($company, $photoId, StoredFile::PURPOSE_INSPECTION_PHOTO, "inspection_photo_file_ids.{$index}")->id;
+        }
+
+        return $found;
     }
 
     public function cancelReservation(Request $request, string $reservation): JsonResponse
@@ -2271,11 +2455,11 @@ final class CarRentalController extends Controller
     }
 
     /** @return array<string, mixed>|null */
-    private function checkoutInspectionPayload(CarRentalReservation $reservation, bool $includeSignatures): ?array
+    private function inspectionPayload(CarRentalReservation $reservation, string $stage, bool $includeSignatures): ?array
     {
         $inspection = $reservation->relationLoaded('inspections')
-            ? $reservation->inspections->firstWhere('stage', 'pre_rental')
-            : $reservation->inspections()->where('stage', 'pre_rental')->first();
+            ? $reservation->inspections->firstWhere('stage', $stage)
+            : $reservation->inspections()->where('stage', $stage)->first();
 
         if (! $inspection instanceof CarRentalInspection || $inspection->status !== 'finalized') {
             return null;
@@ -2287,6 +2471,7 @@ final class CarRentalController extends Controller
             'fuel_level_percent' => $inspection->fuel_level_percent === null ? null : (int) round((float) $inspection->fuel_level_percent),
             'accessories' => $inspection->accessories ?? [],
             'damage_notes' => $includeSignatures ? $inspection->notes : null,
+            'damage_marks' => $inspection->damage_sketch ?? [],
             'photo_urls' => array_map(fn (string $id): string => (string) $this->fileUrl($id), $inspection->photo_file_ids ?? []),
             'company_signer_name' => $inspection->company_signer_name,
             'customer_signed_at' => $inspection->customer_signed_at?->toIso8601String(),
@@ -2369,6 +2554,359 @@ final class CarRentalController extends Controller
         ]);
     }
 
+    /** @return array<string, mixed>|null */
+    private function invoicePayload(CarRentalReservation $reservation): ?array
+    {
+        $invoice = $reservation->relationLoaded('invoice')
+            ? $reservation->invoice
+            : $reservation->invoice()->first();
+
+        if (! $invoice instanceof CarRentalInvoice) {
+            return null;
+        }
+
+        return [
+            'id' => $invoice->id,
+            'number' => $invoice->formattedNumber(),
+            'issued_at' => $invoice->issued_at?->toIso8601String(),
+            'currency' => $invoice->currency,
+            'total' => $invoice->total,
+            'balance_due' => $invoice->balance_due,
+            'file_url' => $this->fileUrl($invoice->file_id),
+            'snapshot' => $invoice->snapshot,
+        ];
+    }
+
+    /**
+     * Règle le dépôt de garantie après le retour : libération totale ou
+     * retenue d'un montant justifié. Réservé à l'administration.
+     */
+    public function settleDeposit(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'retained_amount_usd' => ['required', 'numeric', 'min:0', 'max:999999'],
+            'reason' => ['nullable', 'required_unless:retained_amount_usd,0', 'string', 'max:500'],
+        ], [
+            'reason.required_unless' => 'Indiquez le motif de la retenue.',
+        ]);
+
+        $retained = round((float) $data['retained_amount_usd'], 2);
+
+        [$model, $held, $applied] = DB::transaction(function () use ($company, $access, $reservation, $data, $actor, $retained): array {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+
+            if ($model->state !== 'completed') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Le dépôt se règle après l’enregistrement du retour.',
+                ]);
+            }
+
+            $deposits = CarRentalSecurityDeposit::query()
+                ->where('company_id', $company->id)
+                ->where('reservation_id', $model->id)
+                ->where('status', 'held')
+                ->where('currency', 'USD')
+                ->orderBy('held_at')
+                ->lockForUpdate()
+                ->get();
+            $held = round((float) $deposits->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount), 2);
+
+            if ($deposits->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Aucun dépôt de garantie retenu à régler pour cette location.',
+                ]);
+            }
+
+            if ($retained > $held + 0.0001) {
+                throw ValidationException::withMessages([
+                    'retained_amount_usd' => sprintf('La retenue ne peut pas dépasser le dépôt retenu (USD %.2f).', $held),
+                ]);
+            }
+
+            $remaining = $retained;
+            $now = now()->utc();
+
+            foreach ($deposits as $deposit) {
+                $amount = (float) $deposit->amount;
+                $apply = round(min($remaining, $amount), 2);
+                $remaining = round($remaining - $apply, 2);
+
+                $deposit->forceFill([
+                    'status' => $apply <= 0.0 ? 'released' : ($apply + 0.0001 >= $amount ? 'forfeited' : 'partially_applied'),
+                    'applied_amount' => number_format($apply, 2, '.', ''),
+                    'released_at' => $now,
+                    'settlement_note' => $retained > 0 ? trim((string) $data['reason']) : null,
+                    'settled_by' => $actor?->id,
+                ])->save();
+            }
+
+            return [$model->load(['site', 'vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections']), $held, $retained];
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.security_deposit_settled',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalReservation::class,
+            subjectId: $model->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'held_usd' => number_format($held, 2, '.', ''),
+                'retained_usd' => number_format($applied, 2, '.', ''),
+                'released_usd' => number_format($held - $applied, 2, '.', ''),
+            ],
+        );
+
+        return response()->json([
+            'data' => $this->reservationPayload($model, $access),
+        ]);
+    }
+
+    /**
+     * Émet la facture de la location retournée : numéro sur huit chiffres,
+     * lignes, paiements approuvés, dépôt retenu et solde, figés à l'émission.
+     * La facture ne mentionne ni la plaque ni le permis.
+     */
+    public function issueInvoice(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $actor): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, ['vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections'], true);
+
+            if ($model->state !== 'completed') {
+                throw ValidationException::withMessages([
+                    'reservation' => 'La facture s’émet après l’enregistrement du retour.',
+                ]);
+            }
+
+            if (CarRentalInvoice::query()->where('company_id', $company->id)->where('reservation_id', $model->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'reservation' => 'La facture de cette location est déjà émise.',
+                ]);
+            }
+
+            if ($model->securityDeposits->contains(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->status === 'held')) {
+                throw ValidationException::withMessages([
+                    'reservation' => 'Le dépôt de garantie doit être réglé par un administrateur avant la facture.',
+                ]);
+            }
+
+            $snapshot = $this->invoiceSnapshot($company, $model);
+
+            CarRentalInvoice::query()->create([
+                'company_id' => $company->id,
+                'reservation_id' => $model->id,
+                'invoice_number' => $this->documentNumbers->next($company->id, 'car_rental_invoice'),
+                'currency' => $model->currency,
+                'snapshot' => $snapshot,
+                'total' => $snapshot['totals']['total'],
+                'balance_due' => $snapshot['totals']['balance_due'],
+                'issued_by' => $actor?->id,
+                'issued_at' => now()->utc(),
+            ]);
+
+            return $model->load(['site', 'invoice']);
+        });
+
+        $invoice = $model->invoice;
+
+        $this->audit->record(
+            eventType: 'car_rental.invoice_issued',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalInvoice::class,
+            subjectId: $invoice?->id,
+            metadata: [
+                'reservation_number' => $model->formattedNumber(),
+                'invoice_number' => $invoice?->formattedNumber(),
+                'currency' => $invoice?->currency,
+                'total' => $invoice?->total,
+                'balance_due' => $invoice?->balance_due,
+            ],
+        );
+
+        return response()->json([
+            'data' => $this->reservationPayload($model, $access),
+        ], 201);
+    }
+
+    /**
+     * Rattache le PDF de la facture, construit à partir du contenu figé,
+     * puis l'envoie au client. La facture ne contient ni plaque ni permis.
+     */
+    public function attachInvoiceFile(Request $request, string $reservation): JsonResponse
+    {
+        $company = $this->company($request);
+        $access = $this->access($request);
+        $actor = $request->user();
+
+        $data = $request->validate([
+            'file_id' => ['required', 'uuid'],
+        ]);
+
+        $file = $this->files->find($company, $data['file_id'], StoredFile::PURPOSE_RENTAL_INVOICE, 'file_id');
+
+        $model = DB::transaction(function () use ($company, $access, $reservation, $file): CarRentalReservation {
+            $model = $this->reservationFor($company, $access, $reservation, [], true);
+            $invoice = CarRentalInvoice::query()
+                ->where('company_id', $company->id)
+                ->where('reservation_id', $model->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $invoice instanceof CarRentalInvoice) {
+                throw ValidationException::withMessages(['reservation' => 'Émettez d’abord la facture.']);
+            }
+
+            if ($invoice->file_id !== null) {
+                throw ValidationException::withMessages(['reservation' => 'Le PDF de cette facture est déjà enregistré.']);
+            }
+
+            $invoice->forceFill(['file_id' => $file->id])->save();
+
+            return $model->load(['site', 'vehicle', 'customerProfile', 'payments', 'securityDeposits', 'inspections', 'invoice']);
+        });
+
+        $this->audit->record(
+            eventType: 'car_rental.invoice_pdf_stored',
+            companyId: $company->id,
+            actorId: $actor?->id,
+            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            subjectType: CarRentalInvoice::class,
+            subjectId: $model->invoice?->id,
+            metadata: ['invoice_sha256' => $file->sha256],
+        );
+
+        $content = Storage::disk($file->disk)->get($file->path);
+        $sent = is_string($content) && $model->invoice !== null && $this->customerNotifications->notifyInvoice($company, $model, [[
+            'name' => 'Facture-' . $model->invoice->invoice_number . '.pdf',
+            'content' => $content,
+            'mime' => 'application/pdf',
+        ]]);
+
+        return response()->json([
+            'data' => $this->reservationPayload($model, $access),
+            'customer_notification_sent' => $sent,
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function invoiceSnapshot(Company $company, CarRentalReservation $reservation): array
+    {
+        $currency = $reservation->currency;
+        $days = max(1, (int) ceil(CarbonImmutable::instance($reservation->pickup_at)->diffInMinutes(CarbonImmutable::instance($reservation->due_at)) / 1440));
+        $rate = (float) $reservation->daily_rate;
+        $lines = [[
+            'label' => sprintf('Location : %d jour%s × %s %s', $days, $days > 1 ? 's' : '', number_format($rate, 2, ',', ' '), $currency),
+            'amount' => number_format($days * $rate, 2, '.', ''),
+        ]];
+
+        $airport = (float) $reservation->airport_pickup_fee_usd + (float) $reservation->airport_dropoff_fee_usd;
+
+        if ($airport > 0 && $currency === 'USD') {
+            $lines[] = ['label' => 'Frais aéroport', 'amount' => number_format($airport, 2, '.', '')];
+        }
+
+        foreach ($reservation->additional_charges ?? [] as $charge) {
+            $lines[] = ['label' => (string) $charge['label'], 'amount' => (string) $charge['amount']];
+        }
+
+        $total = round(array_sum(array_map(static fn (array $line): float => (float) $line['amount'], $lines)), 2);
+
+        $payments = [];
+        $otherCurrencyPayments = [];
+
+        foreach ($reservation->payments as $payment) {
+            if ($payment->payment_kind !== 'rental' || $payment->status !== 'approved') {
+                continue;
+            }
+
+            $entry = [
+                'method' => $payment->method,
+                'currency' => $payment->currency,
+                'amount' => (string) $payment->amount,
+                'date' => ($payment->approved_at ?? $payment->submitted_at)?->toIso8601String(),
+            ];
+
+            if ($payment->currency === $currency) {
+                $payments[] = $entry;
+            } else {
+                $otherCurrencyPayments[] = $entry;
+            }
+        }
+
+        // Les paiements à crédit sont accordés, pas encaissés : ils restent dus.
+        $paid = round(array_sum(array_map(
+            static fn (array $payment): float => $payment['method'] === 'credit' ? 0.0 : (float) $payment['amount'],
+            $payments,
+        )), 2);
+        $credit = round(array_sum(array_map(
+            static fn (array $payment): float => $payment['method'] === 'credit' ? (float) $payment['amount'] : 0.0,
+            $payments,
+        )), 2);
+        $depositApplied = round((float) $reservation->securityDeposits
+            ->filter(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->currency === 'USD')
+            ->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) ($deposit->applied_amount ?? 0)), 2);
+        $depositCounted = $currency === 'USD' ? $depositApplied : 0.0;
+        $depositReleased = round((float) $reservation->securityDeposits
+            ->filter(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->currency === 'USD')
+            ->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount - (float) ($deposit->applied_amount ?? 0)), 2);
+
+        $checkout = $reservation->inspections->firstWhere('stage', 'pre_rental');
+        $return = $reservation->inspections->firstWhere('stage', 'post_rental');
+        $vehicle = $reservation->vehicle;
+        $profile = $reservation->customerProfile;
+
+        return [
+            'lessor' => [
+                'name' => $company->legal_name,
+                'tax_identification_number' => $company->tax_identification_number,
+                'address' => $company->legal_address,
+                'phone_numbers' => $company->phone_numbers,
+            ],
+            'customer' => [
+                'name' => $profile?->display_name,
+                'email' => $profile?->email,
+                'phone' => $profile?->phone,
+            ],
+            'reservation_number' => $reservation->formattedNumber(),
+            'vehicle' => trim(implode(' ', array_filter([$vehicle?->make, $vehicle?->model, $vehicle?->model_year]))),
+            'pickup_at' => $reservation->checked_out_at?->toIso8601String() ?? $reservation->pickup_at?->toIso8601String(),
+            'due_at' => $reservation->due_at?->toIso8601String(),
+            'returned_at' => $reservation->returned_at?->toIso8601String(),
+            'odometer_out_km' => $checkout?->odometer_km,
+            'odometer_in_km' => $return?->odometer_km,
+            'fuel_out_percent' => $checkout?->fuel_level_percent === null ? null : (int) round((float) $checkout->fuel_level_percent),
+            'fuel_in_percent' => $return?->fuel_level_percent === null ? null : (int) round((float) $return->fuel_level_percent),
+            'currency' => $currency,
+            'lines' => $lines,
+            'payments' => $payments,
+            'other_currency_payments' => $otherCurrencyPayments,
+            'totals' => [
+                'total' => number_format($total, 2, '.', ''),
+                'paid' => number_format($paid, 2, '.', ''),
+                'credit' => number_format($credit, 2, '.', ''),
+                'deposit_applied' => number_format($depositCounted, 2, '.', ''),
+                'balance_due' => number_format(max(0, $total - $paid - $depositCounted), 2, '.', ''),
+                'overpaid' => number_format(max(0, $paid + $depositCounted - $total), 2, '.', ''),
+            ],
+            'deposit' => [
+                'retained_usd' => number_format($depositApplied, 2, '.', ''),
+                'released_usd' => number_format(max(0, $depositReleased), 2, '.', ''),
+            ],
+            'timezone' => $company->timezone,
+        ];
+    }
+
     private function reservationPayload(CarRentalReservation $reservation, ?CompanyUserAccess $access = null): array
     {
         // Les coordonnées du client ne sont renvoyées qu'aux rôles qui gèrent la réservation.
@@ -2444,8 +2982,13 @@ final class CarRentalController extends Controller
                 'license_number' => $reservation->additional_driver_license_number,
             ] : null,
             'checkout_inspection' => in_array($reservation->state, ['checked_out', 'completed'], true)
-                ? $this->checkoutInspectionPayload($reservation, $includeContact)
+                ? $this->inspectionPayload($reservation, 'pre_rental', $includeContact)
                 : null,
+            'return_inspection' => $reservation->state === 'completed'
+                ? $this->inspectionPayload($reservation, 'post_rental', $includeContact)
+                : null,
+            'additional_charges' => $reservation->additional_charges ?? [],
+            'invoice' => $this->invoicePayload($reservation),
             'contract' => [
                 'issued_at' => $reservation->contract_issued_at?->toIso8601String(),
                 'file_url' => $includeContact ? $this->fileUrl($reservation->contract_file_id) : null,
@@ -2482,6 +3025,8 @@ final class CarRentalController extends Controller
             'amount' => $deposit->amount,
             'held_at' => $deposit->held_at?->toIso8601String(),
             'released_at' => $deposit->released_at?->toIso8601String(),
+            'applied_amount' => $deposit->applied_amount,
+            'settlement_note' => $deposit->settlement_note,
         ];
     }
 

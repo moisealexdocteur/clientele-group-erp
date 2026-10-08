@@ -47,7 +47,18 @@ jobs:
       - name: Tester l'API
         env:
           APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-        run: php artisan test
+        run: |
+          set -o pipefail
+          php artisan test 2>&1 | tee test-output.txt
+      # Les échecs sont aussi publiés en annotations, lisibles sans le journal complet.
+      - name: Signaler les tests en échec
+        if: failure()
+        run: |
+          sed -e 's/\x1b\[[0-9;]*m//g' test-output.txt \
+            | awk '/FAILED/ { show = 45 } show > 0 { print; show-- }' \
+            | grep -v '^[[:space:]]*$' \
+            | head -90 \
+            | while IFS= read -r line; do echo "::error::${line}"; done
 
   web:
     runs-on: ubuntu-latest

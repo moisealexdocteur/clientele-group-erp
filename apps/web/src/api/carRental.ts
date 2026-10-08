@@ -22,6 +22,7 @@ import type {
   VehicleOperationalStatus,
   VehicleRegistrationStatus,
 } from './types'
+import type { DamageMark } from '../lib/damageSketch'
 
 /* Appels de l'API Car Rental. La société active est ajoutée par le client HTTP. */
 
@@ -102,6 +103,7 @@ export type FilePurpose =
   | 'inspection_photo'
   | 'signature'
   | 'rental_contract'
+  | 'rental_invoice'
 
 export interface UploadedFileRef {
   id: string
@@ -258,6 +260,7 @@ export interface CheckOutPayload {
   accessories: RentalAccessory[]
   damage_notes?: string
   inspection_photo_file_ids: string[]
+  damage_marks: DamageMark[]
   terms_accepted: boolean
   customer_signature_file_id: string
   company_signature_file_id: string
@@ -289,10 +292,44 @@ export function extendReservation(reservation: CarRentalReservation, dueAt: stri
   )
 }
 
-export function returnReservation(reservation: CarRentalReservation) {
+export interface ReturnPayload {
+  odometer_km: number
+  fuel_level_percent: FuelLevel
+  accessories: RentalAccessory[]
+  damage_notes?: string
+  damage_marks: DamageMark[]
+  inspection_photo_file_ids: string[]
+  apply_cleaning_fee: boolean
+  apply_extra_km: boolean
+  other_charges?: Array<{ label: string; amount: string }>
+  customer_signature_file_id?: string
+}
+
+export function returnReservation(reservation: CarRentalReservation, payload: ReturnPayload) {
   return api<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(
     `${base}/reservations/${reservation.id}/return`,
-    { method: 'POST', body: { expected_lock_version: reservation.lock_version } },
+    { method: 'POST', body: { ...payload, expected_lock_version: reservation.lock_version } },
+  )
+}
+
+/** Règlement du dépôt après le retour : libération ou retenue justifiée. */
+export function settleDeposit(reservationId: string, retainedAmountUsd: string, reason: string) {
+  return api<{ data: CarRentalReservation }>(`${base}/reservations/${reservationId}/deposit-settlement`, {
+    method: 'POST',
+    body: { retained_amount_usd: retainedAmountUsd, reason: reason || null },
+  })
+}
+
+/** Émet la facture numérotée. Son contenu est figé par le serveur. */
+export function issueInvoice(reservationId: string) {
+  return api<{ data: CarRentalReservation }>(`${base}/reservations/${reservationId}/invoice`, { method: 'POST' })
+}
+
+/** Rattache le PDF de la facture ; le serveur l'envoie au client par courriel. */
+export function attachInvoiceFile(reservationId: string, fileId: string) {
+  return api<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(
+    `${base}/reservations/${reservationId}/invoice/file`,
+    { method: 'POST', body: { file_id: fileId } },
   )
 }
 

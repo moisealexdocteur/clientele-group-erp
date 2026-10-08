@@ -184,6 +184,9 @@ export interface CarRentalSecurityDeposit {
   amount: string | null
   held_at: string | null
   released_at: string | null
+  /** Montant retenu au règlement du dépôt. */
+  applied_amount?: string | null
+  settlement_note?: string | null
 }
 
 export interface CheckoutRequirements {
@@ -232,8 +235,58 @@ export interface CarRentalReservation {
   driver_license?: DriverLicense | null
   additional_driver?: { name: string; license_number: string | null } | null
   checkout_inspection?: CheckoutInspection | null
+  return_inspection?: CheckoutInspection | null
+  additional_charges?: AdditionalCharge[]
+  invoice?: RentalInvoice | null
   contract?: ReservationContract
 }
+
+export interface AdditionalCharge {
+  code: 'cleaning' | 'extra_km' | 'other'
+  label: string
+  amount: string
+}
+
+export interface InvoicePaymentLine {
+  method: PaymentMethod
+  currency: Currency
+  amount: string
+  date: string | null
+}
+
+export interface InvoiceSnapshot {
+  lessor: { name: string; tax_identification_number: string | null; address: string | null; phone_numbers: string | null }
+  customer: { name: string | null; email: string | null; phone: string | null }
+  reservation_number: string
+  vehicle: string
+  pickup_at: string | null
+  due_at: string | null
+  returned_at: string | null
+  odometer_out_km: number | null
+  odometer_in_km: number | null
+  fuel_out_percent: number | null
+  fuel_in_percent: number | null
+  currency: Currency
+  lines: Array<{ label: string; amount: string }>
+  payments: InvoicePaymentLine[]
+  other_currency_payments: InvoicePaymentLine[]
+  totals: { total: string; paid: string; credit: string; deposit_applied: string; balance_due: string; overpaid: string }
+  deposit: { retained_usd: string; released_usd: string }
+  timezone: string
+}
+
+export interface RentalInvoice {
+  id: string
+  number: string
+  issued_at: string | null
+  currency: Currency
+  total: string
+  balance_due: string
+  file_url: string | null
+  snapshot: InvoiceSnapshot
+}
+
+import type { DamageMark } from '../lib/damageSketch'
 
 export interface DriverLicense {
   country: string
@@ -265,6 +318,7 @@ export interface CheckoutInspection {
   fuel_level_percent: number | null
   accessories: RentalAccessory[]
   damage_notes: string | null
+  damage_marks: DamageMark[]
   photo_urls: string[]
   company_signer_name: string | null
   customer_signed_at: string | null

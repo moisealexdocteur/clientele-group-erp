@@ -67,6 +67,7 @@ final class CarRentalReservation extends Model
         'contract_snapshot',
         'contract_file_id',
         'contract_issued_at',
+        'additional_charges',
     ];
 
     protected function casts(): array
@@ -90,6 +91,7 @@ final class CarRentalReservation extends Model
             'additional_driver_license_number' => 'encrypted',
             'contract_snapshot' => 'array',
             'contract_issued_at' => 'immutable_datetime',
+            'additional_charges' => 'array',
             'driver_license_expires_at' => 'immutable_date',
             'driver_license_verified_at' => 'immutable_datetime',
             'lock_version' => 'integer',
@@ -124,6 +126,11 @@ final class CarRentalReservation extends Model
     public function securityDeposits(): HasMany
     {
         return $this->hasMany(CarRentalSecurityDeposit::class, 'reservation_id');
+    }
+
+    public function invoice(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CarRentalInvoice::class, 'reservation_id');
     }
 
     public function inspections(): HasMany

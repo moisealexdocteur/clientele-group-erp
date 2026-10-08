@@ -4,6 +4,7 @@ import { accessoryLabels, categoryLabels, fuelLevelLabel, fuelTypeLabels, locati
 import { licenseIssuer } from './countries'
 import { formatMoney } from './money'
 import { formatDate, formatDateTime, rentalDays } from './time'
+import { damageKindLabels, SKETCH_BODY, SKETCH_DETAILS, SKETCH_HEIGHT, SKETCH_WHEELS, SKETCH_WIDTH, type DamageMark } from './damageSketch'
 
 /*
  * Contrat de location au format PDF A4, construit uniquement à partir de
@@ -17,14 +18,14 @@ export interface ContractImages {
   companySignature: Uint8Array
 }
 
-const A4 = { width: 595.28, height: 841.89 }
-const MARGIN = 48
-const INK = rgb(0.07, 0.09, 0.15)
-const MUTED = rgb(0.38, 0.4, 0.45)
+export const A4 = { width: 595.28, height: 841.89 }
+export const MARGIN = 48
+export const INK = rgb(0.07, 0.09, 0.15)
+export const MUTED = rgb(0.38, 0.4, 0.45)
 const LINE = rgb(0.82, 0.83, 0.86)
 const ACCENT = rgb(0.06, 0.42, 0.74)
 
-class Writer {
+export class Writer {
   private page!: PDFPage
   private y = 0
   readonly pages: PDFPage[] = []
@@ -136,6 +137,40 @@ class Writer {
       if (isTitle) this.y -= 4
       this.text(paragraph, { size: 8.8, font: isTitle ? this.bold : this.regular, gap: 0 })
     }
+  }
+
+  /** Croquis des dommages à gauche, liste des marques à droite. */
+  sketch(marks: DamageMark[]): void {
+    const scale = 0.5
+    const height = SKETCH_HEIGHT * scale
+    const width = SKETCH_WIDTH * scale
+    this.ensure(height + 16)
+    const x = MARGIN
+    const top = this.y - 4
+    this.page.drawSvgPath(SKETCH_BODY, { x, y: top, scale, color: rgb(0.95, 0.95, 0.96), borderColor: MUTED, borderWidth: 1 })
+    for (const path of SKETCH_DETAILS) this.page.drawSvgPath(path, { x, y: top, scale, borderColor: MUTED, borderWidth: 0.6 })
+    for (const path of SKETCH_WHEELS) this.page.drawSvgPath(path, { x, y: top, scale, color: MUTED })
+    marks.forEach((mark, index) => {
+      const cx = x + mark.x * width
+      const cy = top - mark.y * height
+      this.page.drawCircle({ x: cx, y: cy, size: 5.5, color: rgb(0.77, 0.06, 0.12), borderColor: rgb(1, 1, 1), borderWidth: 1 })
+      const label = String(index + 1)
+      const size = 6
+      this.page.drawText(label, { x: cx - this.bold.widthOfTextAtSize(label, size) / 2, y: cy - 2.2, size, font: this.bold, color: rgb(1, 1, 1) })
+    })
+    const listX = x + width + 24
+    let listY = top - 10
+    if (!marks.length) {
+      this.page.drawText(this.clean('Aucun dommage marqué sur le croquis.'), { x: listX, y: listY, size: 9, font: this.regular, color: MUTED })
+    }
+    marks.forEach((mark, index) => {
+      const text = this.clean(`${index + 1}. ${damageKindLabels[mark.kind]}${mark.note ? ` - ${mark.note}` : ''}`)
+      for (const line of this.wrap(text, this.regular, 9, A4.width - MARGIN - listX)) {
+        this.page.drawText(line, { x: listX, y: listY, size: 9, font: this.regular, color: INK })
+        listY -= 12
+      }
+    })
+    this.y = top - height - 12
   }
 
   signatures(blocks: Array<{ title: string; image: PDFImage; name: string; date: string }>): void {
@@ -278,6 +313,7 @@ export async function buildContractPdf(reservation: CarRentalReservation, images
     ['Photos de l’état du véhicule', inspection.photo_urls.length ? `${inspection.photo_urls.length} photo${inspection.photo_urls.length > 1 ? 's' : ''} conservée${inspection.photo_urls.length > 1 ? 's' : ''} au dossier` : 'Aucune'],
     ['Contrôle effectué par', inspection.company_signer_name],
   ])
+  w.sketch(inspection.damage_marks ?? [])
 
   w.heading('Conditions générales')
   w.terms(snapshot.terms)

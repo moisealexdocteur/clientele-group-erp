@@ -8,7 +8,8 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 const props = withDefaults(defineProps<{
   label: string
   disabled?: boolean
-}>(), { disabled: false })
+  required?: boolean
+}>(), { disabled: false, required: true })
 
 const emit = defineEmits<{ change: [signed: boolean] }>()
 
@@ -131,7 +132,7 @@ defineExpose({ toBlob, clear })
 <template>
   <div class="signature">
     <div class="signature-head">
-      <span class="field-label">{{ label }}<span class="required" aria-hidden="true">*</span></span>
+      <span class="field-label">{{ label }}<span v-if="required" class="required" aria-hidden="true">*</span></span>
       <button class="btn btn-ghost" type="button" :disabled="disabled || !signed" @click="clear">Effacer</button>
     </div>
     <div class="signature-area" :class="{ signed, disabled }">

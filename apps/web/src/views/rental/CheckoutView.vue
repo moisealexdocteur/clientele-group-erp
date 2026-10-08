@@ -19,6 +19,8 @@ import FileCapture from '../../components/ui/FileCapture.vue'
 import InlineAlert from '../../components/ui/InlineAlert.vue'
 import PrivateImage from '../../components/ui/PrivateImage.vue'
 import SignaturePad from '../../components/ui/SignaturePad.vue'
+import DamageSketch from '../../components/rental/DamageSketch.vue'
+import type { DamageMark } from '../../lib/damageSketch'
 
 /*
  * Mise en circulation en trois étapes : conducteur et permis, fiche de
@@ -67,6 +69,7 @@ const form = reactive({
 })
 
 const photos = ref<UploadedFileRef[]>([])
+const damageMarks = ref<DamageMark[]>([])
 const photoKey = ref(0)
 const customerSigned = ref(false)
 const companySigned = ref(false)
@@ -242,6 +245,7 @@ async function submit(): Promise<void> {
       accessories: form.accessories,
       damage_notes: form.damage_notes.trim() || undefined,
       inspection_photo_file_ids: photos.value.map((photo) => photo.id),
+      damage_marks: damageMarks.value,
       terms_accepted: form.terms_accepted,
       customer_signature_file_id: customerSignatureId,
       company_signature_file_id: companySignatureId,
@@ -446,6 +450,7 @@ async function submit(): Promise<void> {
 
       <section class="panel form">
         <h2 class="title-section">État du véhicule</h2>
+        <DamageSketch v-model="damageMarks" />
         <FormField label="Dommages constatés" help="Facultatif. Laissez vide si aucun dommage n’est constaté." :error="errors.damage_notes" v-slot="field">
           <textarea v-model="form.damage_notes" v-bind="field.attrs" class="textarea" rows="3" maxlength="2000"></textarea>
         </FormField>

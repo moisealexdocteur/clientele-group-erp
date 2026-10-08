@@ -21,6 +21,7 @@ final class StoredFile extends Model
     public const PURPOSE_INSPECTION_PHOTO = 'inspection_photo';
     public const PURPOSE_SIGNATURE = 'signature';
     public const PURPOSE_RENTAL_CONTRACT = 'rental_contract';
+    public const PURPOSE_RENTAL_INVOICE = 'rental_invoice';
 
     public const PURPOSES = [
         self::PURPOSE_PAYMENT_PROOF,
@@ -30,6 +31,7 @@ final class StoredFile extends Model
         self::PURPOSE_INSPECTION_PHOTO,
         self::PURPOSE_SIGNATURE,
         self::PURPOSE_RENTAL_CONTRACT,
+        self::PURPOSE_RENTAL_INVOICE,
     ];
 
     /** Fichiers qui contiennent des données d'identité ou bancaires. */
