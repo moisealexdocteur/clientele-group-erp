@@ -9,6 +9,7 @@ Toutes les modifications notables de ce projet sont documentées ici.
 - L’écran de connexion n’utilise plus de contenu promotionnel ni de mise en page à deux colonnes.
 - Les erreurs d’identifiant sont formulées de manière standard : « Adresse courriel ou mot de passe incorrect. ».
 - La commande de création du premier propriétaire indique maintenant toutes les exigences du mot de passe avant qu’un compte soit créé.
+- L’application, le worker et le scheduler disposent d’une sortie réseau SMTP dédiée ; PostgreSQL et Redis restent sur le réseau isolé.
 
 ### Ajouté
 
