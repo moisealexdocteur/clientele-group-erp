@@ -29,4 +29,18 @@ return [
         'max_attempts' => (int) env('AUTH_EMAIL_CODE_MAX_ATTEMPTS', 5),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Reçus numérotés
+    |--------------------------------------------------------------------------
+    |
+    | Le QR d'un reçu porte une signature HMAC. Sans secret dédié, la clé de
+    | l'application est utilisée afin que les tests restent autonomes.
+    |
+    */
+
+    'receipts' => [
+        'qr_signing_secret' => (string) env('QR_SIGNING_SECRET', ''),
+    ],
+
 ];

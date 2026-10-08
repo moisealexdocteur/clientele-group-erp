@@ -5,6 +5,7 @@ import { useAppStore } from '../../stores/app'
 import { useSessionStore } from '../../stores/session'
 import { formatDate, formatTime } from '../../lib/time'
 import { initials } from '../../lib/text'
+import { formatRate } from '../../lib/money'
 import AppIcon from '../ui/AppIcon.vue'
 import type { NavItem } from './nav'
 import SheetDialog from '../ui/SheetDialog.vue'
@@ -27,6 +28,12 @@ const accountOpen = ref(false)
 const contextName = computed(() => session.context?.company.name ?? props.area)
 const clockDate = computed(() => formatDate(app.now))
 const clockTime = computed(() => formatTime(app.now))
+const rate = computed(() => session.context?.exchange_rate ?? null)
+
+async function openRates(): Promise<void> {
+  accountOpen.value = false
+  await router.push({ name: 'finance.rates' })
+}
 
 function isActive(item: NavItem): boolean {
   const current = router.currentRoute.value
@@ -77,6 +84,10 @@ async function signOut(): Promise<void> {
         </RouterLink>
       </nav>
       <div class="rail-footer">
+        <RouterLink v-if="session.context" class="rail-rate" :class="{ warning: !rate || rate.below_brh }" :to="{ name: 'finance.rates' }">
+          <span class="text-small">{{ rate ? formatRate(rate.rate_htg_per_usd) : 'Taux HTG/USD non défini' }}</span>
+          <span v-if="rate?.below_brh" class="text-small">Sous la référence BRH</span>
+        </RouterLink>
         <p class="rail-clock">
           <span class="display display-sm">{{ clockTime }}</span>
           <span class="text-muted text-small">{{ clockDate }}, Cap-Haïtien</span>
@@ -139,6 +150,10 @@ async function signOut(): Promise<void> {
           <dt>Société active</dt>
           <dd>{{ session.context.company.name }}</dd>
         </div>
+        <div v-if="session.context">
+          <dt>Taux HTG/USD</dt>
+          <dd>{{ rate ? formatRate(rate.rate_htg_per_usd) : 'Non défini' }}<template v-if="rate?.below_brh"> - sous la référence BRH</template></dd>
+        </div>
         <div>
           <dt>Serveur</dt>
           <dd>{{ app.statusLabel }}</dd>
@@ -153,6 +168,7 @@ async function signOut(): Promise<void> {
         </div>
       </dl>
       <div class="account-actions">
+        <button v-if="session.context" class="btn btn-secondary btn-block" type="button" @click="openRates">Taux de change</button>
         <button v-if="session.companies.length > 1 || session.isOwner" class="btn btn-secondary btn-block" type="button" @click="changeCompany">
           Changer de société
         </button>
@@ -426,6 +442,25 @@ async function signOut(): Promise<void> {
     display: grid;
     gap: 6px;
     padding: 0 12px;
+  }
+
+  .rail-rate {
+    display: grid;
+    gap: 2px;
+    margin: 0 4px 8px;
+    padding: 8px;
+    border-radius: var(--radius-control);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .rail-rate:hover {
+    background: var(--surface-hover);
+  }
+
+  .rail-rate.warning {
+    color: var(--warning);
+    background: var(--warning-soft);
   }
 
   .rail-account {

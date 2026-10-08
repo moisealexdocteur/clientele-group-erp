@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney, sumAmounts, toAmount } from './money'
+import { formatMoney, formatRate, sumAmounts, toAmount } from './money'
 import { initials, isStrongPassword, normalizeCode, vehicleName, vehiclePlate } from './text'
 
 describe('montants', () => {
@@ -40,5 +40,13 @@ describe('textes', () => {
   it('calcule les initiales', () => {
     expect(initials('Moïse Alex')).toBe('MA')
     expect(initials('')).toBe('?')
+  })
+})
+
+describe('formatRate', () => {
+  it('affiche le taux HTG pour 1 USD sans zéros inutiles', () => {
+    expect(formatRate('130.0000').replace(/\s/g, ' ')).toBe('1 USD = 130,00 HTG')
+    expect(formatRate('131.2575').replace(/\s/g, ' ')).toBe('1 USD = 131,2575 HTG')
+    expect(formatRate(null)).toBe('Taux non défini')
   })
 })

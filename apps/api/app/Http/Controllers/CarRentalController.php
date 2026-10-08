@@ -22,7 +22,9 @@ use App\Support\CarRentalAvailabilityService;
 use App\Support\CarRentalCustomerNotificationService;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\DocumentNumberService;
+use App\Support\ExchangeRateService;
 use App\Support\FileVault;
+use App\Support\ReceiptService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,6 +56,8 @@ final class CarRentalController extends Controller
         private readonly DocumentNumberService $documentNumbers,
         private readonly AuditLogger $audit,
         private readonly FileVault $files,
+        private readonly ExchangeRateService $exchangeRates,
+        private readonly ReceiptService $receipts,
     ) {
     }
 
@@ -1757,13 +1761,24 @@ final class CarRentalController extends Controller
             ? $this->files->find($company, $data['proof_file_id'] ?? null, StoredFile::PURPOSE_PAYMENT_PROOF, 'proof_file_id')
             : null;
 
+        // Un paiement dans l'autre devise est converti au taux en vigueur, conservé avec le paiement.
+        $rate = $data['currency'] !== $model->currency
+            ? $this->exchangeRates->requireCurrent($company, 'currency')
+            : null;
+        $converted = $this->exchangeRates->convert(
+            (float) $data['amount'],
+            $data['currency'],
+            $model->currency,
+            $rate === null ? 1.0 : (float) $rate->rate_htg_per_usd,
+        );
+
         if ($proof !== null && $proof->site_id !== $model->site_id) {
             throw ValidationException::withMessages([
                 'proof_file_id' => 'Le reçu doit être ajouté depuis l’adresse de la réservation.',
             ]);
         }
 
-        $payment = DB::transaction(function () use ($company, $model, $data, $proof, $actor): CarRentalPayment {
+        $payment = DB::transaction(function () use ($company, $model, $data, $proof, $actor, $rate, $converted): CarRentalPayment {
             $cashRegisterId = $data['method'] === 'cash' ? ($data['cash_register_id'] ?? null) : null;
 
             if ($cashRegisterId !== null) {
@@ -1798,6 +1813,8 @@ final class CarRentalController extends Controller
                 'proof_sha256' => $proof?->sha256,
                 'approved_by' => $isCredit ? $actor?->id : null,
                 'approved_at' => $isCredit ? now()->utc() : null,
+                'exchange_rate_htg_per_usd' => $rate?->rate_htg_per_usd,
+                'amount_in_reservation_currency' => number_format($converted, 2, '.', ''),
             ]);
             $payment->setBankReference($data['method'] === 'bank_transfer' ? ($data['bank_reference'] ?? null) : null);
             $payment->save();
@@ -1861,6 +1878,7 @@ final class CarRentalController extends Controller
                 'approved_by' => $actor?->id,
                 'approved_at' => now()->utc(),
             ])->save();
+            $this->receipts->issue($record);
 
             if ($record->payment_kind === 'security_deposit') {
                 CarRentalSecurityDeposit::query()->updateOrCreate(
@@ -1895,6 +1913,7 @@ final class CarRentalController extends Controller
                 'method' => $record->method,
                 'kind' => $record->payment_kind,
                 'currency' => $record->currency,
+                'receipt_number' => $record->receipt_number === null ? null : $this->receipts->display($record->receipt_number),
             ],
         );
 
@@ -2835,10 +2854,21 @@ final class CarRentalController extends Controller
                 'currency' => $payment->currency,
                 'amount' => (string) $payment->amount,
                 'date' => ($payment->approved_at ?? $payment->submitted_at)?->toIso8601String(),
+                'receipt_number' => $payment->receipt_number === null ? null : $this->receipts->display($payment->receipt_number),
             ];
 
             if ($payment->currency === $currency) {
                 $payments[] = $entry;
+            } elseif ($payment->amount_in_reservation_currency !== null && $payment->exchange_rate_htg_per_usd !== null) {
+                // Converti au taux enregistré lors du paiement.
+                $payments[] = [
+                    ...$entry,
+                    'currency' => $currency,
+                    'amount' => (string) $payment->amount_in_reservation_currency,
+                    'original_currency' => $payment->currency,
+                    'original_amount' => (string) $payment->amount,
+                    'exchange_rate_htg_per_usd' => (string) $payment->exchange_rate_htg_per_usd,
+                ];
             } else {
                 $otherCurrencyPayments[] = $entry;
             }
@@ -3008,6 +3038,9 @@ final class CarRentalController extends Controller
             'currency' => $payment->currency,
             'amount' => $payment->amount,
             'proof_file_url' => $payment->proof_file_id === null ? null : '/api/v1/car-rental/files/' . $payment->proof_file_id,
+            'exchange_rate_htg_per_usd' => $payment->exchange_rate_htg_per_usd,
+            'amount_in_reservation_currency' => $payment->amount_in_reservation_currency,
+            'receipt_number' => $payment->receipt_number === null ? null : $this->receipts->display($payment->receipt_number),
             'submitted_at' => $payment->submitted_at?->toIso8601String(),
             'approved_at' => $payment->approved_at?->toIso8601String(),
         ];

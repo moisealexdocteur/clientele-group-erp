@@ -6,11 +6,17 @@ use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
+use App\Support\ExchangeRateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 final class CompanyContextController extends Controller
 {
+    public function __construct(
+        private readonly ExchangeRateService $rates,
+    ) {
+    }
+
     public function __invoke(Request $request): JsonResponse
     {
         /** @var Company $company */
@@ -58,6 +64,8 @@ final class CompanyContextController extends Controller
                     'rental_contract_terms' => $company->rental_contract_terms,
                 ],
             ],
+            // Taux HTG/USD en vigueur, affiché dans l'en-tête de l'application.
+            'exchange_rate' => $this->rates->payload($this->rates->current($company)),
             'access' => [
                 'role_key' => $access->role_key,
                 'site_scope' => $access->site_scope,

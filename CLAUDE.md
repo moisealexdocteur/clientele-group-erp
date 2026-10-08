@@ -1,6 +1,6 @@
 # Reprise du projet Clientèle Group ERP
 
-Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire), 0.4.0-alpha.1 (réservations, paiements et design Fluent) 0.5.0-alpha.1 (permis, fiche de sortie, signatures et contrat) et 0.6.0-alpha.1 (retour, croquis, dépôt et facture).
+Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire), 0.4.0-alpha.1 (réservations, paiements et design Fluent) 0.5.0-alpha.1 (permis, fiche de sortie, signatures et contrat), 0.6.0-alpha.1 (retour, croquis, dépôt et facture) et 0.7.0-alpha.1 (taux HTG/USD et reçus).
 
 ## 1. Source de vérité et état de déploiement
 
@@ -8,11 +8,11 @@ Ce document est la référence de transition à lire avant toute modification. I
 | --- | --- |
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
-| Commit figé | `cdc1152220cc4aa62b02548473d457a397b3495c` |
-| Version du dépôt | `0.6.0-alpha.1` (retour, croquis, dépôt, facture, à déployer) |
-| Dernière version déployée | `0.5.0-alpha.1` |
+| Commit figé | `15d247765220cc7e768befc93a05cfff7c606d94` (0.6.0-alpha.1, cycle Car Rental validé en recette le 8 octobre 2026) |
+| Version du dépôt | `0.7.0-alpha.1` (taux HTG/USD, reçus 8 chiffres avec QR, impression 80 mm, à déployer) |
+| Dernière version déployée | `0.6.0-alpha.1` (validée) |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-7b3c2c6` |
+| Image API et web déployée | `sha-15d2477` |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
@@ -80,7 +80,7 @@ Les tests API pertinents sont notamment dans :
 
 - Fuseau métier : `America/Port-au-Prince`, présenté à l'utilisateur comme Cap-Haïtien, Haïti.
 - Format métier demandé : jour, mois, année, heure AM ou PM, fuseau de Cap-Haïtien.
-- Devise : HTG et USD. Les taux sont manuels, définis par administrateur ou propriétaire, avec alerte sous le taux BRH. Cette partie reste à finaliser.
+- Devise : HTG et USD. Les taux sont manuels, définis par administrateur ou propriétaire (`finance.rates.manage`), avec alerte, confirmation et motif sous la référence BRH. Un paiement dans l'autre devise conserve son taux et son équivalent.
 - Les clients peuvent avoir une identité groupe commune, mais les profils, transactions, documents et accès restent limités à la société et à l'adresse autorisées. Ne jamais révéler des données inutiles d'une autre société.
 - Toute opération sensible doit être journalisée avec utilisateur ou système, date et heure.
 - Les données client et les documents sensibles ne doivent pas être affichés dans les listes, calendriers, courriels, journaux ou messages non autorisés.
@@ -162,7 +162,7 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 
 L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent être repris avant d'ajouter d'autres modules.
 
-État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Le cycle Car Rental (remise, retour, croquis, dépôt, facture, P1 courriel) est complet en 0.6.0-alpha.1 : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`. Étape suivante : socle commun (taux HTG/USD avec alerte BRH, reçu 8 chiffres avec QR, impression 80 mm, écran client, exports PDF et Excel).
+État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Le cycle Car Rental (remise, retour, croquis, dépôt, facture, P1 courriel) est complet en 0.6.0-alpha.1 : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`. Socle commun : taux HTG/USD avec alerte BRH, reçus 8 chiffres avec QR et impression 80 mm livrés en 0.7.0-alpha.1 (`docs/26_Taux_HTG_USD_et_recus_0.7.0.md`). Restent : écran client, exports PDF et Excel, rapports journaliers.
 
 ### P0 : disponibilité et navigation (fait)
 

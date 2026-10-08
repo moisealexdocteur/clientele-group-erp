@@ -6,7 +6,7 @@
  * - Fichiers compilés et images : cache d'abord, ils sont versionnés par leur nom.
  * - API : jamais mise en cache. Les données métier restent sous le contrôle du serveur.
  */
-const CACHE_NAME = 'clientele-group-erp-v0.6.0-alpha.1'
+const CACHE_NAME = 'clientele-group-erp-v0.7.0-alpha.1'
 const SHELL = '/index.html'
 const PRECACHE = ['/', SHELL, '/manifest.webmanifest', '/icon.svg', '/brand/clientele-group-logo.webp']
 

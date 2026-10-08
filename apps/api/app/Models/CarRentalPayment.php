@@ -39,6 +39,11 @@ final class CarRentalPayment extends Model
         'proof_file_id',
         'submitted_at',
         'approved_at',
+        'exchange_rate_htg_per_usd',
+        'amount_in_reservation_currency',
+        'receipt_number',
+        'receipt_issued_at',
+        'receipt_print_count',
     ];
 
     protected function casts(): array
@@ -48,6 +53,10 @@ final class CarRentalPayment extends Model
             'bank_reference' => 'encrypted',
             'submitted_at' => 'immutable_datetime',
             'approved_at' => 'immutable_datetime',
+            'exchange_rate_htg_per_usd' => 'decimal:4',
+            'amount_in_reservation_currency' => 'decimal:2',
+            'receipt_issued_at' => 'immutable_datetime',
+            'receipt_print_count' => 'integer',
         ];
     }
 

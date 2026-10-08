@@ -831,6 +831,171 @@ final class CarRentalReservationTest extends TestCase
         );
     }
 
+    public function test_exchange_rate_is_manual_with_brh_alert_and_converts_payments_in_another_currency(): void
+    {
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+            'rental.reservations.read',
+            'rental.payments.submit',
+            'rental.payments.approve',
+            'finance.rates.manage',
+        ]);
+        $agentToken = $this->additionalUser($company, ['rental.reservations.read']);
+
+        $this->requestFor($agentToken, $company)
+            ->postJson('/api/v1/exchange-rates', ['rate_htg_per_usd' => 130])
+            ->assertForbidden();
+
+        // Sous la référence BRH : confirmation et motif obligatoires.
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/exchange-rates', [
+                'rate_htg_per_usd' => 128,
+                'brh_reference_rate' => 131.25,
+                'brh_reference_date' => '2026-10-01',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('confirm_below_brh');
+
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/exchange-rates', [
+                'rate_htg_per_usd' => 128,
+                'brh_reference_rate' => 131.25,
+                'brh_reference_date' => '2026-10-01',
+                'confirm_below_brh' => true,
+                'note' => 'Taux négocié pour un client institutionnel.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.below_brh', true);
+
+        $this->travel(1)->seconds();
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/exchange-rates', ['rate_htg_per_usd' => 130])
+            ->assertCreated()
+            ->assertJsonPath('data.below_brh', false);
+
+        $this->requestFor($agentToken, $company)
+            ->getJson('/api/v1/exchange-rates')
+            ->assertOk()
+            ->assertJsonPath('current.rate_htg_per_usd', '130.0000')
+            ->assertJsonCount(2, 'history');
+
+        $this->requestFor($agentToken, $company)
+            ->getJson('/api/v1/context')
+            ->assertOk()
+            ->assertJsonPath('exchange_rate.rate_htg_per_usd', '130.0000');
+
+        $vehicle = $this->vehicle($company, $site, 'SUV-HTG', 'suv');
+        $reservation = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->json('data');
+        $register = CashRegister::query()->create([
+            'company_id' => $company->id,
+            'site_id' => $site->id,
+            'code' => 'CAR-HTG',
+            'name' => 'Caisse Car Rental',
+            'is_active' => true,
+        ]);
+
+        // 13 000 HTG au taux de 130 = 100 USD sur une réservation en USD.
+        $payment = $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments", [
+                'payment_kind' => 'rental',
+                'method' => 'cash',
+                'currency' => 'HTG',
+                'amount' => '13000.00',
+                'cash_register_id' => $register->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.exchange_rate_htg_per_usd', '130.0000')
+            ->assertJsonPath('data.amount_in_reservation_currency', '100.00')
+            ->assertJsonPath('data.receipt_number', null)
+            ->json('data');
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments/{$payment['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.receipt_number', '0000 0001');
+    }
+
+    public function test_an_approved_payment_receives_a_numbered_receipt_with_a_signed_qr(): void
+    {
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+            'rental.reservations.read',
+            'rental.payments.submit',
+            'rental.payments.approve',
+            'rental.payments.credit',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-RECU', 'suv');
+        $reservation = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated()
+            ->json('data');
+        $register = CashRegister::query()->create([
+            'company_id' => $company->id,
+            'site_id' => $site->id,
+            'code' => 'CAR-RECU',
+            'name' => 'Caisse Car Rental',
+            'is_active' => true,
+        ]);
+
+        $payment = $this->submitCashPayment($token, $company, $reservation['id'], $register->id, 'rental', '130.00');
+        $this->approvePayment($token, $company, $reservation['id'], $payment['id']);
+
+        $receipt = $this->requestFor($token, $company)
+            ->getJson("/api/v1/car-rental/payments/{$payment['id']}/receipt")
+            ->assertOk()
+            ->assertJsonPath('data.number', '0000 0001')
+            ->assertJsonPath('data.cash_register', 'Caisse Car Rental')
+            ->assertJsonPath('data.amount', '130.00')
+            ->json('data');
+
+        self::assertStringNotContainsString('SUV-RECU', json_encode($receipt, JSON_THROW_ON_ERROR));
+        self::assertStringContainsString('/verification/recu/RENT/00000001?s=', (string) $receipt['verification_url']);
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/payments/{$payment['id']}/receipt/prints", ['copy' => 'client'])
+            ->assertOk()
+            ->assertJsonPath('data.print_count', 1);
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/payments/{$payment['id']}/receipt/prints", ['copy' => 'administration'])
+            ->assertOk()
+            ->assertJsonPath('data.print_count', 2);
+        self::assertTrue(AuditEvent::query()->where('event_type', 'receipt.reprinted')->exists());
+
+        // Vérification publique : sans session, sans donnée client.
+        parse_str((string) parse_url((string) $receipt['verification_url'], PHP_URL_QUERY), $query);
+        $verified = $this->getJson('/api/v1/public/receipts/RENT/00000001?s=' . $query['s'])
+            ->assertOk()
+            ->assertJsonPath('valid', true)
+            ->assertJsonPath('number', '0000 0001')
+            ->assertJsonPath('amount', '130.00')
+            ->json();
+        self::assertArrayNotHasKey('customer', $verified);
+
+        $this->getJson('/api/v1/public/receipts/RENT/00000001?s=0000000000')
+            ->assertOk()
+            ->assertJsonPath('valid', false);
+
+        // Un crédit accordé n'est pas un encaissement : pas de reçu.
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/payments", [
+                'payment_kind' => 'rental',
+                'method' => 'credit',
+                'currency' => 'USD',
+                'amount' => '100.00',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.receipt_number', null);
+    }
+
     /** @return array<string, mixed> */
     private function checkedOutReservation(string $token, Company $company, Site $site, CarRentalVehicle $vehicle): array
     {
