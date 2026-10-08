@@ -30,7 +30,7 @@ if [[ ! -f "${DEPLOY_DIR}/.env" ]]; then
   cat > "${DEPLOY_DIR}/.env" <<EOF
 COMPOSE_PROJECT_NAME=clientele-erp-preprod
 TRAEFIK_ROUTER_NAME=clientele-erp-preprod
-TRAEFIK_ROUTER_PRIORITY=100
+TRAEFIK_ROUTER_PRIORITY=1000
 APP_DOMAIN=${APP_DOMAIN}
 APP_URL=https://${APP_DOMAIN}
 APP_ENV=staging
@@ -48,11 +48,44 @@ SMTP_USERNAME=
 SMTP_PASSWORD=
 SMTP_FROM_ADDRESS=no-reply@clientelegroup.tech
 SMTP_FROM_NAME=Clientèle Group préproduction
+HASH_DRIVER=argon2id
+HASH_VERIFY=true
+ARGON_MEMORY=65536
+ARGON_THREADS=1
+ARGON_TIME=4
+AUTH_TOKEN_ABSOLUTE_MINUTES=720
+AUTH_TOKEN_IDLE_MINUTES=120
+AUTH_EMAIL_CODE_TTL_MINUTES=10
+AUTH_EMAIL_CODE_MAX_ATTEMPTS=5
 QR_SIGNING_SECRET=${qr_secret}
 EOF
   chmod 0600 "${DEPLOY_DIR}/.env"
 else
   sed -i -E "s/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=${DEPLOY_TAG}/" "${DEPLOY_DIR}/.env"
+  if grep -q '^TRAEFIK_ROUTER_PRIORITY=' "${DEPLOY_DIR}/.env"; then
+    sed -i -E 's/^TRAEFIK_ROUTER_PRIORITY=.*/TRAEFIK_ROUTER_PRIORITY=1000/' "${DEPLOY_DIR}/.env"
+  else
+    printf '\nTRAEFIK_ROUTER_PRIORITY=1000\n' >> "${DEPLOY_DIR}/.env"
+  fi
+
+  ensure_env_line() {
+    local key="$1"
+    local value="$2"
+
+    if ! grep -q "^${key}=" "${DEPLOY_DIR}/.env"; then
+      printf '%s=%s\n' "${key}" "${value}" >> "${DEPLOY_DIR}/.env"
+    fi
+  }
+
+  ensure_env_line HASH_DRIVER argon2id
+  ensure_env_line HASH_VERIFY true
+  ensure_env_line ARGON_MEMORY 65536
+  ensure_env_line ARGON_THREADS 1
+  ensure_env_line ARGON_TIME 4
+  ensure_env_line AUTH_TOKEN_ABSOLUTE_MINUTES 720
+  ensure_env_line AUTH_TOKEN_IDLE_MINUTES 120
+  ensure_env_line AUTH_EMAIL_CODE_TTL_MINUTES 10
+  ensure_env_line AUTH_EMAIL_CODE_MAX_ATTEMPTS 5
 fi
 
 cat > "${DEPLOY_DIR}/compose.yaml" <<'YAML'
@@ -66,16 +99,16 @@ services:
         condition: service_healthy
     networks: [traefik-public, clientele-internal]
     labels:
-      traefik.enable: "true"
-      traefik.docker.network: traefik-public
-      "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.rule": "Host(`${APP_DOMAIN}`)"
-      "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.entrypoints": websecure
-      "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.tls": "true"
-      "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.tls.certresolver": letsencrypt
-      "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.middlewares": clientele-security@file
-      "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.priority": "${TRAEFIK_ROUTER_PRIORITY}"
-      "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.service": "${TRAEFIK_ROUTER_NAME}"
-      "traefik.http.services.${TRAEFIK_ROUTER_NAME}.loadbalancer.server.port": "8080"
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.tls=true"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.middlewares=clientele-security@file"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.priority=${TRAEFIK_ROUTER_PRIORITY}"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME}.service=${TRAEFIK_ROUTER_NAME}"
+      - "traefik.http.services.${TRAEFIK_ROUTER_NAME}.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s
@@ -93,6 +126,15 @@ services:
       APP_LOCALE: fr
       APP_FALLBACK_LOCALE: fr
       APP_FAKER_LOCALE: fr_FR
+      HASH_DRIVER: ${HASH_DRIVER}
+      HASH_VERIFY: ${HASH_VERIFY}
+      ARGON_MEMORY: ${ARGON_MEMORY}
+      ARGON_THREADS: ${ARGON_THREADS}
+      ARGON_TIME: ${ARGON_TIME}
+      AUTH_TOKEN_ABSOLUTE_MINUTES: ${AUTH_TOKEN_ABSOLUTE_MINUTES}
+      AUTH_TOKEN_IDLE_MINUTES: ${AUTH_TOKEN_IDLE_MINUTES}
+      AUTH_EMAIL_CODE_TTL_MINUTES: ${AUTH_EMAIL_CODE_TTL_MINUTES}
+      AUTH_EMAIL_CODE_MAX_ATTEMPTS: ${AUTH_EMAIL_CODE_MAX_ATTEMPTS}
       APP_RUN_MIGRATIONS: "true"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
@@ -192,7 +234,20 @@ for attempt in {1..24}; do
   sleep 5
 done
 
-curl --fail --silent --show-error --max-time 30 "https://${APP_DOMAIN}/api/health"
-echo
+public_health=''
+for attempt in {1..24}; do
+  if public_health="$(curl --fail --silent --max-time 30 "https://${APP_DOMAIN}/api/health")" \
+    && [[ "${public_health}" == *'"status":"ok"'* ]] \
+    && [[ "${public_health}" == *'"service":"clientele-group-erp-api"'* ]]; then
+    break
+  fi
+  if [[ "${attempt}" -eq 24 ]]; then
+    echo "Le point de santé public ne répond pas encore avec l'API ERP attendue." >&2
+    compose ps >&2
+    exit 1
+  fi
+  sleep 5
+done
+printf '%s\n' "${public_health}"
 compose ps
 echo "Préproduction opérationnelle avec le tag ${DEPLOY_TAG}."

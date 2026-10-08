@@ -15,6 +15,14 @@ Prérequis :
 
 Le compose ne publie pas PostgreSQL ni Redis. Seul le service web est routé par Traefik.
 
-Le service `bootstrap` de `infra/traefik/compose.yaml` émet les premiers certificats et maintient la page temporaire. Pour la préproduction, il reste actif afin de conserver la page `erp.clientelegroup.tech` tant que la production n'existe pas. Le routeur applicatif de préproduction utilise un nom distinct et une priorité explicite ; il prend donc le relais uniquement sur `preprod.erp.clientelegroup.tech`. Le bootstrap sera retiré lors de la publication de la vraie production, après vérification du routeur de production.
+Le service `bootstrap` de `infra/traefik/compose.yaml` émet les premiers certificats et maintient la page temporaire. Pour la préproduction, il reste actif afin de conserver la page `erp.clientelegroup.tech` tant que la production n'existe pas. Son routeur `preprod` a une priorité de repli (`1`), tandis que le routeur applicatif utilise un nom distinct et une priorité explicite supérieure. Les labels Traefik dynamiques utilisent la syntaxe liste `clé=valeur`, car Docker Compose n'interpole pas les variables dans les clés YAML. Le bootstrap sera retiré lors de la publication de la vraie production, après vérification du routeur de production.
+
+## Correctif de routage préproduction
+
+`fix-preprod-routing.sh` sert uniquement à corriger un environnement déjà créé par une version antérieure du script de déploiement. Il recrée le seul conteneur `web` de préproduction avec des labels Traefik statiques, puis exige la réponse JSON de `/api/health`. Il ne touche pas à la production, à la base de données, à Redis, à SSH ni aux accès root.
 
 Le premier lancement de `app` applique les migrations Laravel avec `APP_RUN_MIGRATIONS=true`. Les services `worker` et `scheduler` sont dans le profil Compose `background` et ne sont pas lancés sur le KVM1 tant que le pilote n'en a pas besoin. PostgreSQL et Redis ne publient aucun port.
+
+## Courriels de sécurité
+
+La connexion et la réinitialisation utilisent un code à usage unique envoyé au courriel personnel. Un environnement réel doit définir un transport SMTP transactionnel et un expéditeur `no-reply@clientelegroup.tech` vérifié. Le transport `MAIL_MAILER=log` est conservé pour le bootstrap de préproduction, mais l’application refusera alors d’émettre des codes pour éviter de les écrire dans les journaux. Ne créez donc aucun compte humain avant d’avoir remplacé ce transport par SMTP et fait un test d’envoi.

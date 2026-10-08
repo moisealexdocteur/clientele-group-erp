@@ -58,6 +58,7 @@ services:
       traefik.http.routers.clientele-bootstrap-preprod.tls: "true"
       traefik.http.routers.clientele-bootstrap-preprod.tls.certresolver: letsencrypt
       traefik.http.routers.clientele-bootstrap-preprod.middlewares: clientele-security@file
+      traefik.http.routers.clientele-bootstrap-preprod.priority: "1"
       traefik.http.routers.clientele-bootstrap-preprod.service: clientele-bootstrap
       traefik.http.services.clientele-bootstrap.loadbalancer.server.port: "80"
 

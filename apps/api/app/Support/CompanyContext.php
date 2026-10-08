@@ -20,6 +20,10 @@ final class CompanyContext
         }
 
         return DB::transaction(function () use ($companyId, $operation): mixed {
+            if (DB::getDriverName() !== 'pgsql') {
+                return $operation();
+            }
+
             DB::select(
                 "select set_config('app.current_company_id', ?, true)",
                 [$companyId],

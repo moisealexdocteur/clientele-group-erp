@@ -49,12 +49,13 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 | docs/08_Recette_et_criteres_d_acceptation.md | Tests de réception avant production |
 | docs/10_Profil_KVM1_et_sites.md | Profil KVM1, inventaire des caisses et seuils d'évolution |
 | docs/11_Identite_visuelle_et_experience_mobile.md | Logo, couleurs et règles mobile-first |
+| docs/12_Pilote_Car_Rental.md | Périmètre, permissions et critères du pilote Car Rental |
 
 ## État du projet
 
-Version : 0.2.0-alpha.1
+Version : 0.2.0-alpha.4
 
-Cette préversion contient le cadrage produit, les décisions d'architecture, le contrat de données du noyau, l'amorce Traefik HTTPS et le premier socle exécutable Laravel 13 + Vue PWA. Le pilote est ordonné : Car Rental, Auto Parts et motocyclettes, Guest House, Market, puis Hotel, Bar et Restaurant. Aucun module métier n'est encore déclaré prêt pour la production et aucune donnée réelle ne doit être chargée.
+Cette préversion contient le cadrage produit, le routage HTTPS, l'authentification à double étape par courriel, la réinitialisation de mot de passe, les rôles locaux, le choix obligatoire de société/site et l'audit sécurisé. Le pilote Car Rental possède maintenant son premier flux PWA/API : véhicules, disponibilité, réservation, soumission de paiement Sogebank et structures de dépôt/inspection encore inactives. Aucun module n'est encore prêt pour la production et aucune donnée réelle ne doit être chargée.
 
 ## Règles de version
 
@@ -68,11 +69,11 @@ Chaque changement fonctionnel ou technique met à jour CHANGELOG.md et, lorsque 
 
 ## Démarrage de l'implémentation
 
-1. Terminer l'authentification, les sociétés, les rôles, l'audit et la configuration globale du lot 0.2.
-2. Ajouter les migrations financières : devises, taux BRH, sessions de caisse et reçus.
-3. Construire le POS et l'impression 80 mm avant d'ouvrir les modules métiers.
-4. Déployer d'abord le socle sur `preprod.erp.clientelegroup.tech` avec des données de test.
-5. Construire Car Rental en premier, puis suivre l'ordre validé des modules.
+1. Publier l'alpha.4, passer la CI et déployer la préproduction avec des données de test.
+2. Configurer un SMTP transactionnel, puis créer le premier propriétaire par commande interactive.
+3. Ajouter les taux BRH, sessions de caisse, reçus QR et impression 80 mm.
+4. Terminer Car Rental : contrat, inspections, dépôt, retour, kilométrage et documents.
+5. Suivre l'ordre validé : Auto Parts et motocyclettes, Guest House, Market, puis Hotel, Bar et Restaurant.
 
 ## Licence
 

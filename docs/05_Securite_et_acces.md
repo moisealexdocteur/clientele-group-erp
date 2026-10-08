@@ -4,6 +4,14 @@
 
 Le produit manipule de l'argent, des reçus, des informations de clients, des documents d'identité, des photos d'inspection, des contrats et des données de paie. La sécurité fait partie du produit, pas d'une option à ajouter après les ventes.
 
+## État de la préversion 0.2.0-alpha.4
+
+Le socle implémente déjà le mot de passe Argon2id, le code courriel à six chiffres, la réinitialisation personnelle, les sessions opaques révocables, le contexte de société et le journal d’audit. Les codes et jetons sont stockés sous hash ; aucun code ne peut être inscrit dans les journaux de l’application.
+
+La préproduction utilise encore volontairement le transport de courriel `log`. L’application refuse donc d’y émettre un code de sécurité tant qu’un SMTP transactionnel réel n’est pas configuré. Aucun compte humain ne doit être provisionné avant ce réglage.
+
+Le pilote Car Rental ajoute des profils clients strictement locaux par société. Les coordonnées, détails de lieu personnalisés, références de virement, notes et légendes d’inspection sont chiffrés au repos. L’identité maître Clientèle Group ne contient aucune coordonnée et ne peut pas servir à consulter des données d’une autre société.
+
 ## 2. Authentification
 
 ### 2.1 Comptes
@@ -11,6 +19,7 @@ Le produit manipule de l'argent, des reçus, des informations de clients, des do
 - Chaque personne possède son propre compte. Les comptes partagés sont interdits.
 - L'adresse courriel personnelle sert à la réinitialisation et à la 2FA.
 - Un compte appartient à un ou plusieurs rôles, mais seulement aux sociétés autorisées.
+- Un rôle système, y compris propriétaire, ne contourne jamais les accès locaux : la personne choisit une société autorisée avant de voir des données opérationnelles.
 - Le propriétaire peut désactiver un compte, révoquer toutes ses sessions et forcer une nouvelle 2FA.
 - Les comptes techniques sont identifiés comme Système, ont un secret séparé et ne peuvent pas se connecter à l'interface humaine.
 
@@ -28,6 +37,7 @@ Le produit manipule de l'argent, des reçus, des informations de clients, des do
 - Un code ou lien est à usage unique, de courte durée et stocké sous hash.
 - Les tentatives sont limitées et journalisées.
 - L'envoi échoué ne révèle pas si une adresse existe.
+- Le transport `log` est interdit pour les codes de sécurité, car il exposerait leur contenu dans les journaux techniques.
 - Une 2FA de secours, comme une clé d'authentification ou TOTP, peut être ajoutée plus tard sans remplacer les règles existantes.
 
 ## 3. Autorisation
