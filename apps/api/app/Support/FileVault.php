@@ -62,8 +62,9 @@ final class FileVault
             throw ValidationException::withMessages(['file' => 'Le fichier n’a pas pu être reçu. Réessayez.']);
         }
 
-        // Le type est lu dans le contenu, pas dans le nom ou l'en-tête envoyé.
-        $mime = (string) $file->getMimeType();
+        // Le type est lu dans le contenu (signature du fichier), jamais dans le
+        // nom, l'extension ou l'en-tête envoyé par le navigateur.
+        $mime = $this->sniffMimeType($file);
 
         if (! in_array($mime, $allowed, true)) {
             throw ValidationException::withMessages([
@@ -135,7 +136,18 @@ final class FileVault
     }
 
     /** @param array<int, string> $allowed */
-    private function typeMessage(array $allowed): string
+    private function sniffMimeType(UploadedFile $file): string
+    {
+        $path = $file->getRealPath();
+
+        if ($path === false || ! is_readable($path)) {
+            return '';
+        }
+
+        return (string) (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+    }
+
+        private function typeMessage(array $allowed): string
     {
         $labels = array_unique(array_map(
             static fn (string $mime): string => match ($mime) {
