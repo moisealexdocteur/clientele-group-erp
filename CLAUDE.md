@@ -9,7 +9,7 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `15d247765220cc7e768befc93a05cfff7c606d94` (0.6.0-alpha.1, cycle Car Rental validé en recette le 8 octobre 2026) |
-| Version du dépôt | `0.8.0-alpha.1` (taux unique du groupe dans Configuration, à déployer) |
+| Version du dépôt | `0.8.0-alpha.1` (taux unique du groupe dans Configuration, à déployer). Branche `fix/car-rental-decoupe` en relecture : découpe Car Rental et correctifs de sécurité, sans nouvelle version |
 | Dernière version déployée | `0.6.0-alpha.1` (validée) |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
 | Image API et web déployée | `sha-15d2477` |
@@ -41,7 +41,8 @@ Le script demande un jeton GitHub classique ayant seulement l'autorisation `read
 ## 3. Architecture actuelle
 
 - Frontend : PWA Vue 3, TypeScript, Vue Router et Pinia dans `apps/web`, design Microsoft Fluent 2 (Segoe UI, jetons dans `src/styles/main.css`). Un écran par fichier dans `src/views`, composants par domaine dans `src/components`, appels serveur dans `src/api`, dates et devises dans `src/lib`. Détail : `docs/22_Interface_modulaire_0.3.0.md`. Ne jamais recréer un fichier d'interface unique.
-- Backend : Laravel et PHP dans `apps/api`.
+- Backend : Laravel et PHP dans `apps/api`. Car Rental : un contrôleur invocable par action dans `app/Http/Controllers/CarRental`, règles partagées dans `app/Support/CarRental` (présentation, lecture, planning, véhicules, prix, croquis, clients). Ne jamais recréer un contrôleur unique ni dépasser 500 lignes par contrôleur.
+- Montants : `App\Support\Money` en centimes entiers (taux en dix-millièmes). Interdit : `(float)` sur un prix, un dépôt, un taux ou une signature. Saisie contrôlée par `App\Rules\DecimalAmount`.
 - Infrastructure locale : Docker Compose et Traefik dans `infra`.
 - Base de données : PostgreSQL.
 - Cache, sessions et files : Redis.
@@ -80,7 +81,7 @@ Les tests API pertinents sont notamment dans :
 
 - Fuseau métier : `America/Port-au-Prince`, présenté à l'utilisateur comme Cap-Haïtien, Haïti.
 - Format métier demandé : jour, mois, année, heure AM ou PM, fuseau de Cap-Haïtien.
-- Devise : HTG et USD. Un seul taux manuel pour tout le groupe (décision du propriétaire, 0.8.0), saisi dans Configuration > Taux de change par le propriétaire ou par les utilisateurs qu'il autorise sur leur fiche (droit de compte `can_manage_exchange_rates`, pas de permission par société). Alerte, confirmation et motif sous la référence BRH. Un paiement dans l'autre devise conserve son taux et son équivalent.
+- Devise : HTG et USD. Un seul taux manuel pour tout le groupe (décision du propriétaire, 0.8.0), saisi dans Configuration > Taux de change par le propriétaire ou par les utilisateurs qu'il autorise sur leur fiche (droit de compte `can_manage_exchange_rates`, pas de permission par société). Alerte, confirmation et motif sous la référence saisie (chiffre relevé à la main, par exemple publié par la BRH ; l'application ne lit pas la BRH et ce n'est pas un contrôle officiel). Un paiement dans l'autre devise conserve son taux et son équivalent.
 - Les clients peuvent avoir une identité groupe commune, mais les profils, transactions, documents et accès restent limités à la société et à l'adresse autorisées. Ne jamais révéler des données inutiles d'une autre société.
 - Toute opération sensible doit être journalisée avec utilisateur ou système, date et heure.
 - Les données client et les documents sensibles ne doivent pas être affichés dans les listes, calendriers, courriels, journaux ou messages non autorisés.
@@ -94,7 +95,9 @@ Les tests API pertinents sont notamment dans :
 - La création d'un compte envoie un courriel au format visuel validé.
 - Permissions ajoutées en 0.6.0 : `rental.deposits.settle` (régler le dépôt, autres frais, administrateur) et `rental.invoices.issue` (facture, administrateur et agent).
 - Permissions ajoutées en 0.4.0 : `rental.reservations.override_rate` (modifier le tarif de la fiche), `rental.payments.credit` (accorder un crédit), `rental.documents.sensitive` (voir permis et reçus). Elles sont accordées au rôle administrateur Car Rental, jamais à l'agent par défaut.
-- Les fichiers (photos, reçus, permis) sont privés : volume Docker `clientele-documents`, 10 Mo au plus, hash SHA-256, lecture selon la permission et journalisation.
+- Les fichiers (photos, reçus, permis) sont privés : volume Docker `clientele-documents`, JPEG, PNG ou PDF seulement (type lu dans le contenu, SVG et HTML refusés), 10 Mo au plus, hash SHA-256, lecture selon la permission et journalisation. Un fichier d'une autre société répond 404.
+- QR des reçus : HMAC sur la chaîne décimale du montant avec `QR_SIGNING_SECRET` (32 caractères au moins). L'application refuse de démarrer sans cette clé hors développement et tests ; aucun repli sur `APP_KEY`.
+- Formats d'impression : contrat, fiche de sortie et facture Car Rental en PDF A4. Le 80 mm est réservé aux reçus d'encaissement et aux futures caisses (Market, bar, station, pièces). Une imprimante absente ne bloque jamais la recette.
 
 ## 5. Périmètre global à préserver
 
@@ -147,7 +150,7 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 - Le montant de location et le dépôt requis doivent être visibles automatiquement dans la vue de mise en circulation, à partir de la réservation et de la fiche véhicule. Ils ne doivent pas être ressaisis par le préposé.
 - Une prolongation doit contrôler la disponibilité sans divulguer les données du prochain client. Si le véhicule est réservé pour un autre client, le système explique le conflit sans afficher son identité.
 - Un retour anticipé conserve le montant de la réservation initiale, conformément à la politique demandée.
-- Frais possibles : 20 USD pour prise en charge aéroport, 20 USD pour retour aéroport, 20 USD de nettoyage si le véhicule n'est pas retourné dans le même état de propreté. Ne pas les appliquer automatiquement sans règle et validation métier.
+- Frais possibles, réglés par société dans Configuration (20 USD au départ) : prise en charge aéroport, retour aéroport, nettoyage si le véhicule n'est pas retourné dans le même état de propreté. Ne pas les appliquer automatiquement sans règle et validation métier.
 
 ### Courriels client Car Rental
 
@@ -204,7 +207,7 @@ L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent �
 | Parcours Car Rental PWA | `apps/web/src/views/rental/`, `apps/web/src/components/rental/`, `apps/web/src/styles/main.css` |
 | Navigation et droits côté interface | `apps/web/src/router/index.ts`, `apps/web/src/stores/session.ts` |
 | Catalogue de flotte | `apps/web/src/data/clienteleFleetCatalog.ts`, `apps/web/public/fleet/` |
-| API Car Rental | `apps/api/app/Http/Controllers/CarRentalController.php` |
+| API Car Rental | `apps/api/app/Http/Controllers/CarRental/` (une action par classe), `apps/api/app/Support/CarRental/` |
 | Autorisation société et adresse | `apps/api/app/Support/CompanySiteAuthorizer.php`, `apps/api/app/Http/Controllers/CompanyContextController.php` |
 | Modèles Car Rental | `apps/api/app/Models/CarRentalReservation.php`, `apps/api/app/Models/CarRentalVehicle.php`, `apps/api/app/Models/CarRentalVehicleDocument.php` |
 | Courriels Car Rental | `apps/api/app/Support/CarRentalCustomerNotificationService.php`, `apps/api/app/Mail/CarRentalCustomerNotificationMail.php`, `apps/api/resources/views/mail/car-rental-customer-notification.blade.php` |

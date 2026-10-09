@@ -20,7 +20,7 @@ Cette version termine le cycle Car Rental : remise, retour, règlement du dépô
 - croquis, dommages constatés et 12 photos au plus ;
 - signature du client s'il est présent ;
 - frais supplémentaires, appliqués seulement si la case est cochée :
-  - nettoyage 20 USD (location en USD) ;
+  - nettoyage, montant réglé dans Configuration (20 USD au départ, location en USD) ;
   - kilométrage supplémentaire, calculé à partir du forfait et du prix au kilomètre du contrat ;
   - autres frais (motif et montant), réservés à `rental.deposits.settle`.
 
