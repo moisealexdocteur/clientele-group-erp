@@ -4,6 +4,7 @@ use App\Http\Controllers\BootstrapController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CarRentalController;
 use App\Http\Controllers\CarRentalFileController;
+use App\Http\Controllers\CashController;
 use App\Http\Controllers\CompanyContextController;
 use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\ReceiptController;
@@ -79,6 +80,32 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware(['api.token', 'company.context'])->group(function (): void {
         Route::get('/context', CompanyContextController::class)->name('api.v1.context');
+
+        /*
+         * Caisse commune : ouverture, clôture, écarts et rapport journalier.
+         * La lecture des caisses et sessions est contrôlée par le contrôleur
+         * (cash.sessions.operate ou cash.reports.read).
+         */
+        Route::prefix('cash')->group(function (): void {
+            Route::get('/registers', [CashController::class, 'registers'])->name('api.v1.cash.registers.index');
+            Route::post('/registers/{register}/sessions', [CashController::class, 'open'])
+                ->middleware('company.permission:cash.sessions.operate')
+                ->name('api.v1.cash.sessions.open');
+            Route::get('/sessions/{session}', [CashController::class, 'show'])->name('api.v1.cash.sessions.show');
+            Route::post('/sessions/{session}/close', [CashController::class, 'close'])
+                ->middleware('company.permission:cash.sessions.operate')
+                ->name('api.v1.cash.sessions.close');
+            Route::post('/sessions/{session}/review', [CashController::class, 'review'])
+                ->middleware('company.permission:cash.sessions.approve')
+                ->name('api.v1.cash.sessions.review');
+            Route::post('/sessions/{session}/prints', [CashController::class, 'recordSessionPrint'])->name('api.v1.cash.sessions.prints');
+            Route::get('/reports/daily', [CashController::class, 'dailyReport'])
+                ->middleware('company.permission:cash.reports.read')
+                ->name('api.v1.cash.reports.daily');
+            Route::post('/reports/daily/exports', [CashController::class, 'recordDailyReportExport'])
+                ->middleware('company.permission:cash.reports.read')
+                ->name('api.v1.cash.reports.daily.exports');
+        });
 
 
         Route::prefix('car-rental')->group(function (): void {

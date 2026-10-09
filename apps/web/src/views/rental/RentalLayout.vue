@@ -20,6 +20,9 @@ const nav = computed<NavItem[]>(() => {
   if (session.can('rental.vehicles.read') || session.can('rental.vehicles.manage')) {
     items.push({ to: { name: 'rental.vehicles' }, label: 'Véhicules', icon: 'car', match: 'rental.vehicles' })
   }
+  if (session.can('cash.sessions.operate') || session.can('cash.reports.read')) {
+    items.push({ to: { name: 'cash' }, label: 'Caisse', icon: 'cash', match: 'cash' })
+  }
   return items
 })
 </script>

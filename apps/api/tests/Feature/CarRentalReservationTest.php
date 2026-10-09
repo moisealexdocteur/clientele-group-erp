@@ -7,6 +7,7 @@ use App\Models\AuditEvent;
 use App\Models\CarRentalVehicle;
 use App\Models\CarRentalReservation;
 use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
@@ -605,13 +606,7 @@ final class CarRentalReservationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('payment');
 
-        $cashRegister = CashRegister::query()->create([
-            'company_id' => $company->id,
-            'site_id' => $site->id,
-            'code' => 'CAR-01',
-            'name' => 'Caisse Car Rental 1',
-            'is_active' => true,
-        ]);
+        $cashRegister = $this->openRegister($company, $site, 'CAR-01', 'Caisse Car Rental 1');
 
         $rentalPayment = $this->submitCashPayment($token, $company, $reservation['id'], $cashRegister->id, 'rental', '130.00');
         $this->approvePayment($token, $company, $reservation['id'], $rentalPayment['id']);
@@ -894,13 +889,7 @@ final class CarRentalReservationTest extends TestCase
             ]))
             ->assertCreated()
             ->json('data');
-        $register = CashRegister::query()->create([
-            'company_id' => $company->id,
-            'site_id' => $site->id,
-            'code' => 'CAR-HTG',
-            'name' => 'Caisse Car Rental',
-            'is_active' => true,
-        ]);
+        $register = $this->openRegister($company, $site, 'CAR-HTG', 'Caisse Car Rental');
 
         // 13 000 HTG au taux de 130 = 100 USD sur une réservation en USD.
         $payment = $this->requestFor($token, $company)
@@ -940,13 +929,7 @@ final class CarRentalReservationTest extends TestCase
             ]))
             ->assertCreated()
             ->json('data');
-        $register = CashRegister::query()->create([
-            'company_id' => $company->id,
-            'site_id' => $site->id,
-            'code' => 'CAR-RECU',
-            'name' => 'Caisse Car Rental',
-            'is_active' => true,
-        ]);
+        $register = $this->openRegister($company, $site, 'CAR-RECU', 'Caisse Car Rental');
 
         $payment = $this->submitCashPayment($token, $company, $reservation['id'], $register->id, 'rental', '130.00');
         $this->approvePayment($token, $company, $reservation['id'], $payment['id']);
@@ -1110,13 +1093,7 @@ final class CarRentalReservationTest extends TestCase
             ->assertCreated()
             ->json('data');
 
-        $cashRegister = CashRegister::query()->create([
-            'company_id' => $company->id,
-            'site_id' => $site->id,
-            'code' => 'CAR-RET',
-            'name' => 'Caisse Car Rental',
-            'is_active' => true,
-        ]);
+        $cashRegister = $this->openRegister($company, $site, 'CAR-RET', 'Caisse Car Rental');
         $rental = $this->submitCashPayment($token, $company, $reservation['id'], $cashRegister->id, 'rental', '390.00');
         $this->approvePayment($token, $company, $reservation['id'], $rental['id']);
         $deposit = $this->submitCashPayment($token, $company, $reservation['id'], $cashRegister->id, 'security_deposit', '250.00');
@@ -1225,6 +1202,29 @@ final class CarRentalReservationTest extends TestCase
         [, $token] = ApiAccessToken::issueFor($user, Request::create('/api/v1/auth/login', 'POST'));
 
         return $token;
+    }
+
+    /** Caisse active avec une session ouverte : les espèces exigent une caisse ouverte. */
+    private function openRegister(Company $company, Site $site, string $code, string $name): CashRegister
+    {
+        $register = CashRegister::query()->create([
+            'company_id' => $company->id,
+            'site_id' => $site->id,
+            'code' => $code,
+            'name' => $name,
+            'is_active' => true,
+        ]);
+        CashSession::query()->create([
+            'company_id' => $company->id,
+            'site_id' => $site->id,
+            'cash_register_id' => $register->id,
+            'status' => 'open',
+            'opened_at' => now()->utc(),
+            'opening_usd' => '0.00',
+            'opening_htg' => '0.00',
+        ]);
+
+        return $register;
     }
 
     private function pngBytes(): string

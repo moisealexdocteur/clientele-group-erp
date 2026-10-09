@@ -38,6 +38,11 @@ defineProps<{ name: IconName }>()
     <template v-else-if="name === 'plus'">
       <path d="M12 5v14M5 12h14" />
     </template>
+    <template v-else-if="name === 'cash'">
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.75" />
+      <path d="M6 9.5v5M18 9.5v5" />
+    </template>
     <template v-else-if="name === 'search'">
       <circle cx="10.5" cy="10.5" r="6.5" />
       <path d="M15.5 15.5 20 20" />
