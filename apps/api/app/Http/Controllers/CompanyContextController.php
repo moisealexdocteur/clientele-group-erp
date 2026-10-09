@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
+use App\Models\CashSession;
 use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
 use App\Support\ExchangeRateService;
@@ -46,6 +47,13 @@ final class CompanyContextController extends Controller
             ->orderBy('name')
             ->get(['id', 'company_id', 'code', 'name', 'address']);
 
+        // Caisses ouvertes : le formulaire de paiement en espèces le signale avant l'envoi.
+        $openRegisters = CashSession::query()
+            ->where('company_id', $company->id)
+            ->where('status', 'open')
+            ->pluck('cash_register_id')
+            ->flip();
+
         return response()->json([
             'company' => [
                 'id' => $company->id,
@@ -82,6 +90,7 @@ final class CompanyContextController extends Controller
                         'code' => $register->code,
                         'name' => $register->name,
                         'is_active' => $register->is_active,
+                        'is_open' => $openRegisters->has($register->id),
                     ])
                     ->values(),
             ])->values(),

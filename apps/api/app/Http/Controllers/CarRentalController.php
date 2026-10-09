@@ -20,6 +20,7 @@ use App\Models\StoredFile;
 use App\Support\AuditLogger;
 use App\Support\CarRentalAvailabilityService;
 use App\Support\CarRentalCustomerNotificationService;
+use App\Support\CashSessionService;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\DocumentNumberService;
 use App\Support\ExchangeRateService;
@@ -58,6 +59,7 @@ final class CarRentalController extends Controller
         private readonly FileVault $files,
         private readonly ExchangeRateService $exchangeRates,
         private readonly ReceiptService $receipts,
+        private readonly CashSessionService $cash,
     ) {
     }
 
@@ -1893,12 +1895,18 @@ final class CarRentalController extends Controller
                 }
             }
 
+            // Les espèces entrent dans la session ouverte de la caisse choisie.
+            $cashSession = $cashRegisterId === null
+                ? null
+                : $this->cash->requireOpenSession($company, $cashRegisterId, 'cash_register_id');
+
             // Un crédit n'encaisse rien : il est accordé et approuvé par la même personne autorisée.
             $isCredit = $data['method'] === 'credit';
             $payment = new CarRentalPayment([
                 'company_id' => $company->id,
                 'reservation_id' => $model->id,
                 'cash_register_id' => $cashRegisterId,
+                'cash_session_id' => $cashSession?->id,
                 'payment_kind' => $data['payment_kind'],
                 'method' => $data['method'],
                 'status' => $isCredit ? 'approved' : 'submitted',
@@ -1976,6 +1984,7 @@ final class CarRentalController extends Controller
                 'approved_at' => now()->utc(),
             ])->save();
             $this->receipts->issue($record);
+            $this->cash->recordPayment($record, $actor);
 
             if ($record->payment_kind === 'security_deposit') {
                 CarRentalSecurityDeposit::query()->updateOrCreate(
@@ -2754,6 +2763,9 @@ final class CarRentalController extends Controller
                 $amount = (float) $deposit->amount;
                 $apply = round(min($remaining, $amount), 2);
                 $remaining = round($remaining - $apply, 2);
+
+                // La part non retenue d'un dépôt en espèces sort de la caisse qui l'a reçu.
+                $this->cash->recordDepositRefund($company, $deposit, round($amount - $apply, 2), $actor);
 
                 $deposit->forceFill([
                     'status' => $apply <= 0.0 ? 'released' : ($apply + 0.0001 >= $amount ? 'forfeited' : 'partially_applied'),
