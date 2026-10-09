@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\BootstrapController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\CarRentalController;
+use App\Http\Controllers\CarRental;
 use App\Http\Controllers\CarRentalFileController;
 use App\Http\Controllers\CompanyContextController;
 use App\Http\Controllers\ExchangeRateController;
@@ -82,7 +82,7 @@ Route::prefix('v1')->group(function (): void {
 
 
         Route::prefix('car-rental')->group(function (): void {
-            Route::get('/customers', [CarRentalController::class, 'customers'])
+            Route::get('/customers', CarRental\SearchCustomers::class)
                 ->middleware('company.permission:rental.reservations.create')
                 ->name('api.v1.car-rental.customers.index');
             Route::get('/payments/{payment}/receipt', [ReceiptController::class, 'show'])
@@ -91,89 +91,89 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/payments/{payment}/receipt/prints', [ReceiptController::class, 'recordPrint'])
                 ->middleware('company.permission:rental.reservations.read')
                 ->name('api.v1.car-rental.receipts.prints');
-            Route::get('/vehicles', [CarRentalController::class, 'vehicles'])
+            Route::get('/vehicles', CarRental\ListVehicles::class)
                 ->middleware('company.permission:rental.vehicles.read')
                 ->name('api.v1.car-rental.vehicles.index');
-            Route::post('/vehicles', [CarRentalController::class, 'storeVehicle'])
+            Route::post('/vehicles', CarRental\StoreVehicle::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.store');
-            Route::patch('/vehicles/{vehicle}/operational-status', [CarRentalController::class, 'updateVehicleStatus'])
+            Route::patch('/vehicles/{vehicle}/operational-status', CarRental\UpdateVehicleStatus::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.operational-status');
-            Route::patch('/vehicles/{vehicle}/registration', [CarRentalController::class, 'updateVehicleRegistration'])
+            Route::patch('/vehicles/{vehicle}/registration', CarRental\UpdateVehicleRegistration::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.registration');
-            Route::patch('/vehicles/{vehicle}/commercial-terms', [CarRentalController::class, 'updateVehicleCommercialTerms'])
+            Route::patch('/vehicles/{vehicle}/commercial-terms', CarRental\UpdateVehicleCommercialTerms::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.commercial-terms');
-            Route::patch('/vehicles/{vehicle}/details', [CarRentalController::class, 'updateVehicleDetails'])
+            Route::patch('/vehicles/{vehicle}/details', CarRental\UpdateVehicleDetails::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.details');
-            Route::patch('/vehicles/{vehicle}/active', [CarRentalController::class, 'updateVehicleActive'])
+            Route::patch('/vehicles/{vehicle}/active', CarRental\UpdateVehicleActive::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.active');
-            Route::put('/vehicles/{vehicle}/photo', [CarRentalController::class, 'updateVehiclePhoto'])
+            Route::put('/vehicles/{vehicle}/photo', CarRental\UpdateVehiclePhoto::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.photo');
-            Route::get('/vehicles/{vehicle}/documents', [CarRentalController::class, 'vehicleDocuments'])
+            Route::get('/vehicles/{vehicle}/documents', CarRental\ListVehicleDocuments::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.documents.index');
-            Route::put('/vehicles/{vehicle}/documents', [CarRentalController::class, 'saveVehicleDocuments'])
+            Route::put('/vehicles/{vehicle}/documents', CarRental\SaveVehicleDocuments::class)
                 ->middleware('company.permission:rental.vehicles.manage')
                 ->name('api.v1.car-rental.vehicles.documents.store');
-            Route::get('/calendar', [CarRentalController::class, 'calendar'])
+            Route::get('/calendar', CarRental\ShowCalendar::class)
                 ->middleware('company.permission:rental.calendar.read')
                 ->name('api.v1.car-rental.calendar');
-            Route::get('/availability', [CarRentalController::class, 'availability'])
+            Route::get('/availability', CarRental\CheckAvailability::class)
                 ->middleware('company.permission:rental.availability.read')
                 ->name('api.v1.car-rental.availability');
-            Route::post('/reservations', [CarRentalController::class, 'store'])
+            Route::post('/reservations', CarRental\StoreReservation::class)
                 ->middleware('company.permission:rental.reservations.create')
                 ->name('api.v1.car-rental.reservations.store');
-            Route::get('/reservations', [CarRentalController::class, 'reservations'])
+            Route::get('/reservations', CarRental\ListReservations::class)
                 ->middleware('company.permission:rental.reservations.read')
                 ->name('api.v1.car-rental.reservations.index');
-            Route::get('/reservations/{reservation}', [CarRentalController::class, 'show'])
+            Route::get('/reservations/{reservation}', CarRental\ShowReservation::class)
                 ->middleware('company.permission:rental.reservations.read')
                 ->name('api.v1.car-rental.reservations.show');
-            Route::patch('/reservations/{reservation}', [CarRentalController::class, 'updateReservation'])
+            Route::patch('/reservations/{reservation}', CarRental\UpdateReservation::class)
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.update');
-            Route::post('/reservations/{reservation}/notify', [CarRentalController::class, 'notifyReservation'])
+            Route::post('/reservations/{reservation}/notify', CarRental\NotifyReservation::class)
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.notify');
-            Route::post('/reservations/{reservation}/check-out', [CarRentalController::class, 'checkOutReservation'])
+            Route::post('/reservations/{reservation}/check-out', CarRental\CheckOutReservation::class)
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.check-out');
-            Route::post('/reservations/{reservation}/contract', [CarRentalController::class, 'attachContract'])
+            Route::post('/reservations/{reservation}/contract', CarRental\AttachContract::class)
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.contract');
-            Route::post('/reservations/{reservation}/deposit-settlement', [CarRentalController::class, 'settleDeposit'])
+            Route::post('/reservations/{reservation}/deposit-settlement', CarRental\SettleDeposit::class)
                 ->middleware('company.permission:rental.deposits.settle')
                 ->name('api.v1.car-rental.reservations.deposit-settlement');
-            Route::post('/reservations/{reservation}/invoice', [CarRentalController::class, 'issueInvoice'])
+            Route::post('/reservations/{reservation}/invoice', CarRental\IssueInvoice::class)
                 ->middleware('company.permission:rental.invoices.issue')
                 ->name('api.v1.car-rental.reservations.invoice');
-            Route::post('/reservations/{reservation}/invoice/file', [CarRentalController::class, 'attachInvoiceFile'])
+            Route::post('/reservations/{reservation}/invoice/file', CarRental\AttachInvoiceFile::class)
                 ->middleware('company.permission:rental.invoices.issue')
                 ->name('api.v1.car-rental.reservations.invoice-file');
-            Route::post('/reservations/{reservation}/extend', [CarRentalController::class, 'extendReservation'])
+            Route::post('/reservations/{reservation}/extend', CarRental\ExtendReservation::class)
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.extend');
-            Route::post('/reservations/{reservation}/return', [CarRentalController::class, 'completeReturn'])
+            Route::post('/reservations/{reservation}/return', CarRental\CompleteReturn::class)
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.return');
-            Route::post('/reservations/{reservation}/cancel', [CarRentalController::class, 'cancelReservation'])
+            Route::post('/reservations/{reservation}/cancel', CarRental\CancelReservation::class)
                 ->middleware('company.permission:rental.reservations.manage')
                 ->name('api.v1.car-rental.reservations.cancel');
-            Route::post('/reservations/{reservation}/payments', [CarRentalController::class, 'submitPayment'])
+            Route::post('/reservations/{reservation}/payments', CarRental\SubmitPayment::class)
                 ->middleware('company.permission:rental.payments.submit')
                 ->name('api.v1.car-rental.payments.store');
             Route::post('/files', [CarRentalFileController::class, 'store'])
                 ->name('api.v1.car-rental.files.store');
             Route::get('/files/{file}', [CarRentalFileController::class, 'show'])
                 ->name('api.v1.car-rental.files.show');
-            Route::post('/reservations/{reservation}/payments/{payment}/approve', [CarRentalController::class, 'approvePayment'])
+            Route::post('/reservations/{reservation}/payments/{payment}/approve', CarRental\ApprovePayment::class)
                 ->middleware('company.permission:rental.payments.approve')
                 ->name('api.v1.car-rental.payments.approve');
         });
