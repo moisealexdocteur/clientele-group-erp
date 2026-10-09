@@ -25,7 +25,6 @@ import type { ReservationFormValues } from './reservationForm'
  * Le bouton d'enregistrement reste grisé tant qu'un élément obligatoire manque.
  */
 
-const AIRPORT_FEE_USD = 20
 const KM_PER_DAY = 100
 const MINIMUM_DAYS = 2
 
@@ -45,6 +44,9 @@ const emit = defineEmits<{
 }>()
 
 const session = useSessionStore()
+
+/* Frais aéroport réglé dans Configuration, par trajet. */
+const airportFeeUsd = computed(() => Number(session.context?.company.rental_fees?.airport_usd ?? '0') || 0)
 const app = useAppStore()
 
 const form = reactive<ReservationFormValues>({ ...props.initial })
@@ -58,8 +60,8 @@ const shortRental = computed(() => periodValid.value && days.value < MINIMUM_DAY
 const officeSite = computed(() => session.sites.find((site) => site.id === form.site_id) ?? null)
 
 const airportFeesUsd = computed(() =>
-  (form.pickup_location_type === 'cap_haitien_airport' && form.apply_airport_pickup_fee ? AIRPORT_FEE_USD : 0)
-  + (form.dropoff_location_type === 'cap_haitien_airport' && form.apply_airport_dropoff_fee ? AIRPORT_FEE_USD : 0),
+  (form.pickup_location_type === 'cap_haitien_airport' && form.apply_airport_pickup_fee ? airportFeeUsd.value : 0)
+  + (form.dropoff_location_type === 'cap_haitien_airport' && form.apply_airport_dropoff_fee ? airportFeeUsd.value : 0),
 )
 
 const rentalEstimate = computed(() => {
@@ -238,11 +240,11 @@ defineExpose({ form })
         </FormField>
         <label v-if="form.pickup_location_type === 'cap_haitien_airport'" class="check">
           <input v-model="form.apply_airport_pickup_fee" type="checkbox" />
-          <span>Appliquer {{ formatMoney(AIRPORT_FEE_USD, 'USD') }} pour la prise en charge à l’aéroport</span>
+          <span>Appliquer {{ formatMoney(airportFeeUsd, 'USD') }} pour la prise en charge à l’aéroport</span>
         </label>
         <label v-if="form.dropoff_location_type === 'cap_haitien_airport'" class="check">
           <input v-model="form.apply_airport_dropoff_fee" type="checkbox" />
-          <span>Appliquer {{ formatMoney(AIRPORT_FEE_USD, 'USD') }} pour le retour à l’aéroport</span>
+          <span>Appliquer {{ formatMoney(airportFeeUsd, 'USD') }} pour le retour à l’aéroport</span>
         </label>
       </section>
 

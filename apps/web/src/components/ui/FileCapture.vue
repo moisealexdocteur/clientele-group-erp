@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
   required?: boolean
 }>(), {
   required: false,
-  accept: 'image/jpeg,image/png,image/webp',
+  accept: 'image/jpeg,image/png',
   help: '',
   error: '',
   disabled: false,

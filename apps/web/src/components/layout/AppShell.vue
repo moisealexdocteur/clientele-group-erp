@@ -92,7 +92,7 @@ async function signOut(): Promise<void> {
           :to="session.canManageRates ? { name: 'system.rates' } : undefined"
         >
           <span class="text-small">{{ rate ? formatRate(rate.rate_htg_per_usd) : 'Taux HTG/USD non défini' }}</span>
-          <span v-if="rate?.below_brh" class="text-small">Sous la référence BRH</span>
+          <span v-if="rate?.below_brh" class="text-small">Sous la référence saisie</span>
         </component>
         <p class="rail-clock">
           <span class="display display-sm">{{ clockTime }}</span>
@@ -158,7 +158,7 @@ async function signOut(): Promise<void> {
         </div>
         <div v-if="session.context">
           <dt>Taux HTG/USD</dt>
-          <dd>{{ rate ? formatRate(rate.rate_htg_per_usd) : 'Non défini' }}<template v-if="rate?.below_brh"> - sous la référence BRH</template></dd>
+          <dd>{{ rate ? formatRate(rate.rate_htg_per_usd) : 'Non défini' }}<template v-if="rate?.below_brh"> - sous la référence saisie</template></dd>
         </div>
         <div>
           <dt>Serveur</dt>

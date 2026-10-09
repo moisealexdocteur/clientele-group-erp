@@ -2,6 +2,22 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche fix/car-rental-decoupe
+
+Détail : `docs/29_Decoupe_Car_Rental_et_securite.md`. Pas de nouvelle version avant relecture.
+
+### Modifié
+
+- Car Rental : un contrôleur invocable par action et sept services partagés, à la place d'un contrôleur de 3 193 lignes.
+- Montants en centimes entiers et taux en dix-millièmes, sans flottant ; saisie limitée à deux décimales.
+- Fichiers : JPEG, PNG et PDF seulement.
+- Frais aéroport et nettoyage réglés par société dans Configuration.
+- Écran de taux : « référence saisie ».
+
+### Sécurité
+
+- QR signé sur le montant décimal canonique, signature HMAC complète (64 caractères, plus tronquée à 20) ; `QR_SIGNING_SECRET` obligatoire, démarrage refusé sans clé, aucun repli sur `APP_KEY`.
+
 ## 0.8.0-alpha.1 - 2026-10-14
 
 Détail : `docs/28_Taux_unique_du_groupe_0.8.0.md`.

@@ -65,6 +65,8 @@ export interface CompanyContext {
     base_currency: Currency
     /** Identité du loueur imprimée sur le contrat de location. */
     legal?: CompanyLegalIdentity
+    /** Frais de service Car Rental en vigueur, réglés dans Configuration. */
+    rental_fees?: { airport_usd: string; cleaning_usd: string }
   }
   access: {
     role_key: string
@@ -490,6 +492,8 @@ export interface SystemCompany {
   phone_numbers?: string | null
   rental_contract_terms?: string | null
   roadside_assistance_phone?: string | null
+  rental_airport_fee_usd?: string
+  rental_cleaning_fee_usd?: string
   sites: SystemSite[]
 }
 

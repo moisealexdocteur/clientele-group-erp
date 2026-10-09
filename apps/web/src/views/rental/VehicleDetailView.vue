@@ -560,7 +560,7 @@ async function saveDocuments(): Promise<void> {
         purpose="vehicle_photo"
         :site-id="vehicle.site_id"
         label="Photo"
-        help="JPEG, PNG ou WebP, 10 Mo au plus. Évitez que la plaque soit lisible si la photo peut être envoyée au client."
+        help="JPEG ou PNG, 10 Mo au plus. Évitez que la plaque soit lisible si la photo peut être envoyée au client."
         :disabled="action.busy.value"
         @uploaded="(file) => savePhoto(file.id)"
       />

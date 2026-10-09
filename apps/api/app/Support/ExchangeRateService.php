@@ -34,15 +34,10 @@ final class ExchangeRateService
         return $rate;
     }
 
-    public function convert(float $amount, string $from, string $to, float $rateHtgPerUsd): float
+    /** Montant décimal converti au taux donné, arrondi au centime, sans flottant. */
+    public function convert(string $amount, string $from, string $to, string $rateHtgPerUsd): string
     {
-        if ($from === $to) {
-            return round($amount, 2);
-        }
-
-        return $from === 'HTG'
-            ? round($amount / $rateHtgPerUsd, 2)
-            : round($amount * $rateHtgPerUsd, 2);
+        return Money::convert($amount, $from, $to, $rateHtgPerUsd);
     }
 
     /** @return array<string, mixed>|null */

@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\ExchangeRate;
+use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\ExchangeRateService;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -58,34 +59,37 @@ final class ExchangeRateController extends Controller
         }
 
         $data = $request->validate([
-            'rate_htg_per_usd' => ['required', 'numeric', 'gt:0', 'max:100000'],
-            'brh_reference_rate' => ['nullable', 'numeric', 'gt:0', 'max:100000'],
+            'rate_htg_per_usd' => ['required', 'numeric', 'gt:0', 'max:100000', 'regex:/^\d{1,6}(\.\d{1,4})?$/'],
+            'brh_reference_rate' => ['nullable', 'numeric', 'gt:0', 'max:100000', 'regex:/^\d{1,6}(\.\d{1,4})?$/'],
             'brh_reference_date' => ['nullable', 'required_with:brh_reference_rate', 'date_format:Y-m-d', 'before_or_equal:today'],
             'confirm_below_brh' => ['sometimes', 'boolean'],
             'note' => ['nullable', 'string', 'max:500'],
         ], [
             'rate_htg_per_usd.required' => 'Saisissez le taux : nombre de gourdes pour 1 USD.',
             'rate_htg_per_usd.gt' => 'Le taux doit être supérieur à zéro.',
-            'brh_reference_date.required_with' => 'Indiquez la date du taux de référence BRH.',
-            'brh_reference_date.before_or_equal' => 'La date du taux BRH ne peut pas être dans le futur.',
+            'rate_htg_per_usd.regex' => 'Saisissez le taux avec quatre décimales au plus, par exemple 131.2500.',
+            'brh_reference_rate.regex' => 'Saisissez la référence avec quatre décimales au plus, par exemple 131.2500.',
+            'brh_reference_date.required_with' => 'Indiquez la date de la référence saisie.',
+            'brh_reference_date.before_or_equal' => 'La date de la référence ne peut pas être dans le futur.',
         ]);
 
-        $rate = (float) $data['rate_htg_per_usd'];
-        $brh = isset($data['brh_reference_rate']) ? (float) $data['brh_reference_rate'] : null;
-        $below = $brh !== null && $rate + 0.00001 < $brh;
+        // Taux comparés en dix-millièmes entiers, jamais en flottant.
+        $rate = Money::rateUnits((string) $data['rate_htg_per_usd']);
+        $brh = isset($data['brh_reference_rate']) ? Money::rateUnits((string) $data['brh_reference_rate']) : null;
+        $below = $brh !== null && $rate < $brh;
 
         if ($below && (($data['confirm_below_brh'] ?? false) !== true || ! filled($data['note'] ?? null))) {
             throw ValidationException::withMessages([
                 'confirm_below_brh' => sprintf(
-                    'Ce taux est inférieur au taux de référence BRH (%s HTG). Confirmez-le et indiquez le motif.',
-                    number_format($brh, 4, ',', ' '),
+                    'Ce taux est inférieur à la référence saisie (%s HTG). Confirmez-le et indiquez le motif.',
+                    str_replace('.', ',', Money::fromScaled($brh, Money::RATE_SCALE)),
                 ),
             ]);
         }
 
         $record = ExchangeRate::query()->create([
-            'rate_htg_per_usd' => number_format($rate, 4, '.', ''),
-            'brh_reference_rate' => $brh === null ? null : number_format($brh, 4, '.', ''),
+            'rate_htg_per_usd' => Money::fromScaled($rate, Money::RATE_SCALE),
+            'brh_reference_rate' => $brh === null ? null : Money::fromScaled($brh, Money::RATE_SCALE),
             'brh_reference_date' => $data['brh_reference_date'] ?? null,
             'below_brh' => $below,
             'note' => filled($data['note'] ?? null) ? trim((string) $data['note']) : null,

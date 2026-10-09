@@ -23,6 +23,8 @@ export function updateCompany(companyId: string, payload: {
   phone_numbers?: string | null
   rental_contract_terms?: string | null
   roadside_assistance_phone?: string | null
+  rental_airport_fee_usd?: string
+  rental_cleaning_fee_usd?: string
 }) {
   return api<{ data: SystemCompany }>(`${base}/${companyId}`, { ...global, method: 'PATCH', body: payload })
 }

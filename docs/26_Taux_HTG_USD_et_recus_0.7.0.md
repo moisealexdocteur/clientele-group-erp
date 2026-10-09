@@ -40,7 +40,7 @@ La référence BRH est saisie manuellement : l'application ne lit pas le site de
 ## 5. Vérification du QR
 
 - Le QR ouvre `https://<domaine>/verification/recu/<code société>/<numéro>?s=<signature>`.
-- La signature HMAC utilise `QR_SIGNING_SECRET` (déjà présent dans l'environnement de préproduction).
+- La signature HMAC utilise `QR_SIGNING_SECRET` (déjà présent dans l'environnement de préproduction). Depuis la branche `fix/car-rental-decoupe`, elle est complète (64 caractères hexadécimaux) et n'est plus tronquée à 20 caractères : voir `docs/29_Decoupe_Car_Rental_et_securite.md`.
 - La page publique confirme la société, le numéro, la date, le montant et l'état. Elle ne montre jamais le client, le véhicule ni la réservation.
 - Un code modifié ou inconnu est refusé. La vérification est limitée à 30 essais par minute et par adresse.
 

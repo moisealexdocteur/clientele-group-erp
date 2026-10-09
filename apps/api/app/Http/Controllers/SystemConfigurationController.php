@@ -2,16 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CashRegister;
+use App\Mail\AccountCreatedMail;
 use App\Models\ApiAccessToken;
+use App\Models\CashRegister;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
 use App\Models\CompanyUserSiteAccess;
 use App\Models\Site;
 use App\Models\User;
-use App\Mail\AccountCreatedMail;
+use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CompanyContext;
+use App\Support\Money;
 use App\Support\PasswordPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -189,6 +191,8 @@ final class SystemConfigurationController extends Controller
             'phone_numbers' => ['nullable', 'string', 'max:160'],
             'roadside_assistance_phone' => ['sometimes', 'nullable', 'string', 'max:64'],
             'rental_contract_terms' => ['sometimes', 'nullable', 'string', 'max:40000'],
+            'rental_airport_fee_usd' => ['sometimes', 'required', 'numeric', 'min:0', 'max:9999', new DecimalAmount()],
+            'rental_cleaning_fee_usd' => ['sometimes', 'required', 'numeric', 'min:0', 'max:9999', new DecimalAmount()],
         ], $this->companyValidationMessages());
 
         $owner = $this->owner($request);
@@ -200,6 +204,13 @@ final class SystemConfigurationController extends Controller
                 $company->forceFill([
                     'roadside_assistance_phone' => $this->trimmedOrNull($data['roadside_assistance_phone'] ?? null),
                 ]);
+            }
+
+            // Frais de service Car Rental : réglés ici seulement, jamais dans un écran métier.
+            foreach (['rental_airport_fee_usd', 'rental_cleaning_fee_usd'] as $fee) {
+                if (array_key_exists($fee, $data)) {
+                    $company->forceFill([$fee => Money::normalize((string) $data[$fee])]);
+                }
             }
 
             if ($termsProvided) {
@@ -1080,6 +1091,8 @@ final class SystemConfigurationController extends Controller
             'phone_numbers' => $company->phone_numbers,
             'rental_contract_terms' => $company->rental_contract_terms,
             'roadside_assistance_phone' => $company->roadside_assistance_phone,
+            'rental_airport_fee_usd' => (string) $company->rental_airport_fee_usd,
+            'rental_cleaning_fee_usd' => (string) $company->rental_cleaning_fee_usd,
             'sites' => $company->relationLoaded('sites')
                 ? $company->sites->map(fn (Site $site): array => $this->sitePayload($site))->values()
                 : [],

@@ -37,15 +37,22 @@ final class ReceiptService
         return $this->numbers->display($number);
     }
 
-    public function signature(string $companyId, string $number, string $amount, string $currency): string
+    /**
+     * Signature HMAC-SHA256 complète du reçu (256 bits, 64 caractères
+     * hexadécimaux), sans troncature ; la vérification publique est aussi
+     * limitée à 30 essais par minute. Le montant est signé sous forme décimale
+     * canonique, sans flottant. Sans clé QR dédiée, aucune signature n'est
+     * produite : la clé de l'application n'est jamais réutilisée.
+     */
+    public function signature(string $companyId, string $number, string $amount, string $currency): ?string
     {
         $secret = (string) config('security.receipts.qr_signing_secret');
 
-        if ($secret === '') {
-            $secret = (string) config('app.key');
+        if (strlen($secret) < 32) {
+            return null;
         }
 
-        return substr(hash_hmac('sha256', implode('|', [$companyId, $number, number_format((float) $amount, 2, '.', ''), $currency]), $secret), 0, 20);
+        return hash_hmac('sha256', implode('|', [$companyId, $number, Money::normalize($amount), $currency]), $secret);
     }
 
     public function verificationUrl(Company $company, CarRentalPayment $payment): ?string
@@ -54,12 +61,18 @@ final class ReceiptService
             return null;
         }
 
+        $signature = $this->signature($company->id, $payment->receipt_number, (string) $payment->amount, $payment->currency);
+
+        if ($signature === null) {
+            return null;
+        }
+
         return sprintf(
             '%s/verification/recu/%s/%s?s=%s',
             rtrim((string) config('app.url'), '/'),
             rawurlencode($company->code),
             $payment->receipt_number,
-            $this->signature($company->id, $payment->receipt_number, (string) $payment->amount, $payment->currency),
+            $signature,
         );
     }
 }

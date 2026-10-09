@@ -50,7 +50,7 @@ Dans la configuration système, chaque société a une raison sociale, un repré
 ## 7. Fichiers privés
 
 - Stockage sur le volume Docker `clientele-documents`, hors de la racine web.
-- Types acceptés : JPEG, PNG, WebP et PDF selon l'usage ; 10 Mo au plus.
+- Types acceptés : JPEG, PNG et PDF selon l'usage ; 10 Mo au plus (WebP retiré, voir `docs/29_Decoupe_Car_Rental_et_securite.md`).
 - Empreinte SHA-256, isolation par société (RLS PostgreSQL), lecture selon la permission de l'usage (`rental.documents.sensitive` pour les reçus et permis), journalisation du dépôt.
 
 ## 8. Déploiement

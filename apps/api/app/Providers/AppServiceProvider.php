@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\ReceiptSecretGuard;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +20,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        $console = $this->app->runningInConsole();
+        $command = $console ? ($_SERVER['argv'][1] ?? null) : null;
+
+        ReceiptSecretGuard::check(
+            (string) $this->app->environment(),
+            (string) config('security.receipts.qr_signing_secret'),
+            is_string($command) ? $command : null,
+            $console,
+        );
     }
 }

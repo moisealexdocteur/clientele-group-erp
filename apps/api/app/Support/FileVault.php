@@ -24,11 +24,11 @@ final class FileVault
 
     /** @var array<string, array<int, string>> */
     private const ALLOWED_MIME_TYPES = [
-        StoredFile::PURPOSE_PAYMENT_PROOF => ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
-        StoredFile::PURPOSE_VEHICLE_PHOTO => ['image/jpeg', 'image/png', 'image/webp'],
-        StoredFile::PURPOSE_DRIVER_LICENSE_FRONT => ['image/jpeg', 'image/png', 'image/webp'],
-        StoredFile::PURPOSE_DRIVER_LICENSE_BACK => ['image/jpeg', 'image/png', 'image/webp'],
-        StoredFile::PURPOSE_INSPECTION_PHOTO => ['image/jpeg', 'image/png', 'image/webp'],
+        StoredFile::PURPOSE_PAYMENT_PROOF => ['image/jpeg', 'image/png', 'application/pdf'],
+        StoredFile::PURPOSE_VEHICLE_PHOTO => ['image/jpeg', 'image/png'],
+        StoredFile::PURPOSE_DRIVER_LICENSE_FRONT => ['image/jpeg', 'image/png'],
+        StoredFile::PURPOSE_DRIVER_LICENSE_BACK => ['image/jpeg', 'image/png'],
+        StoredFile::PURPOSE_INSPECTION_PHOTO => ['image/jpeg', 'image/png'],
         StoredFile::PURPOSE_SIGNATURE => ['image/png'],
         StoredFile::PURPOSE_RENTAL_CONTRACT => ['application/pdf'],
         StoredFile::PURPOSE_RENTAL_INVOICE => ['application/pdf'],
@@ -37,7 +37,6 @@ final class FileVault
     private const EXTENSIONS = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
-        'image/webp' => 'webp',
         'application/pdf' => 'pdf',
     ];
 
@@ -63,8 +62,9 @@ final class FileVault
             throw ValidationException::withMessages(['file' => 'Le fichier n’a pas pu être reçu. Réessayez.']);
         }
 
-        // Le type est lu dans le contenu, pas dans le nom ou l'en-tête envoyé.
-        $mime = (string) $file->getMimeType();
+        // Le type est lu dans le contenu (signature du fichier), jamais dans le
+        // nom, l'extension ou l'en-tête envoyé par le navigateur.
+        $mime = $this->sniffMimeType($file);
 
         if (! in_array($mime, $allowed, true)) {
             throw ValidationException::withMessages([
@@ -136,13 +136,23 @@ final class FileVault
     }
 
     /** @param array<int, string> $allowed */
-    private function typeMessage(array $allowed): string
+    private function sniffMimeType(UploadedFile $file): string
+    {
+        $path = $file->getRealPath();
+
+        if ($path === false || ! is_readable($path)) {
+            return '';
+        }
+
+        return (string) (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+    }
+
+        private function typeMessage(array $allowed): string
     {
         $labels = array_unique(array_map(
             static fn (string $mime): string => match ($mime) {
                 'application/pdf' => 'PDF',
                 'image/png' => 'PNG',
-                'image/webp' => 'WebP',
                 default => 'JPEG',
             },
             $allowed,
