@@ -49,7 +49,6 @@ final class SystemConfigurationController extends Controller
                 'rental.documents.sensitive',
                 'rental.deposits.settle',
                 'rental.invoices.issue',
-                'finance.rates.manage',
             ],
         ],
         'car_rental_agent' => [
@@ -616,6 +615,46 @@ final class SystemConfigurationController extends Controller
      * Désactive ou réactive l'accès pour cette société uniquement. Aucun
      * compte ni événement d'audit n'est supprimé.
      */
+    /**
+     * Accorde ou retire le droit de saisir le taux HTG/USD du groupe. Ce droit
+     * est porté par la personne, quelle que soit sa société.
+     */
+    public function updateExchangeRateAccess(Request $request, Company $company, string $companyUserAccess): JsonResponse
+    {
+        $data = $request->validate([
+            'allowed' => ['required', 'boolean'],
+        ]);
+        $owner = $this->owner($request);
+
+        return $this->companyContext->within($company->id, function () use ($company, $companyUserAccess, $data, $owner): JsonResponse {
+            $access = $this->companyUserAccessFor($company, $companyUserAccess);
+            $user = $access->user;
+
+            if (! $user instanceof User || $user->system_role === 'owner') {
+                throw ValidationException::withMessages([
+                    'user' => 'Le propriétaire saisit toujours le taux : ce droit ne se modifie pas pour lui.',
+                ]);
+            }
+
+            if ((bool) $user->can_manage_exchange_rates !== (bool) $data['allowed']) {
+                $user->forceFill(['can_manage_exchange_rates' => (bool) $data['allowed']])->save();
+                $this->audit->record(
+                    eventType: $data['allowed'] ? 'configuration.exchange_rate_access_granted' : 'configuration.exchange_rate_access_revoked',
+                    companyId: $company->id,
+                    actorId: $owner->id,
+                    actorType: 'USER',
+                    subjectType: User::class,
+                    subjectId: $user->id,
+                    metadata: [],
+                );
+            }
+
+            return response()->json([
+                'data' => $this->companyUserPayload($this->companyUserAccessFor($company, $access->id)),
+            ]);
+        });
+    }
+
     public function updateCompanyUserStatus(Request $request, Company $company, string $companyUserAccess): JsonResponse
     {
         $data = $request->validate([
@@ -1092,6 +1131,7 @@ final class SystemConfigurationController extends Controller
             'site_scope' => $access->site_scope,
             'is_active' => $access->is_active,
             'is_system_owner' => $access->role_key === 'owner',
+            'can_manage_exchange_rates' => $user instanceof User && $user->canManageExchangeRates(),
             'can_edit_personal_profile' => $user instanceof User
                 && $access->role_key !== 'owner'
                 && ! $this->userHasOtherActiveCompanyAccess($user, $access->company_id),

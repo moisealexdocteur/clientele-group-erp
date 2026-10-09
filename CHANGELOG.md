@@ -2,6 +2,20 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.8.0-alpha.1 - 2026-10-14
+
+Détail : `docs/28_Taux_unique_du_groupe_0.8.0.md`.
+
+### Modifié
+
+- Le taux HTG/USD devient un réglage unique du groupe, dans Configuration > Taux de change. Les taux déjà saisis par société sont repris dans l'historique du groupe.
+- Saisie du taux réservée au propriétaire et aux utilisateurs qu'il autorise dans Configuration (fiche utilisateur). La permission par société `finance.rates.manage` est retirée.
+- Un utilisateur autorisé non propriétaire voit seulement « Taux de change » et « Activités » dans Configuration.
+
+### Ajouté
+
+- Droit utilisateur « Taux de change du groupe », accordé ou retiré avec confirmation et journal (`configuration.exchange_rate_access_granted`, `configuration.exchange_rate_access_revoked`).
+
 ## 0.7.1-alpha.1 - 2026-10-13
 
 Détail : `docs/27_Courriels_facture_au_retour_et_clients_connus_0.7.1.md`.

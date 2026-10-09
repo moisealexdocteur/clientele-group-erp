@@ -29,6 +29,8 @@ export interface SessionUser {
   email: string
   system_role: string
   two_factor_email_verified: boolean
+  /** Propriétaire ou personne désignée pour saisir le taux du groupe. */
+  can_manage_exchange_rates?: boolean
 }
 
 export interface CompanyChoice {
@@ -502,6 +504,7 @@ export interface SystemCompanyUser {
   site_scope: 'all' | 'selected'
   is_active: boolean
   is_system_owner: boolean
+  can_manage_exchange_rates?: boolean
   can_edit_personal_profile: boolean
   can_delete_permanently: boolean
   sites: Array<{

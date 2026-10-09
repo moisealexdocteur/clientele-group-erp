@@ -298,6 +298,7 @@ final class AuthController extends Controller
             'email' => $user->email,
             'system_role' => $user->system_role,
             'two_factor_email_verified' => $user->two_factor_email_verified_at !== null,
+            'can_manage_exchange_rates' => $user->canManageExchangeRates(),
         ];
     }
 

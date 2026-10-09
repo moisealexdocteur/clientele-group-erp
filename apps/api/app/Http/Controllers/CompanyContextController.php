@@ -64,8 +64,8 @@ final class CompanyContextController extends Controller
                     'rental_contract_terms' => $company->rental_contract_terms,
                 ],
             ],
-            // Taux HTG/USD en vigueur, affiché dans l'en-tête de l'application.
-            'exchange_rate' => $this->rates->payload($this->rates->current($company)),
+            // Taux HTG/USD du groupe en vigueur, affiché dans l'application.
+            'exchange_rate' => $this->rates->payload($this->rates->current()),
             'access' => [
                 'role_key' => $access->role_key,
                 'site_scope' => $access->site_scope,

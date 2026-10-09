@@ -4,7 +4,7 @@ import type { ExchangeRate, PaymentReceipt } from './types'
 /* Taux HTG/USD et reçus de caisse. La société active est ajoutée par le client HTTP. */
 
 export function fetchExchangeRates() {
-  return api<{ current: ExchangeRate | null; history: ExchangeRate[] }>('/api/v1/exchange-rates')
+  return api<{ current: ExchangeRate | null; history: ExchangeRate[]; can_manage: boolean }>('/api/v1/exchange-rates', { withoutCompany: true })
 }
 
 export function setExchangeRate(payload: {
@@ -14,7 +14,7 @@ export function setExchangeRate(payload: {
   confirm_below_brh?: boolean
   note?: string
 }) {
-  return api<{ data: ExchangeRate }>('/api/v1/exchange-rates', { method: 'POST', body: payload })
+  return api<{ data: ExchangeRate }>('/api/v1/exchange-rates', { method: 'POST', body: payload, withoutCompany: true })
 }
 
 export function fetchReceipt(paymentId: string) {

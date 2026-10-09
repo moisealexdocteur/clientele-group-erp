@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
+use App\Models\User;
 use App\Models\ExchangeRate;
 use App\Support\AuditLogger;
 use App\Support\ExchangeRateService;
@@ -11,9 +11,10 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Taux HTG/USD manuels. Le taux est défini par un administrateur ou le
- * propriétaire ; un taux inférieur à la référence BRH exige une
- * confirmation explicite et un motif, et reste signalé dans l'historique.
+ * Taux HTG/USD du groupe, réglé dans Configuration. Il est saisi par le
+ * propriétaire ou par les personnes qu'il désigne ; un taux inférieur à la
+ * référence BRH exige une confirmation explicite et un motif, et reste
+ * signalé dans l'historique.
  */
 final class ExchangeRateController extends Controller
 {
@@ -25,26 +26,36 @@ final class ExchangeRateController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->company($request);
-
         $history = ExchangeRate::query()
             ->with('author')
-            ->where('company_id', $company->id)
             ->orderByDesc('effective_at')
             ->orderByDesc('created_at')
             ->limit(30)
             ->get();
 
         return response()->json([
-            'current' => $this->rates->payload($this->rates->current($company)),
+            'current' => $this->rates->payload($this->rates->current()),
+            'can_manage' => $request->user() instanceof User && $request->user()->canManageExchangeRates(),
             'history' => $history->map(fn (ExchangeRate $rate): ?array => $this->rates->payload($rate))->values(),
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $company = $this->company($request);
         $actor = $request->user();
+
+        if (! $actor instanceof User || ! $actor->canManageExchangeRates()) {
+            $this->audit->record(
+                eventType: 'authorization.exchange_rate_refused',
+                actorId: $actor?->id,
+                actorType: $actor === null ? 'SYSTEM' : 'USER',
+                subjectType: User::class,
+                subjectId: $actor?->id,
+                metadata: [],
+            );
+
+            return response()->json(['message' => 'Seuls le propriétaire et les personnes désignées dans Configuration peuvent saisir le taux.'], 403);
+        }
 
         $data = $request->validate([
             'rate_htg_per_usd' => ['required', 'numeric', 'gt:0', 'max:100000'],
@@ -73,7 +84,6 @@ final class ExchangeRateController extends Controller
         }
 
         $record = ExchangeRate::query()->create([
-            'company_id' => $company->id,
             'rate_htg_per_usd' => number_format($rate, 4, '.', ''),
             'brh_reference_rate' => $brh === null ? null : number_format($brh, 4, '.', ''),
             'brh_reference_date' => $data['brh_reference_date'] ?? null,
@@ -85,9 +95,9 @@ final class ExchangeRateController extends Controller
 
         $this->audit->record(
             eventType: $below ? 'finance.exchange_rate_set_below_brh' : 'finance.exchange_rate_set',
-            companyId: $company->id,
-            actorId: $actor?->id,
-            actorType: $actor === null ? 'SYSTEM' : 'USER',
+            companyId: null,
+            actorId: $actor->id,
+            actorType: 'USER',
             subjectType: ExchangeRate::class,
             subjectId: $record->id,
             metadata: [
@@ -100,13 +110,5 @@ final class ExchangeRateController extends Controller
         return response()->json([
             'data' => $this->rates->payload($record->load('author')),
         ], 201);
-    }
-
-    private function company(Request $request): Company
-    {
-        $company = $request->attributes->get('clientele.company');
-        abort_unless($company instanceof Company, 500, 'Contexte de société manquant.');
-
-        return $company;
     }
 }

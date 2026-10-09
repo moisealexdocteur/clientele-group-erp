@@ -7,6 +7,7 @@ import {
   resetCompanyUserPassword,
   updateCompanyUser,
   updateCompanyUserStatus,
+  updateExchangeRateAccess,
 } from '../../api/system'
 import type { CarRentalUserRole, SystemCompanyUser } from '../../api/types'
 import { useSystemStore } from '../../stores/system'
@@ -99,6 +100,24 @@ async function toggleStatus(): Promise<void> {
   if (!result) return
   apply(result.data)
   ui.toast(activate ? 'Accès réactivé.' : 'Accès désactivé pour cette société.')
+}
+
+async function toggleRateAccess(): Promise<void> {
+  if (!user.value) return
+  const allow = !user.value.can_manage_exchange_rates
+  const confirmed = await ui.confirm({
+    title: allow ? 'Autoriser la saisie du taux' : 'Retirer la saisie du taux',
+    message: allow
+      ? `${user.value.name} pourra saisir le taux HTG/USD utilisé par toutes les sociétés du groupe. Chaque saisie est journalisée.`
+      : `${user.value.name} ne pourra plus saisir le taux HTG/USD du groupe.`,
+    confirmLabel: allow ? 'Autoriser' : 'Retirer',
+    danger: !allow,
+  })
+  if (!confirmed) return
+  const result = await statusRequest.run(() => updateExchangeRateAccess(props.companyId, props.accessId, allow))
+  if (!result) return
+  apply(result.data)
+  ui.toast(allow ? 'Droit de saisie du taux accordé.' : 'Droit de saisie du taux retiré.')
 }
 
 function openPassword(): void {
@@ -196,6 +215,16 @@ async function remove(): Promise<void> {
         <p class="text-secondary">{{ user.is_active ? 'L’utilisateur peut accéder à cette société.' : 'L’accès à cette société est désactivé.' }}</p>
         <button class="btn" :class="user.is_active ? 'btn-secondary' : 'btn-primary'" type="button" :disabled="statusRequest.busy.value || !app.canReachServer" @click="toggleStatus">
           {{ user.is_active ? 'Désactiver l’accès' : 'Réactiver l’accès' }}
+        </button>
+      </section>
+
+      <section v-if="!user.is_system_owner" class="panel">
+        <h2 class="title-section">Taux de change du groupe</h2>
+        <p class="text-secondary">
+          {{ user.can_manage_exchange_rates ? 'Peut saisir le taux HTG/USD du groupe.' : 'Consulte le taux HTG/USD du groupe sans le modifier.' }}
+        </p>
+        <button class="btn btn-secondary" type="button" :disabled="statusRequest.busy.value || !app.canReachServer" @click="toggleRateAccess">
+          {{ user.can_manage_exchange_rates ? 'Retirer la saisie du taux' : 'Autoriser la saisie du taux' }}
         </button>
       </section>
 
