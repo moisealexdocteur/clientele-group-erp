@@ -45,6 +45,8 @@ export interface ContextCashRegister {
   code: string
   name: string
   is_active: boolean
+  /** Une session de caisse est ouverte : les espèces peuvent être reçues. */
+  is_open?: boolean
 }
 
 export interface ContextSite {
@@ -512,4 +514,79 @@ export interface SystemCompanyUser {
     code: string
     name: string
   }>
+}
+
+/* Caisse commune : sessions, mouvements d'espèces et rapport journalier. */
+
+export type CashCurrencyTotals = Record<Currency, { opening: string; in: string; out: string; expected: string }>
+
+export type CashMovementKind = 'rental_payment' | 'deposit_payment' | 'deposit_refund'
+
+export interface CashMovement {
+  id: string
+  kind: CashMovementKind
+  label: string
+  direction: 'in' | 'out'
+  currency: Currency
+  amount: string
+  occurred_at: string | null
+  receipt_number: string | null
+  payment_id: string | null
+  reservation_id: string | null
+  reservation_number: string | null
+  recorded_by: string | null
+}
+
+export interface CashSession {
+  id: string
+  status: 'open' | 'closed'
+  site: { id: string; name: string | null }
+  cash_register: { id: string; code: string | null; name: string | null }
+  opened_at: string | null
+  opened_by: string | null
+  closed_at: string | null
+  closed_by: string | null
+  totals: CashCurrencyTotals
+  declared: Record<Currency, string> | null
+  variance: Record<Currency, string> | null
+  variance_note: string | null
+  review_status: 'none' | 'pending' | 'approved'
+  reviewed_at: string | null
+  reviewed_by: string | null
+  review_note: string | null
+  report_print_count: number
+  pending_cash_payments: number
+  can_close: boolean
+  can_review: boolean
+  movements?: CashMovement[]
+}
+
+export interface CashRegisterState {
+  id: string
+  code: string
+  name: string
+  site: { id: string | null; name: string | null }
+  session: CashSession | null
+  suggested_opening: Record<Currency, string>
+}
+
+export interface CashPermissions {
+  operate: boolean
+  approve: boolean
+  reports: boolean
+}
+
+export interface DailyCashReport {
+  date: string
+  company: { name: string; display_name: string; tax_identification_number: string | null }
+  site: string | null
+  generated_at: string
+  generated_by: string | null
+  sessions: CashSession[]
+  totals: Record<Currency, { opening: string; in: string; out: string; expected: string; declared: string; variance: string }>
+  movements_by_kind: Array<{ kind: CashMovementKind; label: string; direction: 'in' | 'out'; currency: Currency; count: number; amount: string }>
+  other_payments: Array<{ method: string; currency: Currency; count: number; amount: string }>
+  open_sessions: number
+  pending_reviews: number
+  reprints: number
 }
