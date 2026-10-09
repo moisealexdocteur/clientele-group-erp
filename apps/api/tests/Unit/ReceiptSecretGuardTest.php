@@ -23,9 +23,15 @@ final class ReceiptSecretGuardTest extends TestCase
     public function test_a_long_secret_or_the_image_build_is_accepted(): void
     {
         ReceiptSecretGuard::check('production', str_repeat('a', 32));
-        ReceiptSecretGuard::check('production', '', 'package:discover');
+        ReceiptSecretGuard::check('production', '', 'package:discover', true);
         ReceiptSecretGuard::check('testing', '');
 
         $this->addToAssertionCount(3);
+    }
+
+    public function test_the_container_start_command_is_refused_without_a_secret(): void
+    {
+        $this->expectException(RuntimeException::class);
+        ReceiptSecretGuard::check('production', '', 'migrate', true);
     }
 }
