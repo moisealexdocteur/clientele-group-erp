@@ -82,6 +82,8 @@ export interface CompanyLegalIdentity {
   address: string | null
   phone_numbers: string | null
   rental_contract_terms?: string | null
+  /** Frais de service en vigueur, réglés dans Configuration. */
+  rental_fees?: { airport_usd: string; cleaning_usd: string }
 }
 
 export type FuelType = 'gasoline' | 'diesel'
@@ -490,6 +492,8 @@ export interface SystemCompany {
   phone_numbers?: string | null
   rental_contract_terms?: string | null
   roadside_assistance_phone?: string | null
+  rental_airport_fee_usd?: string
+  rental_cleaning_fee_usd?: string
   sites: SystemSite[]
 }
 

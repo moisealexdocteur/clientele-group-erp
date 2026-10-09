@@ -14,6 +14,12 @@ final class Company extends Model
 
     protected $keyType = 'string';
 
+    /** Valeurs de départ identiques aux valeurs par défaut de la base. */
+    protected $attributes = [
+        'rental_airport_fee_usd' => '20.00',
+        'rental_cleaning_fee_usd' => '20.00',
+    ];
+
     protected $fillable = [
         'code',
         'legal_name',
@@ -29,12 +35,16 @@ final class Company extends Model
         'phone_numbers',
         'rental_contract_terms',
         'roadside_assistance_phone',
+        'rental_airport_fee_usd',
+        'rental_cleaning_fee_usd',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'rental_airport_fee_usd' => 'decimal:2',
+            'rental_cleaning_fee_usd' => 'decimal:2',
         ];
     }
 

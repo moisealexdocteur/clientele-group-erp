@@ -6,6 +6,7 @@ use App\Http\Controllers\CarRental\Concerns\ResolvesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\CarRentalReservation;
 use App\Models\CarRentalVehicle;
+use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRentalAvailabilityService;
 use App\Support\CarRentalCustomerNotificationService;
@@ -16,6 +17,7 @@ use App\Support\CarRental\CarRentalSchedule;
 use App\Support\CarRental\CarRentalVehicleRules;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\DocumentNumberService;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -65,21 +67,23 @@ final class StoreReservation extends Controller
             'apply_airport_pickup_fee' => ['nullable', 'boolean'],
             'apply_airport_dropoff_fee' => ['nullable', 'boolean'],
             'currency' => ['required', Rule::in(['HTG', 'USD'])],
-            'daily_rate' => ['required', 'numeric', 'min:0'],
+            'daily_rate' => ['required', 'numeric', 'min:0', new DecimalAmount()],
             'kilometer_plan' => ['required', Rule::in(CarRentalReservation::KILOMETER_PLANS)],
             'included_km' => ['nullable', 'integer', 'min:0', 'required_if:kilometer_plan,limited'],
             // Le contrat papier laisse ce prix à compléter : il reste facultatif.
-            'additional_km_rate' => ['nullable', 'numeric', 'min:0'],
+            'additional_km_rate' => ['nullable', 'numeric', 'min:0', new DecimalAmount()],
         ]);
 
         $site = $this->siteAuthorizer->siteFor($company, $access, $data['site_id']);
         [$pickupAt, $dueAt] = $this->schedule->interval($company, $data['pickup_at'], $data['due_at']);
         $airportPickupFee = $this->pricing->airportServiceFee(
+            $company,
             $data['pickup_location_type'],
             (bool) ($data['apply_airport_pickup_fee'] ?? false),
             'apply_airport_pickup_fee',
         );
         $airportDropoffFee = $this->pricing->airportServiceFee(
+            $company,
             $data['dropoff_location_type'],
             (bool) ($data['apply_airport_dropoff_fee'] ?? false),
             'apply_airport_dropoff_fee',
@@ -117,12 +121,12 @@ final class StoreReservation extends Controller
                 'airport_pickup_fee_usd' => $airportPickupFee,
                 'airport_dropoff_fee_usd' => $airportDropoffFee,
                 'currency' => $data['currency'],
-                'daily_rate' => $data['daily_rate'],
+                'daily_rate' => Money::normalize((string) $data['daily_rate']),
                 'rate_overridden' => $rateOverridden,
                 'minimum_security_deposit_usd' => $vehicle->minimum_security_deposit_usd,
                 'kilometer_plan' => $data['kilometer_plan'],
                 'included_km' => $data['kilometer_plan'] === 'limited' ? $data['included_km'] : null,
-                'additional_km_rate' => $data['kilometer_plan'] === 'limited' ? ($data['additional_km_rate'] ?? null) : null,
+                'additional_km_rate' => $data['kilometer_plan'] === 'limited' ? (isset($data['additional_km_rate']) ? Money::normalize((string) $data['additional_km_rate']) : null) : null,
             ]);
         });
 

@@ -16,7 +16,7 @@ import StatusPill from '../../components/ui/StatusPill.vue'
 
 /*
  * Taux HTG/USD du groupe, réglage du socle commun dans Configuration. Le formulaire reprend le
- * dernier taux ; un taux sous la référence BRH demande une confirmation
+ * dernier taux ; un taux sous la référence saisie demande une confirmation
  * et un motif, et reste signalé dans l'historique.
  */
 const session = useSessionStore()
@@ -44,10 +44,10 @@ const belowBrh = computed(() => Boolean(form.rate && form.brh && Number(form.rat
 const missing = computed(() => {
   const items: string[] = []
   if (!(Number(form.rate) > 0)) items.push('Le taux : nombre de gourdes pour 1 USD')
-  if (form.brh && !form.brh_date) items.push('La date du taux BRH')
+  if (form.brh && !form.brh_date) items.push('La date de la référence')
   if (belowBrh.value) {
-    if (!form.confirm) items.push('La confirmation du taux sous la référence BRH')
-    if (!form.note.trim()) items.push('Le motif du taux sous la référence BRH')
+    if (!form.confirm) items.push('La confirmation du taux sous la référence saisie')
+    if (!form.note.trim()) items.push('Le motif du taux sous la référence saisie')
   }
   return items
 })
@@ -90,7 +90,7 @@ async function save(): Promise<void> {
   if (!result) return
   open.value = false
   await Promise.all([load(), session.refreshContext().catch(() => undefined)])
-  ui.toast(result.data.below_brh ? 'Taux enregistré sous la référence BRH. L’écart est signalé.' : 'Taux enregistré. Il s’applique aux prochains paiements.')
+  ui.toast(result.data.below_brh ? 'Taux enregistré sous la référence saisie. L’écart est signalé.' : 'Taux enregistré. Il s’applique aux prochains paiements.')
 }
 </script>
 
@@ -113,9 +113,9 @@ async function save(): Promise<void> {
           Depuis le {{ when(current.effective_at) }}<template v-if="current.set_by"> - saisi par {{ current.set_by }}</template>
         </p>
         <p v-if="current.brh_reference_rate" class="text-small">
-          Référence BRH<template v-if="current.brh_reference_date"> du {{ formatDate(current.brh_reference_date) }}</template> : {{ formatRate(current.brh_reference_rate) }}
+          Référence saisie<template v-if="current.brh_reference_date"> du {{ formatDate(current.brh_reference_date) }}</template> : {{ formatRate(current.brh_reference_rate) }}
         </p>
-        <p v-if="current.below_brh" class="alert alert-warning">Ce taux est inférieur à la référence BRH. Motif : {{ current.note }}</p>
+        <p v-if="current.below_brh" class="alert alert-warning">Ce taux est inférieur à la référence saisie. Motif : {{ current.note }}</p>
       </template>
       <p v-else class="alert alert-warning">
         Aucun taux n’est défini. Les paiements dans une autre devise sont refusés tant qu’il n’est pas saisi.
@@ -130,7 +130,7 @@ async function save(): Promise<void> {
             <strong>{{ formatRate(item.rate_htg_per_usd) }}</strong>
             <span class="text-secondary text-small">{{ when(item.effective_at) }}<template v-if="item.set_by"> - {{ item.set_by }}</template></span>
           </span>
-          <StatusPill v-if="item.below_brh" tone="warning" label="Sous BRH" />
+          <StatusPill v-if="item.below_brh" tone="warning" label="Sous la référence" />
         </li>
       </ul>
     </section>
@@ -142,18 +142,18 @@ async function save(): Promise<void> {
         <input v-model="form.rate" v-bind="field.attrs" class="input input-amount" type="number" inputmode="decimal" min="0.0001" step="0.0001" />
       </FormField>
       <div class="grid-2">
-        <FormField label="Référence BRH (HTG pour 1 USD)" help="Facultatif. Sert à l’alerte de taux bas." :error="saving.fieldErrors.value.brh_reference_rate" v-slot="field">
+        <FormField label="Référence saisie (HTG pour 1 USD)" help="Facultatif. Chiffre relevé et saisi à la main, par exemple le taux de référence publié par la BRH. L’application ne lit pas la BRH." :error="saving.fieldErrors.value.brh_reference_rate" v-slot="field">
           <input v-model="form.brh" v-bind="field.attrs" class="input" type="number" inputmode="decimal" min="0.0001" step="0.0001" />
         </FormField>
-        <FormField label="Date du taux BRH" :required="Boolean(form.brh)" :error="saving.fieldErrors.value.brh_reference_date" v-slot="field">
+        <FormField label="Date de la référence" :required="Boolean(form.brh)" :error="saving.fieldErrors.value.brh_reference_date" v-slot="field">
           <input v-model="form.brh_date" v-bind="field.attrs" class="input" type="date" :max="today" />
         </FormField>
       </div>
       <template v-if="belowBrh">
-        <p class="alert alert-warning">Ce taux est inférieur à la référence BRH. Il sera signalé dans l’historique et le journal.</p>
+        <p class="alert alert-warning">Ce taux est inférieur à la référence saisie. Il sera signalé dans l’historique et le journal.</p>
         <label class="check">
           <input v-model="form.confirm" type="checkbox" />
-          <span>Je confirme ce taux inférieur à la référence BRH.<span class="required" aria-hidden="true">*</span></span>
+          <span>Je confirme ce taux inférieur à la référence saisie.<span class="required" aria-hidden="true">*</span></span>
         </label>
       </template>
       <FormField label="Motif ou note" :required="belowBrh" :error="saving.fieldErrors.value.note || saving.fieldErrors.value.confirm_below_brh" v-slot="field">

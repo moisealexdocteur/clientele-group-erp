@@ -11,6 +11,7 @@ use App\Models\CarRentalVehicle;
 use App\Models\CarRentalVehicleDocument;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
+use App\Support\Money;
 use App\Support\ReceiptService;
 use Carbon\CarbonImmutable;
 
@@ -227,8 +228,8 @@ final class CarRentalPresenter
         $includeContact = $access?->allows('rental.reservations.manage') ?? false;
         $includeDocuments = $access?->allows('rental.documents.sensitive') ?? false;
 
-        $airportPickupFee = (float) $reservation->airport_pickup_fee_usd;
-        $airportDropoffFee = (float) $reservation->airport_dropoff_fee_usd;
+        $airportPickupFee = Money::toCents((string) $reservation->airport_pickup_fee_usd);
+        $airportDropoffFee = Money::toCents((string) $reservation->airport_dropoff_fee_usd);
 
         return [
             'id' => $reservation->id,
@@ -253,9 +254,9 @@ final class CarRentalPresenter
                 'type' => $reservation->dropoff_location_type,
                 'detail' => $reservation->dropoff_location_detail,
             ],
-            'airport_pickup_fee_usd' => number_format($airportPickupFee, 2, '.', ''),
-            'airport_dropoff_fee_usd' => number_format($airportDropoffFee, 2, '.', ''),
-            'airport_fees_total_usd' => number_format($airportPickupFee + $airportDropoffFee, 2, '.', ''),
+            'airport_pickup_fee_usd' => Money::fromCents($airportPickupFee),
+            'airport_dropoff_fee_usd' => Money::fromCents($airportDropoffFee),
+            'airport_fees_total_usd' => Money::fromCents($airportPickupFee + $airportDropoffFee),
             'currency' => $reservation->currency,
             'daily_rate' => $reservation->daily_rate,
             'rate_overridden' => (bool) $reservation->rate_overridden,
@@ -356,10 +357,10 @@ final class CarRentalPresenter
         $deposits = $reservation->relationLoaded('securityDeposits')
             ? $reservation->securityDeposits
             : $reservation->securityDeposits()->get();
-        $minimumDeposit = (float) ($reservation->minimum_security_deposit_usd ?? 0);
-        $heldDepositUsd = (float) $deposits
+        $minimumDeposit = Money::toCents((string) ($reservation->minimum_security_deposit_usd ?? '0'));
+        $heldDepositUsd = Money::sumCents($deposits
             ->filter(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->status === 'held' && $deposit->currency === 'USD')
-            ->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount);
+            ->map(static fn (CarRentalSecurityDeposit $deposit): string => (string) $deposit->amount));
 
         return [
             'contract_terms_configured' => filled(Company::query()->whereKey($reservation->company_id)->value('rental_contract_terms')),
@@ -368,9 +369,9 @@ final class CarRentalPresenter
             'approved_rental_payment' => $payments->contains(
                 static fn (CarRentalPayment $payment): bool => $payment->payment_kind === 'rental' && $payment->status === 'approved',
             ),
-            'minimum_security_deposit_usd' => number_format($minimumDeposit, 2, '.', ''),
-            'held_security_deposit_usd' => number_format($heldDepositUsd, 2, '.', ''),
-            'security_deposit_satisfied' => $heldDepositUsd + 0.0001 >= $minimumDeposit,
+            'minimum_security_deposit_usd' => Money::fromCents($minimumDeposit),
+            'held_security_deposit_usd' => Money::fromCents($heldDepositUsd),
+            'security_deposit_satisfied' => $heldDepositUsd >= $minimumDeposit,
         ];
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CarRental;
 use App\Http\Controllers\CarRental\Concerns\ResolvesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\CarRentalReservation;
+use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRentalAvailabilityService;
 use App\Support\CarRentalCustomerNotificationService;
@@ -13,6 +14,7 @@ use App\Support\CarRental\CarRentalPresenter;
 use App\Support\CarRental\CarRentalPricing;
 use App\Support\CarRental\CarRentalSchedule;
 use App\Support\CarRental\CarRentalVehicleRules;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -67,10 +69,10 @@ final class UpdateReservation extends Controller
             'apply_airport_pickup_fee' => ['nullable', 'boolean'],
             'apply_airport_dropoff_fee' => ['nullable', 'boolean'],
             'currency' => ['sometimes', Rule::in(['HTG', 'USD'])],
-            'daily_rate' => ['sometimes', 'numeric', 'gt:0'],
+            'daily_rate' => ['sometimes', 'numeric', 'gt:0', new DecimalAmount()],
             'kilometer_plan' => ['sometimes', Rule::in(CarRentalReservation::KILOMETER_PLANS)],
             'included_km' => ['nullable', 'integer', 'min:0'],
-            'additional_km_rate' => ['nullable', 'numeric', 'min:0'],
+            'additional_km_rate' => ['nullable', 'numeric', 'min:0', new DecimalAmount()],
             'notify_customer' => ['nullable', 'boolean'],
         ]);
         [$pickupAt, $dueAt] = $this->schedule->interval($company, $data['pickup_at'], $data['due_at']);
@@ -112,7 +114,7 @@ final class UpdateReservation extends Controller
             $currency = $data['currency'] ?? $model->currency;
             $dailyRate = array_key_exists('daily_rate', $data) ? (string) $data['daily_rate'] : (string) $model->daily_rate;
             $rateUnchanged = $currency === $model->currency
-                && (int) round((float) $dailyRate * 100) === (int) round((float) $model->daily_rate * 100);
+                && Money::toCents((string) $dailyRate) === Money::toCents((string) $model->daily_rate);
 
             if ($vehicleChanged && ! $access->allows('rental.reservations.override_rate')) {
                 $currency = 'USD';
@@ -136,7 +138,7 @@ final class UpdateReservation extends Controller
                 'pickup_at' => $pickupAt,
                 'due_at' => $dueAt,
                 'currency' => $currency,
-                'daily_rate' => $dailyRate,
+                'daily_rate' => Money::normalize($dailyRate),
                 'rate_overridden' => $rateOverridden,
                 'lock_version' => $model->lock_version + 1,
             ];
@@ -151,11 +153,13 @@ final class UpdateReservation extends Controller
                 $attributes['dropoff_location_type'] = $dropoffType;
                 $attributes['dropoff_location_detail'] = $this->pricing->locationDetail($dropoffType, $data['dropoff_location_detail'] ?? null, $site);
                 $attributes['airport_pickup_fee_usd'] = $this->pricing->airportServiceFee(
+                    $company,
                     $pickupType,
                     (bool) ($data['apply_airport_pickup_fee'] ?? false),
                     'apply_airport_pickup_fee',
                 );
                 $attributes['airport_dropoff_fee_usd'] = $this->pricing->airportServiceFee(
+                    $company,
                     $dropoffType,
                     (bool) ($data['apply_airport_dropoff_fee'] ?? false),
                     'apply_airport_dropoff_fee',
@@ -174,7 +178,7 @@ final class UpdateReservation extends Controller
 
                 $attributes['kilometer_plan'] = $data['kilometer_plan'];
                 $attributes['included_km'] = $limited ? $data['included_km'] : null;
-                $attributes['additional_km_rate'] = $limited ? ($data['additional_km_rate'] ?? null) : null;
+                $attributes['additional_km_rate'] = $limited && isset($data['additional_km_rate']) ? Money::normalize((string) $data['additional_km_rate']) : null;
                 $changes[] = 'kilometers';
             }
 

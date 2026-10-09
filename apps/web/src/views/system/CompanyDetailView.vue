@@ -7,6 +7,7 @@ import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
 import { useRequest } from '../../composables/useRequest'
 import { normalizeCode } from '../../lib/text'
+import { formatMoney } from '../../lib/money'
 import { CLIENTELE_CAR_RENTAL_FLEET_ADDRESS } from '../../data/clienteleFleetCatalog'
 import PageHeader from '../../components/ui/PageHeader.vue'
 import FormField from '../../components/ui/FormField.vue'
@@ -27,6 +28,9 @@ const legalRequest = useRequest()
 const termsRequest = useRequest()
 const termsOpen = ref(false)
 const termsDraft = ref('')
+const feesRequest = useRequest()
+const feesOpen = ref(false)
+const feesForm = reactive({ rental_airport_fee_usd: '', rental_cleaning_fee_usd: '' })
 
 const company = computed(() => system.company(props.companyId))
 const siteOpen = ref(false)
@@ -101,6 +105,35 @@ async function saveLegal(): Promise<void> {
   await system.load()
   legalOpen.value = false
   ui.toast('Identité légale enregistrée.')
+}
+
+function openFees(): void {
+  Object.assign(feesForm, {
+    rental_airport_fee_usd: company.value?.rental_airport_fee_usd ?? '20.00',
+    rental_cleaning_fee_usd: company.value?.rental_cleaning_fee_usd ?? '20.00',
+  })
+  feesRequest.reset()
+  feesOpen.value = true
+}
+
+async function saveFees(): Promise<void> {
+  const current = company.value
+  if (!current) return
+  const result = await feesRequest.run(() => updateCompany(props.companyId, {
+    legal_name: current.legal_name,
+    display_name: current.display_name,
+    legal_representative: current.legal_representative ?? null,
+    tax_identification_number: current.tax_identification_number ?? null,
+    legal_address: current.legal_address ?? null,
+    phone_numbers: current.phone_numbers ?? null,
+    rental_airport_fee_usd: String(feesForm.rental_airport_fee_usd),
+    rental_cleaning_fee_usd: String(feesForm.rental_cleaning_fee_usd),
+  }))
+  if (!result) return
+  await system.load()
+  if (session.context?.company.id === props.companyId) await session.refreshContext().catch(() => undefined)
+  feesOpen.value = false
+  ui.toast('Frais enregistrés. Ils s’appliquent aux prochaines réservations et aux prochains retours.')
 }
 
 function openTerms(): void {
@@ -216,6 +249,26 @@ async function saveRegister(): Promise<void> {
       </dl>
     </section>
 
+    <section class="panel" aria-labelledby="fees-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="fees-title" class="title-section">Frais de service Car Rental</h2>
+          <p class="text-secondary text-small">Proposés à la réservation et au retour, appliqués seulement sur décision. Une location déjà enregistrée garde ses montants.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openFees">Modifier</button>
+      </div>
+      <dl class="facts">
+        <div>
+          <dt>Prise en charge ou retour à l’aéroport</dt>
+          <dd>{{ formatMoney(company.rental_airport_fee_usd ?? '20.00', 'USD') }} par trajet</dd>
+        </div>
+        <div>
+          <dt>Nettoyage</dt>
+          <dd>{{ formatMoney(company.rental_cleaning_fee_usd ?? '20.00', 'USD') }}</dd>
+        </div>
+      </dl>
+    </section>
+
     <section class="panel" aria-labelledby="terms-title">
       <div class="panel-header">
         <div>
@@ -293,6 +346,24 @@ async function saveRegister(): Promise<void> {
       <button class="btn btn-secondary" type="button" :disabled="legalRequest.busy.value" @click="legalOpen = false">Annuler</button>
       <button class="btn btn-primary" type="submit" form="legal-form" :disabled="legalRequest.busy.value || legalMissing.length > 0 || !app.canReachServer">
         {{ legalRequest.busy.value ? 'Enregistrement' : 'Enregistrer' }}
+      </button>
+    </template>
+  </SheetDialog>
+
+  <SheetDialog :open="feesOpen" title="Frais de service Car Rental" description="Montants en USD. Saisissez 0 pour ne pas proposer un frais." :locked="feesRequest.busy.value" @close="feesOpen = false">
+    <form id="fees-form" class="form" novalidate @submit.prevent="saveFees">
+      <FormField label="Frais aéroport, par trajet (USD)" required :error="feesRequest.fieldErrors.value.rental_airport_fee_usd" v-slot="field">
+        <input v-model="feesForm.rental_airport_fee_usd" v-bind="field.attrs" class="input input-amount" type="text" inputmode="decimal" maxlength="7" required />
+      </FormField>
+      <FormField label="Frais de nettoyage (USD)" required :error="feesRequest.fieldErrors.value.rental_cleaning_fee_usd" v-slot="field">
+        <input v-model="feesForm.rental_cleaning_fee_usd" v-bind="field.attrs" class="input input-amount" type="text" inputmode="decimal" maxlength="7" required />
+      </FormField>
+      <InlineAlert :message="feesRequest.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="feesRequest.busy.value" @click="feesOpen = false">Annuler</button>
+      <button class="btn btn-primary" type="submit" form="fees-form" :disabled="feesRequest.busy.value || !app.canReachServer">
+        {{ feesRequest.busy.value ? 'Enregistrement' : 'Enregistrer' }}
       </button>
     </template>
   </SheetDialog>

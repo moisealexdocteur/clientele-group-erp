@@ -63,6 +63,11 @@ final class CompanyContextController extends Controller
                     'phone_numbers' => $company->phone_numbers,
                     'rental_contract_terms' => $company->rental_contract_terms,
                 ],
+                // Frais de service en vigueur, réglés dans Configuration.
+                'rental_fees' => [
+                    'airport_usd' => (string) $company->rental_airport_fee_usd,
+                    'cleaning_usd' => (string) $company->rental_cleaning_fee_usd,
+                ],
             ],
             // Taux HTG/USD du groupe en vigueur, affiché dans l'application.
             'exchange_rate' => $this->rates->payload($this->rates->current()),

@@ -6,9 +6,11 @@ use App\Http\Controllers\CarRental\Concerns\ResolvesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\CarRentalReservation;
 use App\Models\CarRentalSecurityDeposit;
+use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRental\CarRentalLookup;
 use App\Support\CarRental\CarRentalPresenter;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,13 +38,13 @@ final class SettleDeposit extends Controller
         $actor = $request->user();
 
         $data = $request->validate([
-            'retained_amount_usd' => ['required', 'numeric', 'min:0', 'max:999999'],
+            'retained_amount_usd' => ['required', 'numeric', 'min:0', 'max:999999', new DecimalAmount()],
             'reason' => ['nullable', 'required_unless:retained_amount_usd,0', 'string', 'max:500'],
         ], [
             'reason.required_unless' => 'Indiquez le motif de la retenue.',
         ]);
 
-        $retained = round((float) $data['retained_amount_usd'], 2);
+        $retained = Money::toCents((string) $data['retained_amount_usd']);
 
         [$model, $held, $applied] = DB::transaction(function () use ($company, $access, $reservation, $data, $actor, $retained): array {
             $model = $this->lookup->reservationFor($company, $access, $reservation, [], true);
@@ -61,7 +63,7 @@ final class SettleDeposit extends Controller
                 ->orderBy('held_at')
                 ->lockForUpdate()
                 ->get();
-            $held = round((float) $deposits->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount), 2);
+            $held = Money::sumCents($deposits->map(static fn (CarRentalSecurityDeposit $deposit): string => (string) $deposit->amount));
 
             if ($deposits->isEmpty()) {
                 throw ValidationException::withMessages([
@@ -69,9 +71,9 @@ final class SettleDeposit extends Controller
                 ]);
             }
 
-            if ($retained > $held + 0.0001) {
+            if ($retained > $held) {
                 throw ValidationException::withMessages([
-                    'retained_amount_usd' => sprintf('La retenue ne peut pas dépasser le dépôt retenu (USD %.2f).', $held),
+                    'retained_amount_usd' => sprintf('La retenue ne peut pas dépasser le dépôt retenu (USD %s).', Money::fromCents($held)),
                 ]);
             }
 
@@ -79,13 +81,13 @@ final class SettleDeposit extends Controller
             $now = now()->utc();
 
             foreach ($deposits as $deposit) {
-                $amount = (float) $deposit->amount;
-                $apply = round(min($remaining, $amount), 2);
-                $remaining = round($remaining - $apply, 2);
+                $amount = Money::toCents((string) $deposit->amount);
+                $apply = min($remaining, $amount);
+                $remaining -= $apply;
 
                 $deposit->forceFill([
-                    'status' => $apply <= 0.0 ? 'released' : ($apply + 0.0001 >= $amount ? 'forfeited' : 'partially_applied'),
-                    'applied_amount' => number_format($apply, 2, '.', ''),
+                    'status' => $apply <= 0 ? 'released' : ($apply >= $amount ? 'forfeited' : 'partially_applied'),
+                    'applied_amount' => Money::fromCents($apply),
                     'released_at' => $now,
                     'settlement_note' => $retained > 0 ? trim((string) $data['reason']) : null,
                     'settled_by' => $actor?->id,
@@ -104,9 +106,9 @@ final class SettleDeposit extends Controller
             subjectId: $model->id,
             metadata: [
                 'reservation_number' => $model->formattedNumber(),
-                'held_usd' => number_format($held, 2, '.', ''),
-                'retained_usd' => number_format($applied, 2, '.', ''),
-                'released_usd' => number_format($held - $applied, 2, '.', ''),
+                'held_usd' => Money::fromCents($held),
+                'retained_usd' => Money::fromCents($applied),
+                'released_usd' => Money::fromCents($held - $applied),
             ],
         );
 

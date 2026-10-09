@@ -24,11 +24,11 @@ final class FileVault
 
     /** @var array<string, array<int, string>> */
     private const ALLOWED_MIME_TYPES = [
-        StoredFile::PURPOSE_PAYMENT_PROOF => ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
-        StoredFile::PURPOSE_VEHICLE_PHOTO => ['image/jpeg', 'image/png', 'image/webp'],
-        StoredFile::PURPOSE_DRIVER_LICENSE_FRONT => ['image/jpeg', 'image/png', 'image/webp'],
-        StoredFile::PURPOSE_DRIVER_LICENSE_BACK => ['image/jpeg', 'image/png', 'image/webp'],
-        StoredFile::PURPOSE_INSPECTION_PHOTO => ['image/jpeg', 'image/png', 'image/webp'],
+        StoredFile::PURPOSE_PAYMENT_PROOF => ['image/jpeg', 'image/png', 'application/pdf'],
+        StoredFile::PURPOSE_VEHICLE_PHOTO => ['image/jpeg', 'image/png'],
+        StoredFile::PURPOSE_DRIVER_LICENSE_FRONT => ['image/jpeg', 'image/png'],
+        StoredFile::PURPOSE_DRIVER_LICENSE_BACK => ['image/jpeg', 'image/png'],
+        StoredFile::PURPOSE_INSPECTION_PHOTO => ['image/jpeg', 'image/png'],
         StoredFile::PURPOSE_SIGNATURE => ['image/png'],
         StoredFile::PURPOSE_RENTAL_CONTRACT => ['application/pdf'],
         StoredFile::PURPOSE_RENTAL_INVOICE => ['application/pdf'],
@@ -37,7 +37,6 @@ final class FileVault
     private const EXTENSIONS = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
-        'image/webp' => 'webp',
         'application/pdf' => 'pdf',
     ];
 
@@ -142,7 +141,6 @@ final class FileVault
             static fn (string $mime): string => match ($mime) {
                 'application/pdf' => 'PDF',
                 'image/png' => 'PNG',
-                'image/webp' => 'WebP',
                 default => 'JPEG',
             },
             $allowed,

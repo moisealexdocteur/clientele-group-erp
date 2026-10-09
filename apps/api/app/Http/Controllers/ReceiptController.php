@@ -111,7 +111,7 @@ final class ReceiptController extends Controller
 
             $expected = $this->receipts->signature($company->id, $number, (string) $payment->amount, $payment->currency);
 
-            if (! hash_equals($expected, $signature)) {
+            if ($expected === null || ! hash_equals($expected, $signature)) {
                 return $invalid;
             }
 

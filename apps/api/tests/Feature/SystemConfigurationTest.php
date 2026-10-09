@@ -379,6 +379,38 @@ final class SystemConfigurationTest extends TestCase
         self::assertContains('tax_identification_number', $event->metadata['changed']);
     }
 
+    public function test_the_owner_sets_the_rental_service_fees_in_configuration(): void
+    {
+        $owner = User::factory()->create(['is_active' => true, 'system_role' => 'owner']);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $companyId = $this->createCompany($ownerToken, 'RENT-FEES', 'Clientèle Rent a Car');
+        $identity = ['legal_name' => 'Clientèle Rent A Car', 'display_name' => 'Clientèle Rent a Car'];
+
+        $this->withToken($ownerToken)
+            ->getJson('/api/v1/system/configuration/companies')
+            ->assertOk()
+            ->assertJsonPath('data.0.rental_airport_fee_usd', '20.00')
+            ->assertJsonPath('data.0.rental_cleaning_fee_usd', '20.00');
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}", [...$identity, 'rental_airport_fee_usd' => '1e2'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('rental_airport_fee_usd');
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}", [...$identity, 'rental_airport_fee_usd' => '25', 'rental_cleaning_fee_usd' => '15.50'])
+            ->assertOk()
+            ->assertJsonPath('data.rental_airport_fee_usd', '25.00')
+            ->assertJsonPath('data.rental_cleaning_fee_usd', '15.50');
+
+        $this->withToken($ownerToken)
+            ->withHeader('X-Clientele-Company-Id', $companyId)
+            ->getJson('/api/v1/context')
+            ->assertOk()
+            ->assertJsonPath('company.legal.rental_fees.airport_usd', '25.00')
+            ->assertJsonPath('company.legal.rental_fees.cleaning_usd', '15.50');
+    }
+
     public function test_the_owner_records_the_rental_contract_terms_without_losing_them_on_identity_updates(): void
     {
         $owner = User::factory()->create(['is_active' => true, 'system_role' => 'owner']);

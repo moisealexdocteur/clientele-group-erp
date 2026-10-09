@@ -794,7 +794,7 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
           :site-id="reservation.site_id"
           label="Reçu de virement Sogebank"
           required
-          accept="image/jpeg,image/png,image/webp,application/pdf"
+          accept="image/jpeg,image/png,application/pdf"
           help="Photo nette du reçu ou fichier PDF, 10 Mo au plus."
           :error="action.fieldErrors.value.proof_file_id"
           @uploaded="(file) => (paymentForm.proof_file_id = file.id)"

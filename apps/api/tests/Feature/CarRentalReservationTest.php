@@ -244,6 +244,30 @@ final class CarRentalReservationTest extends TestCase
             ]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('apply_airport_pickup_fee');
+
+        // Le frais vient de la configuration de la société, plus d'une constante.
+        $company->forceFill(['rental_airport_fee_usd' => '25.50'])->save();
+        $other = $this->vehicle($company, $site, 'SUV-AIRPORT-2', 'suv');
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $other->id,
+                'pickup_location_type' => 'cap_haitien_airport',
+                'apply_airport_pickup_fee' => true,
+            ]))
+            ->assertCreated()
+            ->assertJsonPath('data.airport_pickup_fee_usd', '25.50')
+            ->assertJsonPath('data.airport_fees_total_usd', '25.50');
+
+        // Un montant avec exposant ou trois décimales est refusé.
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $other->id,
+                'daily_rate' => '1.3e2',
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('daily_rate');
     }
 
     public function test_a_selected_site_scope_cannot_read_or_create_outside_its_grant(): void
@@ -985,6 +1009,13 @@ final class CarRentalReservationTest extends TestCase
         $this->getJson('/api/v1/public/receipts/RENT/00000001?s=0000000000')
             ->assertOk()
             ->assertJsonPath('valid', false);
+
+        // Montant modifié après l'émission : l'ancienne signature est refusée.
+        \App\Models\CarRentalPayment::query()->whereKey($payment['id'])->update(['amount' => '131.00']);
+        $this->getJson('/api/v1/public/receipts/RENT/00000001?s=' . $query['s'])
+            ->assertOk()
+            ->assertJsonPath('valid', false);
+        \App\Models\CarRentalPayment::query()->whereKey($payment['id'])->update(['amount' => '130.00']);
 
         // Un crédit accordé n'est pas un encaissement : pas de reçu.
         $this->requestFor($token, $company)

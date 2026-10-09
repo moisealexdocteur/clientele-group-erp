@@ -4,6 +4,7 @@ namespace App\Support\CarRental;
 
 use App\Models\CarRentalVehicle;
 use App\Models\CompanyUserAccess;
+use App\Support\Money;
 use App\Support\Text;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -13,13 +14,13 @@ final class CarRentalVehicleRules
 {
     public function assertVehicleCommercialTermsConfigured(CarRentalVehicle $vehicle): void
     {
-        if ($vehicle->daily_rate_usd === null || (float) $vehicle->daily_rate_usd <= 0) {
+        if ($vehicle->daily_rate_usd === null || Money::toCents((string) $vehicle->daily_rate_usd) <= 0) {
             throw ValidationException::withMessages([
                 'vehicle_id' => 'Le tarif quotidien en USD doit être configuré pour ce véhicule avant toute réservation.',
             ]);
         }
 
-        if ($vehicle->minimum_security_deposit_usd === null || (float) $vehicle->minimum_security_deposit_usd < 0) {
+        if ($vehicle->minimum_security_deposit_usd === null || Money::toCents((string) $vehicle->minimum_security_deposit_usd) < 0) {
             throw ValidationException::withMessages([
                 'vehicle_id' => 'Le dépôt minimum en USD doit être configuré pour ce véhicule avant toute réservation.',
             ]);
@@ -65,7 +66,7 @@ final class CarRentalVehicleRules
         string $dailyRate,
     ): bool {
         $matchesVehicle = $currency === 'USD'
-            && (int) round((float) $dailyRate * 100) === (int) round((float) $vehicle->daily_rate_usd * 100);
+            && Money::toCents($dailyRate) === Money::toCents((string) $vehicle->daily_rate_usd);
 
         if ($matchesVehicle) {
             return false;
@@ -75,7 +76,7 @@ final class CarRentalVehicleRules
             throw ValidationException::withMessages([
                 'daily_rate' => sprintf(
                     'Le tarif de la fiche véhicule s’applique : USD %s par jour. Seul un administrateur peut appliquer un autre tarif.',
-                    number_format((float) $vehicle->daily_rate_usd, 2, '.', ''),
+                    Money::normalize((string) $vehicle->daily_rate_usd),
                 ),
             ]);
         }

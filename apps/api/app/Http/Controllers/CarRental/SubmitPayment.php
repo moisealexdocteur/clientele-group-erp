@@ -8,11 +8,13 @@ use App\Models\CarRentalPayment;
 use App\Models\CarRentalReservation;
 use App\Models\CashRegister;
 use App\Models\StoredFile;
+use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRental\CarRentalPresenter;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\ExchangeRateService;
 use App\Support\FileVault;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +52,7 @@ final class SubmitPayment extends Controller
             'payment_kind' => ['required', Rule::in(CarRentalPayment::KINDS)],
             'method' => ['required', Rule::in(CarRentalPayment::METHODS)],
             'currency' => ['required', Rule::in(['HTG', 'USD'])],
-            'amount' => ['required', 'numeric', 'gt:0'],
+            'amount' => ['required', 'numeric', 'gt:0', new DecimalAmount()],
             'cash_register_id' => ['nullable', 'uuid', 'required_if:method,cash'],
             'bank_name' => ['nullable', 'string', 'max:64'],
             'bank_reference' => ['nullable', 'string', 'max:128'],
@@ -94,11 +96,12 @@ final class SubmitPayment extends Controller
         $rate = $data['currency'] !== $model->currency
             ? $this->exchangeRates->requireCurrent('currency')
             : null;
+        $amount = Money::normalize((string) $data['amount']);
         $converted = $this->exchangeRates->convert(
-            (float) $data['amount'],
+            $amount,
             $data['currency'],
             $model->currency,
-            $rate === null ? 1.0 : (float) $rate->rate_htg_per_usd,
+            $rate === null ? '1' : (string) $rate->rate_htg_per_usd,
         );
 
         if ($proof !== null && $proof->site_id !== $model->site_id) {
@@ -107,7 +110,7 @@ final class SubmitPayment extends Controller
             ]);
         }
 
-        $payment = DB::transaction(function () use ($company, $model, $data, $proof, $actor, $rate, $converted): CarRentalPayment {
+        $payment = DB::transaction(function () use ($company, $model, $data, $proof, $actor, $rate, $converted, $amount): CarRentalPayment {
             $cashRegisterId = $data['method'] === 'cash' ? ($data['cash_register_id'] ?? null) : null;
 
             if ($cashRegisterId !== null) {
@@ -135,7 +138,7 @@ final class SubmitPayment extends Controller
                 'method' => $data['method'],
                 'status' => $isCredit ? 'approved' : 'submitted',
                 'currency' => $data['currency'],
-                'amount' => $data['amount'],
+                'amount' => $amount,
                 'bank_name' => $data['method'] === 'bank_transfer' ? 'Sogebank' : null,
                 'proof_file_id' => $proof?->id,
                 'proof_storage_key' => $proof?->path,
@@ -143,7 +146,7 @@ final class SubmitPayment extends Controller
                 'approved_by' => $isCredit ? $actor?->id : null,
                 'approved_at' => $isCredit ? now()->utc() : null,
                 'exchange_rate_htg_per_usd' => $rate?->rate_htg_per_usd,
-                'amount_in_reservation_currency' => number_format($converted, 2, '.', ''),
+                'amount_in_reservation_currency' => $converted,
             ]);
             $payment->setBankReference($data['method'] === 'bank_transfer' ? ($data['bank_reference'] ?? null) : null);
             $payment->save();

@@ -46,6 +46,7 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
       - name: Tester l'API
         env:
+          APP_ENV: testing
           APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
         run: |
           set -o pipefail

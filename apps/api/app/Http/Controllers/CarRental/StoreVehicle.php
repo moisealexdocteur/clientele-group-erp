@@ -5,10 +5,12 @@ namespace App\Http\Controllers\CarRental;
 use App\Http\Controllers\CarRental\Concerns\ResolvesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\CarRentalVehicle;
+use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRental\CarRentalPresenter;
 use App\Support\CarRental\CarRentalVehicleRules;
 use App\Support\CompanySiteAuthorizer;
+use App\Support\Money;
 use App\Support\Text;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -63,8 +65,8 @@ final class StoreVehicle extends Controller
                     ->where(fn ($query) => $query->where('company_id', $company->id)),
             ],
             'latest_odometer_km' => ['required', 'integer', 'min:0'],
-            'daily_rate_usd' => ['required', 'numeric', 'gt:0'],
-            'minimum_security_deposit_usd' => ['required', 'numeric', 'gte:0'],
+            'daily_rate_usd' => ['required', 'numeric', 'gt:0', new DecimalAmount()],
+            'minimum_security_deposit_usd' => ['required', 'numeric', 'gte:0', new DecimalAmount()],
             ...$this->vehicleRules->vehicleContractRules(),
         ], $this->vehicleRules->vehicleValidationMessages());
 
@@ -83,8 +85,8 @@ final class StoreVehicle extends Controller
             'reference_photo_key' => $data['reference_photo_key'] ?? null,
             'vin' => Text::nullableTrimmed($data['vin'] ?? null),
             'latest_odometer_km' => $data['latest_odometer_km'],
-            'daily_rate_usd' => $data['daily_rate_usd'],
-            'minimum_security_deposit_usd' => $data['minimum_security_deposit_usd'],
+            'daily_rate_usd' => Money::normalize((string) $data['daily_rate_usd']),
+            'minimum_security_deposit_usd' => Money::normalize((string) $data['minimum_security_deposit_usd']),
             ...$this->vehicleRules->vehicleContractAttributes($data),
             'is_active' => true,
         ]);

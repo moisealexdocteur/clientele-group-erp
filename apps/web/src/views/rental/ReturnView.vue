@@ -111,9 +111,12 @@ function removeOtherCharge(index: number): void {
   otherCharges.value = otherCharges.value.filter((_, position) => position !== index)
 }
 
+/* Frais de nettoyage réglé dans Configuration. */
+const cleaningFeeUsd = computed(() => Number(session.context?.company.legal?.rental_fees?.cleaning_usd ?? '0') || 0)
+
 const chargesTotal = computed(() => {
   let total = 0
-  if (form.apply_cleaning_fee) total += 20
+  if (form.apply_cleaning_fee) total += cleaningFeeUsd.value
   if (form.apply_extra_km && canBillExtraKm.value) total += extraKmAmount.value
   for (const charge of otherCharges.value) total += Number(charge.amount) || 0
   return Math.round(total * 100) / 100
@@ -297,9 +300,9 @@ async function submit(): Promise<void> {
     <section class="panel form">
       <h2 class="title-section">Frais supplémentaires</h2>
       <p class="text-secondary text-small">Aucun frais n’est appliqué sans case cochée.</p>
-      <label v-if="reservation.currency === 'USD'" class="check">
+      <label v-if="reservation.currency === 'USD' && cleaningFeeUsd > 0" class="check">
         <input v-model="form.apply_cleaning_fee" type="checkbox" />
-        <span>Nettoyage : le véhicule n’est pas rendu dans le même état de propreté (20,00 USD)</span>
+        <span>Nettoyage : le véhicule n’est pas rendu dans le même état de propreté ({{ formatMoney(cleaningFeeUsd, 'USD') }})</span>
       </label>
       <label v-if="canBillExtraKm" class="check">
         <input v-model="form.apply_extra_km" type="checkbox" />

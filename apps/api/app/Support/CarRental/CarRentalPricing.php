@@ -7,6 +7,7 @@ use App\Models\CarRentalSecurityDeposit;
 use App\Models\CarRentalVehicle;
 use App\Models\Company;
 use App\Models\Site;
+use App\Support\Money;
 use App\Support\ReceiptService;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
@@ -14,17 +15,13 @@ use Illuminate\Validation\ValidationException;
 /** Frais, lieux, contrat figé et facture figée. */
 final class CarRentalPricing
 {
-    public const AIRPORT_SERVICE_FEE_USD = '20.00';
-
-    /** Frais de nettoyage confirmés par la direction, appliqués seulement sur décision au retour. */
-    public const CLEANING_FEE_USD = '20.00';
-
     public function __construct(
         private readonly ReceiptService $receipts,
     ) {
     }
 
-    public function airportServiceFee(string $locationType, bool $apply, string $field): string
+    /** Frais aéroport réglé dans Configuration pour la société, en USD. */
+    public function airportServiceFee(Company $company, string $locationType, bool $apply, string $field): string
     {
         if (! $apply) {
             return '0.00';
@@ -36,29 +33,30 @@ final class CarRentalPricing
             ]);
         }
 
-        return self::AIRPORT_SERVICE_FEE_USD;
+        return Money::normalize((string) ($company->rental_airport_fee_usd ?? '0'));
     }
 
     /**
      * Frais retenus au retour, dans la devise de la réservation. Aucun frais
-     * n'est appliqué sans case cochée : nettoyage (20 USD) et kilométrage
-     * supplémentaire selon le prix au kilomètre du contrat.
+     * n'est appliqué sans case cochée : nettoyage (montant réglé dans
+     * Configuration) et kilométrage supplémentaire selon le prix au kilomètre
+     * du contrat.
      *
      * @param array<string, mixed> $data
      * @return array<int, array{code: string, label: string, amount: string}>
      */
-    public function returnCharges(CarRentalReservation $reservation, int $drivenKm, array $data): array
+    public function returnCharges(Company $company, CarRentalReservation $reservation, int $drivenKm, array $data): array
     {
         $charges = [];
 
         if (($data['apply_cleaning_fee'] ?? false) === true) {
             if ($reservation->currency !== 'USD') {
                 throw ValidationException::withMessages([
-                    'apply_cleaning_fee' => 'Les frais de nettoyage de 20 USD s’appliquent à une location en USD. Utilisez « Autres frais » pour une location en HTG.',
+                    'apply_cleaning_fee' => 'Les frais de nettoyage sont réglés en USD et s’appliquent à une location en USD. Utilisez « Autres frais » pour une location en HTG.',
                 ]);
             }
 
-            $charges[] = ['code' => 'cleaning', 'label' => 'Frais de nettoyage', 'amount' => self::CLEANING_FEE_USD];
+            $charges[] = ['code' => 'cleaning', 'label' => 'Frais de nettoyage', 'amount' => Money::normalize((string) ($company->rental_cleaning_fee_usd ?? '0'))];
         }
 
         if (($data['apply_extra_km'] ?? false) === true) {
@@ -73,7 +71,7 @@ final class CarRentalPricing
             $charges[] = [
                 'code' => 'extra_km',
                 'label' => sprintf('Kilométrage supplémentaire : %d km', $extra),
-                'amount' => number_format($extra * (float) $reservation->additional_km_rate, 2, '.', ''),
+                'amount' => Money::fromCents($extra * Money::toCents((string) $reservation->additional_km_rate)),
             ];
         }
 
@@ -81,7 +79,7 @@ final class CarRentalPricing
             $charges[] = [
                 'code' => 'other',
                 'label' => trim((string) $charge['label']),
-                'amount' => number_format((float) $charge['amount'], 2, '.', ''),
+                'amount' => Money::normalize((string) $charge['amount']),
             ];
         }
 
@@ -102,23 +100,23 @@ final class CarRentalPricing
     {
         $currency = $reservation->currency;
         $days = max(1, (int) ceil(CarbonImmutable::instance($reservation->pickup_at)->diffInMinutes(CarbonImmutable::instance($reservation->due_at)) / 1440));
-        $rate = (float) $reservation->daily_rate;
+        $rateCents = Money::toCents((string) $reservation->daily_rate);
         $lines = [[
-            'label' => sprintf('Location : %d jour%s × %s %s', $days, $days > 1 ? 's' : '', number_format($rate, 2, ',', ' '), $currency),
-            'amount' => number_format($days * $rate, 2, '.', ''),
+            'label' => sprintf('Location : %d jour%s × %s %s', $days, $days > 1 ? 's' : '', Money::formatFr((string) $reservation->daily_rate), $currency),
+            'amount' => Money::fromCents($days * $rateCents),
         ]];
 
-        $airport = (float) $reservation->airport_pickup_fee_usd + (float) $reservation->airport_dropoff_fee_usd;
+        $airport = Money::toCents((string) $reservation->airport_pickup_fee_usd) + Money::toCents((string) $reservation->airport_dropoff_fee_usd);
 
         if ($airport > 0 && $currency === 'USD') {
-            $lines[] = ['label' => 'Frais aéroport', 'amount' => number_format($airport, 2, '.', '')];
+            $lines[] = ['label' => 'Frais aéroport', 'amount' => Money::fromCents($airport)];
         }
 
         foreach ($reservation->additional_charges ?? [] as $charge) {
             $lines[] = ['label' => (string) $charge['label'], 'amount' => (string) $charge['amount']];
         }
 
-        $total = round(array_sum(array_map(static fn (array $line): float => (float) $line['amount'], $lines)), 2);
+        $total = Money::sumCents(array_column($lines, 'amount'));
 
         $payments = [];
         $otherCurrencyPayments = [];
@@ -154,21 +152,19 @@ final class CarRentalPricing
         }
 
         // Les paiements à crédit sont accordés, pas encaissés : ils restent dus.
-        $paid = round(array_sum(array_map(
-            static fn (array $payment): float => $payment['method'] === 'credit' ? 0.0 : (float) $payment['amount'],
+        $paid = Money::sumCents(array_map(
+            static fn (array $payment): string => $payment['method'] === 'credit' ? '0' : $payment['amount'],
             $payments,
-        )), 2);
-        $credit = round(array_sum(array_map(
-            static fn (array $payment): float => $payment['method'] === 'credit' ? (float) $payment['amount'] : 0.0,
+        ));
+        $credit = Money::sumCents(array_map(
+            static fn (array $payment): string => $payment['method'] === 'credit' ? $payment['amount'] : '0',
             $payments,
-        )), 2);
-        $depositApplied = round((float) $reservation->securityDeposits
-            ->filter(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->currency === 'USD')
-            ->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) ($deposit->applied_amount ?? 0)), 2);
-        $depositCounted = $currency === 'USD' ? $depositApplied : 0.0;
-        $depositReleased = round((float) $reservation->securityDeposits
-            ->filter(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->currency === 'USD')
-            ->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount - (float) ($deposit->applied_amount ?? 0)), 2);
+        ));
+        $usdDeposits = $reservation->securityDeposits
+            ->filter(static fn (CarRentalSecurityDeposit $deposit): bool => $deposit->currency === 'USD');
+        $depositApplied = Money::sumCents($usdDeposits->map(static fn (CarRentalSecurityDeposit $deposit): string => (string) ($deposit->applied_amount ?? '0')));
+        $depositCounted = $currency === 'USD' ? $depositApplied : 0;
+        $depositReleased = Money::sumCents($usdDeposits->map(static fn (CarRentalSecurityDeposit $deposit): string => (string) $deposit->amount)) - $depositApplied;
 
         $checkout = $reservation->inspections->firstWhere('stage', 'pre_rental');
         $return = $reservation->inspections->firstWhere('stage', 'post_rental');
@@ -201,16 +197,16 @@ final class CarRentalPricing
             'payments' => $payments,
             'other_currency_payments' => $otherCurrencyPayments,
             'totals' => [
-                'total' => number_format($total, 2, '.', ''),
-                'paid' => number_format($paid, 2, '.', ''),
-                'credit' => number_format($credit, 2, '.', ''),
-                'deposit_applied' => number_format($depositCounted, 2, '.', ''),
-                'balance_due' => number_format(max(0, $total - $paid - $depositCounted), 2, '.', ''),
-                'overpaid' => number_format(max(0, $paid + $depositCounted - $total), 2, '.', ''),
+                'total' => Money::fromCents($total),
+                'paid' => Money::fromCents($paid),
+                'credit' => Money::fromCents($credit),
+                'deposit_applied' => Money::fromCents($depositCounted),
+                'balance_due' => Money::fromCents(max(0, $total - $paid - $depositCounted)),
+                'overpaid' => Money::fromCents(max(0, $paid + $depositCounted - $total)),
             ],
             'deposit' => [
-                'retained_usd' => number_format($depositApplied, 2, '.', ''),
-                'released_usd' => number_format(max(0, $depositReleased), 2, '.', ''),
+                'retained_usd' => Money::fromCents($depositApplied),
+                'released_usd' => Money::fromCents(max(0, $depositReleased)),
             ],
             'timezone' => $company->timezone,
         ];

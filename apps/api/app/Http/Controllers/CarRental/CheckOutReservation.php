@@ -18,6 +18,7 @@ use App\Support\CarRental\CarRentalPresenter;
 use App\Support\CarRental\CarRentalPricing;
 use App\Support\CarRental\CarRentalVehicleRules;
 use App\Support\FileVault;
+use App\Support\Money;
 use App\Support\Text;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -179,7 +180,7 @@ final class CheckOutReservation extends Controller
                 $minimumDeposit = $vehicle->minimum_security_deposit_usd;
             }
 
-            $minimumDepositAmount = (float) $minimumDeposit;
+            $minimumDepositAmount = Money::toCents((string) $minimumDeposit);
             $heldDeposits = CarRentalSecurityDeposit::query()
                 ->where('company_id', $company->id)
                 ->where('reservation_id', $model->id)
@@ -187,14 +188,14 @@ final class CheckOutReservation extends Controller
                 ->where('currency', 'USD')
                 ->lockForUpdate()
                 ->get(['amount']);
-            $heldDepositUsd = (float) $heldDeposits->sum(static fn (CarRentalSecurityDeposit $deposit): float => (float) $deposit->amount);
+            $heldDepositUsd = Money::sumCents($heldDeposits->map(static fn (CarRentalSecurityDeposit $deposit): string => (string) $deposit->amount));
 
-            if ($heldDepositUsd + 0.0001 < $minimumDepositAmount) {
+            if ($heldDepositUsd < $minimumDepositAmount) {
                 throw ValidationException::withMessages([
                     'security_deposit' => sprintf(
-                        'Un dépôt de garantie approuvé de USD %.2f est requis avant la mise en circulation. Dépôt actuellement retenu : USD %.2f.',
-                        $minimumDepositAmount,
-                        $heldDepositUsd,
+                        'Un dépôt de garantie approuvé de USD %s est requis avant la mise en circulation. Dépôt actuellement retenu : USD %s.',
+                        Money::fromCents($minimumDepositAmount),
+                        Money::fromCents($heldDepositUsd),
                     ),
                 ]);
             }

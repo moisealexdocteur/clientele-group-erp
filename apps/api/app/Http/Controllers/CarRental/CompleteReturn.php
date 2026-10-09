@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CarRentalInspection;
 use App\Models\CarRentalReservation;
 use App\Models\StoredFile;
+use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRentalCustomerNotificationService;
 use App\Support\CarRental\CarRentalInspectionRules;
@@ -62,7 +63,7 @@ final class CompleteReturn extends Controller
             'apply_extra_km' => ['sometimes', 'boolean'],
             'other_charges' => ['nullable', 'array', 'max:5'],
             'other_charges.*.label' => ['required', 'string', 'max:80'],
-            'other_charges.*.amount' => ['required', 'numeric', 'min:0.01', 'max:99999'],
+            'other_charges.*.amount' => ['required', 'numeric', 'min:0.01', 'max:99999', new DecimalAmount()],
             'customer_signature_file_id' => ['nullable', 'uuid'],
         ], [
             'odometer_km.required' => 'Saisissez le kilométrage au retour.',
@@ -107,7 +108,7 @@ final class CompleteReturn extends Controller
                 ]);
             }
 
-            $charges = $this->pricing->returnCharges($model, $returnKm - $departureKm, $data);
+            $charges = $this->pricing->returnCharges($company, $model, $returnKm - $departureKm, $data);
             $now = now()->utc();
 
             CarRentalInspection::query()->updateOrCreate(
