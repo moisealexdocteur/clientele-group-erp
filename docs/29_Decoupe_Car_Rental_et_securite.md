@@ -5,7 +5,7 @@ Branche `fix/car-rental-decoupe`, issue d'une revue externe du dépôt. Aucune n
 ## 1. Découpe du contrôleur Car Rental
 
 - `CarRentalController` (3 193 lignes, 28 actions) est supprimé.
-- Chaque action est un contrôleur invocable dans `apps/api/app/Http/Controllers/CarRental` : le plus long fait environ 300 lignes (mise en circulation).
+- Chaque action est un contrôleur invocable dans `apps/api/app/Http/Controllers/CarRental` : le plus long est `CheckOutReservation` (306 lignes, mise en circulation). Il reste sous la limite de 500 lignes ; il est à surveiller et ne sera pas redécoupé dans cette branche.
 - Les règles partagées sont dans `apps/api/app/Support/CarRental` :
 
 | Service | Rôle |
@@ -29,7 +29,7 @@ Branche `fix/car-rental-decoupe`, issue d'une revue externe du dépôt. Aucune n
 
 ## 3. QR des reçus
 
-- Signature HMAC-SHA256 sur `société|numéro|montant décimal canonique|devise`, tronquée à 80 bits pour un QR lisible. La vérification publique reste limitée à 30 essais par minute et par adresse.
+- Signature HMAC-SHA256 complète sur `société|numéro|montant décimal canonique|devise` : 64 caractères hexadécimaux (256 bits). La signature n'est plus tronquée à 20 caractères (80 bits) ; un QR imprimé avant ce changement (préproduction seulement) n'est plus vérifiable. La vérification publique reste limitée à 30 essais par minute et par adresse.
 - `QR_SIGNING_SECRET` est obligatoire (32 caractères au moins). Hors développement et tests, l'application refuse de démarrer sans elle. Aucun repli sur `APP_KEY`.
 - Le nom de variable existant est conservé : le script de préproduction le génère déjà (96 caractères). Le renommer aurait arrêté la préproduction.
 - La page publique montre le montant, la date et la société, jamais le client : c'est un choix documenté dans `docs/26_Taux_HTG_USD_et_recus_0.7.0.md`.

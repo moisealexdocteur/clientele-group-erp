@@ -13,7 +13,9 @@ final class ReceiptSignatureTest extends TestCase
 
         $signature = $receipts->signature('company', '00000001', '10.10', 'USD');
         self::assertNotNull($signature);
-        self::assertSame(20, strlen((string) $signature));
+        // Signature complète : 64 caractères hexadécimaux, aucune troncature.
+        self::assertSame(64, strlen((string) $signature));
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', (string) $signature);
         self::assertSame($signature, $receipts->signature('company', '00000001', '10.1', 'USD'));
         self::assertNotSame($signature, $receipts->signature('company', '00000001', '10.11', 'USD'));
 

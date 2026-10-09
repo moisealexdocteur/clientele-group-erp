@@ -16,7 +16,7 @@ Détail : `docs/29_Decoupe_Car_Rental_et_securite.md`. Pas de nouvelle version a
 
 ### Sécurité
 
-- QR signé sur le montant décimal canonique ; `QR_SIGNING_SECRET` obligatoire, démarrage refusé sans clé, aucun repli sur `APP_KEY`.
+- QR signé sur le montant décimal canonique, signature HMAC complète (64 caractères, plus tronquée à 20) ; `QR_SIGNING_SECRET` obligatoire, démarrage refusé sans clé, aucun repli sur `APP_KEY`.
 
 ## 0.8.0-alpha.1 - 2026-10-14
 

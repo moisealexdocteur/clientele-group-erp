@@ -38,9 +38,9 @@ final class ReceiptService
     }
 
     /**
-     * Signature HMAC-SHA256 du reçu, tronquée à 80 bits (20 caractères
-     * hexadécimaux) pour un QR lisible ; la vérification publique est limitée
-     * à 30 essais par minute. Le montant est signé sous forme décimale
+     * Signature HMAC-SHA256 complète du reçu (256 bits, 64 caractères
+     * hexadécimaux), sans troncature ; la vérification publique est aussi
+     * limitée à 30 essais par minute. Le montant est signé sous forme décimale
      * canonique, sans flottant. Sans clé QR dédiée, aucune signature n'est
      * produite : la clé de l'application n'est jamais réutilisée.
      */
@@ -52,7 +52,7 @@ final class ReceiptService
             return null;
         }
 
-        return substr(hash_hmac('sha256', implode('|', [$companyId, $number, Money::normalize($amount), $currency]), $secret), 0, 20);
+        return hash_hmac('sha256', implode('|', [$companyId, $number, Money::normalize($amount), $currency]), $secret);
     }
 
     public function verificationUrl(Company $company, CarRentalPayment $payment): ?string

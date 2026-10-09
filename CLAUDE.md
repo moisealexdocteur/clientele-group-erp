@@ -96,7 +96,7 @@ Les tests API pertinents sont notamment dans :
 - Permissions ajoutées en 0.6.0 : `rental.deposits.settle` (régler le dépôt, autres frais, administrateur) et `rental.invoices.issue` (facture, administrateur et agent).
 - Permissions ajoutées en 0.4.0 : `rental.reservations.override_rate` (modifier le tarif de la fiche), `rental.payments.credit` (accorder un crédit), `rental.documents.sensitive` (voir permis et reçus). Elles sont accordées au rôle administrateur Car Rental, jamais à l'agent par défaut.
 - Les fichiers (photos, reçus, permis) sont privés : volume Docker `clientele-documents`, JPEG, PNG ou PDF seulement (type lu dans le contenu, SVG et HTML refusés), 10 Mo au plus, hash SHA-256, lecture selon la permission et journalisation. Un fichier d'une autre société répond 404.
-- QR des reçus : HMAC sur la chaîne décimale du montant avec `QR_SIGNING_SECRET` (32 caractères au moins). L'application refuse de démarrer sans cette clé hors développement et tests ; aucun repli sur `APP_KEY`.
+- QR des reçus : HMAC-SHA256 complet (64 caractères hexadécimaux, plus de troncature à 20 caractères) sur la chaîne décimale du montant avec `QR_SIGNING_SECRET` (32 caractères au moins). L'application refuse de démarrer sans cette clé hors développement et tests ; aucun repli sur `APP_KEY`.
 - Formats d'impression : contrat, fiche de sortie et facture Car Rental en PDF A4. Le 80 mm est réservé aux reçus d'encaissement et aux futures caisses (Market, bar, station, pièces). Une imprimante absente ne bloque jamais la recette.
 
 ## 5. Périmètre global à préserver
