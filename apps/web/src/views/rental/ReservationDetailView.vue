@@ -290,6 +290,8 @@ async function saveDeposit(): Promise<void> {
   replace(result.data)
   task.value = null
   ui.toast(Number(depositForm.retained) > 0 ? 'Dépôt réglé : la retenue est enregistrée, le reste est libéré.' : 'Dépôt libéré en totalité.')
+  // Le dépôt réglé, la facture finale est émise et envoyée au client.
+  if (canIssueInvoice.value && !result.data.invoice?.file_url) await createInvoice()
 }
 
 async function createInvoice(): Promise<void> {
@@ -346,8 +348,9 @@ async function createContract(): Promise<void> {
   if (!reservation.value) return
   issuing.value = true
   try {
-    replace(await (await import('../../components/rental/issueContract')).issueContract(reservation.value))
-    ui.toast('Contrat signé enregistré.')
+    const issued = await (await import('../../components/rental/issueContract')).issueContract(reservation.value)
+    replace(issued.reservation)
+    ui.toast(issued.sent ? 'Contrat signé enregistré et envoyé au client.' : 'Contrat signé enregistré.')
   } catch (error) {
     ui.toast(error instanceof Error ? error.message : 'Le contrat n’a pas pu être créé.', 'danger')
   } finally {

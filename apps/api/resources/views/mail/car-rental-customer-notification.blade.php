@@ -56,6 +56,14 @@
                     </tr>
                     <tr>
                         <td style="padding:18px 28px;background:#f8f8fa;color:#6b6d78;font-size:12px;line-height:1.5;">
+                            @if (! empty($contact['roadside']) || ! empty($contact['phones']))
+                                <strong style="display:block;margin:0 0 4px;color:#0e0e10;font-size:13px;">Assistance routière : {{ $contact['roadside'] ?? $contact['phones'] }}</strong>
+                            @endif
+                            @if (! empty($contact['name']))
+                                <span style="display:block;margin:0 0 10px;color:#24252d;">
+                                    {{ $contact['name'] }}@if (! empty($contact['address'])) - {{ $contact['address'] }}@endif @if (! empty($contact['phones']))<br>Tél. {{ $contact['phones'] }}@endif
+                                </span>
+                            @endif
                             Pour toute question, contactez Clientèle Car Rental. Ne transmettez jamais vos informations personnelles par réponse à ce courriel.
                         </td>
                     </tr>

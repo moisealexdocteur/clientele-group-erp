@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchReservation, returnReservation, uploadFile, type UploadedFileRef } from '../../api/carRental'
+import { fetchReservation, issueInvoice, returnReservation, settleDeposit, uploadFile, type UploadedFileRef } from '../../api/carRental'
 import { errorMessage, fieldErrors } from '../../api/client'
 import type { CarRentalReservation, FuelLevel, RentalAccessory } from '../../api/types'
 import { useSessionStore } from '../../stores/session'
@@ -38,6 +38,9 @@ const reservation = ref<CarRentalReservation | null>(null)
 const fuelLevels = Object.keys(fuelLevelLabels).map(Number) as FuelLevel[]
 const accessoryKeys = Object.keys(accessoryLabels) as RentalAccessory[]
 const canAddOtherCharges = computed(() => session.can('rental.deposits.settle'))
+const canSettle = computed(() => session.can('rental.deposits.settle'))
+const canInvoice = computed(() => session.can('rental.invoices.issue'))
+const deposit = reactive({ retained: '0', reason: '', touched: false })
 
 const form = reactive({
   odometer_km: '',
@@ -116,6 +119,24 @@ const chargesTotal = computed(() => {
   return Math.round(total * 100) / 100
 })
 
+const heldDeposit = computed(() =>
+  Math.round((reservation.value?.security_deposits ?? [])
+    .filter((item) => item.status === 'held' && item.currency === 'USD')
+    .reduce((sum, item) => sum + Number(item.amount ?? 0), 0) * 100) / 100,
+)
+
+/* Retenue proposée : frais du retour dans la limite du dépôt, modifiable. */
+const proposedRetention = computed(() =>
+  reservation.value?.currency === 'USD' ? Math.min(chargesTotal.value, heldDeposit.value) : 0,
+)
+const retained = computed(() => (deposit.touched ? Number(deposit.retained) || 0 : proposedRetention.value))
+const settlesHere = computed(() => canSettle.value && heldDeposit.value > 0)
+
+function onRetainedInput(event: Event): void {
+  deposit.touched = true
+  deposit.retained = (event.target as HTMLInputElement).value
+}
+
 const missing = computed(() => {
   const items: string[] = []
   if (form.odometer_km === '') items.push('Le kilométrage au retour')
@@ -125,8 +146,39 @@ const missing = computed(() => {
     if (!charge.label.trim() || !(Number(charge.amount) > 0)) items.push(`Le motif et le montant du frais ${index + 1}`)
   })
   if (form.customer_present && !customerSigned.value) items.push('La signature du client, ou décochez « Client présent »')
+  if (settlesHere.value) {
+    if (retained.value < 0 || retained.value > heldDeposit.value) items.push(`Une retenue sur dépôt entre 0 et ${formatMoney(heldDeposit.value, 'USD')}`)
+    if (retained.value > 0 && !deposit.reason.trim() && !chargesTotal.value) items.push('Le motif de la retenue sur dépôt')
+  }
   return items
 })
+
+/**
+ * Après le retour : règlement du dépôt et facture finale envoyée au client
+ * lorsque le rôle le permet. Une étape qui échoue reste disponible dans le
+ * détail de la réservation ; le retour lui-même est déjà enregistré.
+ */
+async function settleAndInvoice(returned: CarRentalReservation): Promise<string> {
+  let current = returned
+  try {
+    if (settlesHere.value) {
+      const reason = deposit.reason.trim() || current.additional_charges?.map((charge) => charge.label).join(', ') || ''
+      current = (await settleDeposit(current.id, retained.value.toFixed(2), retained.value > 0 ? reason : '')).data
+    }
+    const stillHeld = (current.security_deposits ?? []).some((item) => item.status === 'held')
+    if (!canInvoice.value || stillHeld) {
+      return 'Retour enregistré. La facture sera envoyée après le règlement du dépôt par un administrateur.'
+    }
+    current = (await issueInvoice(current.id)).data
+    const { issueInvoicePdf } = await import('../../components/rental/issueInvoice')
+    const sent = await issueInvoicePdf(current)
+    return sent.customer_notification_sent
+      ? 'Retour enregistré. La facture finale a été envoyée au client.'
+      : 'Retour enregistré. La facture finale est disponible dans la réservation.'
+  } catch {
+    return 'Retour enregistré. Terminez le dépôt ou la facture depuis la réservation.'
+  }
+}
 
 async function submit(): Promise<void> {
   const current = reservation.value
@@ -153,8 +205,9 @@ async function submit(): Promise<void> {
       other_charges: otherCharges.value.length ? otherCharges.value.map((charge) => ({ label: charge.label.trim(), amount: charge.amount })) : undefined,
       customer_signature_file_id: signatureId,
     })
-    ui.toast(result.customer_notification_sent ? 'Retour enregistré. Le courriel client a été envoyé.' : 'Retour enregistré.')
-    await router.replace({ name: 'rental.reservation', params: { reservationId: props.reservationId } })
+    ui.toast(await settleAndInvoice(result.data))
+    // Le retour terminé, l'agent revient à l'accueil.
+    await router.replace({ name: 'rental.today' })
   } catch (caught) {
     error.value = caught instanceof Error && !('status' in caught) ? caught.message : errorMessage(caught)
     errors.value = fieldErrors(caught)
@@ -271,6 +324,20 @@ async function submit(): Promise<void> {
       <p v-if="chargesTotal > 0" class="charges-total">Total des frais : <strong>{{ formatMoney(chargesTotal, reservation.currency) }}</strong></p>
     </section>
 
+    <section v-if="settlesHere" class="panel form">
+      <h2 class="title-section">Dépôt de garantie</h2>
+      <p class="text-secondary text-small">Dépôt retenu : {{ formatMoney(heldDeposit, 'USD') }}. La retenue proposée reprend les frais du retour.</p>
+      <div class="grid-2">
+        <FormField label="Montant retenu (USD)" required v-slot="field">
+          <input v-bind="field.attrs" :value="deposit.touched ? deposit.retained : proposedRetention.toFixed(2)" class="input" type="number" inputmode="decimal" min="0" :max="heldDeposit" step="0.01" @input="onRetainedInput" />
+        </FormField>
+        <FormField label="Motif de la retenue" :required="retained > 0 && !chargesTotal" help="Par défaut : les frais du retour." v-slot="field">
+          <input v-model="deposit.reason" v-bind="field.attrs" class="input" maxlength="500" />
+        </FormField>
+      </div>
+      <p class="text-small">Libéré au client : <strong>{{ formatMoney(Math.max(0, heldDeposit - retained), 'USD') }}</strong></p>
+    </section>
+
     <section class="panel form">
       <h2 class="title-section">Signature du client</h2>
       <label class="check">
@@ -299,7 +366,7 @@ async function submit(): Promise<void> {
         {{ missing.length ? (missing.length > 1 ? `${missing.length} éléments manquants` : '1 élément manquant') : 'Prêt pour le retour' }}
       </span>
       <button class="btn btn-primary" type="submit" :disabled="busy || missing.length > 0 || !app.canReachServer">
-        {{ busy ? 'Enregistrement' : 'Enregistrer le retour' }}
+        {{ busy ? 'Enregistrement' : settlesHere ? 'Enregistrer le retour et facturer' : 'Enregistrer le retour' }}
       </button>
     </div>
   </form>

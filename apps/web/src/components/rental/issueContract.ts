@@ -15,7 +15,7 @@ async function bytes(path: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer())
 }
 
-export async function issueContract(reservation: CarRentalReservation): Promise<CarRentalReservation> {
+export async function issueContract(reservation: CarRentalReservation): Promise<{ reservation: CarRentalReservation; sent: boolean }> {
   const inspection = reservation.checkout_inspection
   if (!reservation.contract?.snapshot || !inspection?.customer_signature_url || !inspection.company_signature_url) {
     throw new Error('Les signatures ou les données du contrat ne sont pas accessibles avec vos droits.')
@@ -29,5 +29,5 @@ export async function issueContract(reservation: CarRentalReservation): Promise<
   const blob = new Blob([pdf as BlobPart], { type: 'application/pdf' })
   const uploaded = await uploadFile('rental_contract', reservation.site_id, blob, `contrat-${reservation.number.replace(/\s/g, '')}.pdf`)
   const result = await attachContract(reservation.id, uploaded.data.id)
-  return result.data
+  return { reservation: result.data, sent: Boolean(result.customer_notification_sent) }
 }

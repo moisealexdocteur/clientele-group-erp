@@ -250,6 +250,7 @@ async function submit(): Promise<void> {
       customer_signature_file_id: customerSignatureId,
       company_signature_file_id: companySignatureId,
       company_signer_name: form.company_signer_name.trim(),
+      defer_customer_notification: true,
     })
     checkedOut = result.data
   } catch (caught) {
@@ -266,8 +267,10 @@ async function submit(): Promise<void> {
   // depuis le détail si sa création échoue ici.
   progress.value = 'Création du contrat PDF'
   try {
-    await (await import('../../components/rental/issueContract')).issueContract(checkedOut)
-    ui.toast('Location mise en circulation. Le contrat signé est enregistré.')
+    const issued = await (await import('../../components/rental/issueContract')).issueContract(checkedOut)
+    ui.toast(issued.sent
+      ? 'Location mise en circulation. Le contrat signé a été envoyé au client.'
+      : 'Location mise en circulation. Le contrat signé est enregistré.')
   } catch {
     ui.toast('Location mise en circulation. Le contrat n’a pas pu être créé : utilisez « Créer le contrat PDF » dans la réservation.', 'danger')
   }

@@ -9,7 +9,7 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `15d247765220cc7e768befc93a05cfff7c606d94` (0.6.0-alpha.1, cycle Car Rental validé en recette le 8 octobre 2026) |
-| Version du dépôt | `0.7.0-alpha.1` (taux HTG/USD, reçus 8 chiffres avec QR, impression 80 mm, à déployer) |
+| Version du dépôt | `0.7.1-alpha.1` (contrat et facture par courriel, assistance routière, clients connus, à déployer) |
 | Dernière version déployée | `0.6.0-alpha.1` (validée) |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
 | Image API et web déployée | `sha-15d2477` |
@@ -89,6 +89,7 @@ Les tests API pertinents sont notamment dans :
 
 - Connexion par courriel et mot de passe, code de sécurité par courriel, réinitialisation personnelle du mot de passe, sessions révocables et journalisation existent déjà.
 - Le mot de passe initial doit être expliqué avant saisie : au moins 12 caractères, majuscule, minuscule, chiffre et symbole.
+- Principe figé : tous les réglages et configurations se trouvent dans le menu Configuration. Les écrans métier affichent seulement les valeurs en vigueur.
 - La gestion d'utilisateur doit permettre création, consultation, modification, désactivation, réactivation, réinitialisation et suppression définitive selon les droits.
 - La création d'un compte envoie un courriel au format visuel validé.
 - Permissions ajoutées en 0.6.0 : `rental.deposits.settle` (régler le dépôt, autres frais, administrateur) et `rental.invoices.issue` (facture, administrateur et agent).
@@ -155,7 +156,9 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 - Ne jamais envoyer la plaque d'immatriculation au client.
 - Le courriel doit utiliser la photo réellement choisie dans la fiche véhicule si elle peut être envoyée sans afficher la plaque. Sinon, supprimer l'image ou utiliser une illustration décrite exactement comme une illustration. Ne jamais présenter une illustration générique comme la photo du véhicule.
 - Lorsqu'ils seront générés et validés, joindre la facture PDF et le contrat signé PDF. Ne jamais annoncer ou joindre un PDF fictif.
-- Le contrat signé contient la plaque et le numéro de permis : il n'est pas envoyé automatiquement par courriel (envoi seulement sur demande explicite, `send_to_customer`).
+- Décision du propriétaire (8 octobre 2026) : le contrat signé est joint au courriel de remise, bien qu'il contienne la plaque et le numéro de permis, car c'est le contrat du client. Le corps des courriels ne montre jamais ni plaque ni permis.
+- Le pied de page des courriels client affiche l'assistance routière et les coordonnées de la société (Configuration, identité légale). Le design et les textes approuvés ne changent pas.
+- La facture finale est envoyée au client après le retour et le règlement du dépôt.
 - Le texte des articles du contrat appartient au propriétaire et se saisit dans la configuration de la société. Ne jamais l'inventer ni le versionner.
 
 ## 7. Correctifs prioritaires non terminés

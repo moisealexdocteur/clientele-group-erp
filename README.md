@@ -55,7 +55,7 @@ Les versions exactes des dépendances sont gelées au démarrage de l'implément
 
 ## État du projet
 
-Version : 0.7.0-alpha.1
+Version : 0.7.1-alpha.1
 
 Cette préversion contient le routage HTTPS, l'authentification à double étape par courriel, la réinitialisation de mot de passe, les rôles locaux, le choix obligatoire de société/site et l'audit sécurisé. Le pilote Car Rental couvre les véhicules, le planning, les réservations, les notifications client, les papiers de flotte et les références publiques contrôlées. Aucun module n'est prêt pour la production sans recette métier, imprimante réelle et données validées.
 

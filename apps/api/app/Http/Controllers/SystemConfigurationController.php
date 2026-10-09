@@ -188,6 +188,7 @@ final class SystemConfigurationController extends Controller
             'tax_identification_number' => ['nullable', 'string', 'max:64'],
             'legal_address' => ['nullable', 'string', 'max:1000'],
             'phone_numbers' => ['nullable', 'string', 'max:160'],
+            'roadside_assistance_phone' => ['sometimes', 'nullable', 'string', 'max:64'],
             'rental_contract_terms' => ['sometimes', 'nullable', 'string', 'max:40000'],
         ], $this->companyValidationMessages());
 
@@ -196,6 +197,12 @@ final class SystemConfigurationController extends Controller
         $termsProvided = array_key_exists('rental_contract_terms', $data);
 
         return $this->companyContext->within($company->id, function () use ($company, $data, $owner, $termsProvided): JsonResponse {
+            if (array_key_exists('roadside_assistance_phone', $data)) {
+                $company->forceFill([
+                    'roadside_assistance_phone' => $this->trimmedOrNull($data['roadside_assistance_phone'] ?? null),
+                ]);
+            }
+
             if ($termsProvided) {
                 $company->forceFill([
                     'rental_contract_terms' => $this->trimmedOrNull($data['rental_contract_terms'] ?? null),
@@ -1033,6 +1040,7 @@ final class SystemConfigurationController extends Controller
             'legal_address' => $company->legal_address,
             'phone_numbers' => $company->phone_numbers,
             'rental_contract_terms' => $company->rental_contract_terms,
+            'roadside_assistance_phone' => $company->roadside_assistance_phone,
             'sites' => $company->relationLoaded('sites')
                 ? $company->sites->map(fn (Site $site): array => $this->sitePayload($site))->values()
                 : [],

@@ -84,7 +84,7 @@ final class CustomerProfile extends Model
         return preg_replace('/[^0-9+]/', '', trim($phone));
     }
 
-    private static function searchHash(?string $value): ?string
+    public static function searchHash(?string $value): ?string
     {
         if ($value === null) {
             return null;

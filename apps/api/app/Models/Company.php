@@ -28,6 +28,7 @@ final class Company extends Model
         'legal_address',
         'phone_numbers',
         'rental_contract_terms',
+        'roadside_assistance_phone',
     ];
 
     protected function casts(): array
