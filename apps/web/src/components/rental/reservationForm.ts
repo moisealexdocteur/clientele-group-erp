@@ -7,6 +7,10 @@ export interface ReservationFormValues {
   site_id: string
   vehicle_id: string
   customer_type: 'individual' | 'institution'
+  /** Fiche d'un client connu choisie à la création. */
+  customer_profile_id: string
+  /** Coordonnées masquées du client connu, pour affichage seulement. */
+  customer_hint: string
   customer_name: string
   customer_email: string
   customer_phone: string
@@ -33,6 +37,8 @@ export function newReservationValues(siteId: string): ReservationFormValues {
     site_id: siteId,
     vehicle_id: '',
     customer_type: 'individual',
+    customer_profile_id: '',
+    customer_hint: '',
     customer_name: '',
     customer_email: '',
     customer_phone: '',
@@ -61,6 +67,8 @@ export function reservationValues(reservation: CarRentalReservation): Reservatio
     site_id: reservation.site_id,
     vehicle_id: reservation.vehicle?.id ?? '',
     customer_type: reservation.customer?.customer_type ?? 'individual',
+    customer_profile_id: '',
+    customer_hint: '',
     customer_name: reservation.customer?.display_name ?? '',
     customer_email: reservation.customer?.email ?? '',
     customer_phone: reservation.customer?.phone ?? '',
@@ -112,7 +120,9 @@ export function toCreatePayload(values: ReservationFormValues, category: NewRese
     site_id: values.site_id,
     vehicle_id: values.vehicle_id || undefined,
     category,
-    customer: { ...customerOf(values), group_contact_sharing_consent: false },
+    ...(values.customer_profile_id
+      ? { customer_profile_id: values.customer_profile_id }
+      : { customer: { ...customerOf(values), group_contact_sharing_consent: false } }),
     pickup_at: values.pickup_at,
     due_at: values.due_at,
     ...conditionsOf(values),

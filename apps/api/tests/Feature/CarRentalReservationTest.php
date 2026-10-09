@@ -996,8 +996,109 @@ final class CarRentalReservationTest extends TestCase
             ->assertJsonPath('data.receipt_number', null);
     }
 
+    public function test_known_customers_are_found_by_name_email_or_phone_with_masked_contacts(): void
+    {
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+            'rental.reservations.read',
+        ]);
+        $vehicle = $this->vehicle($company, $site, 'SUV-CLIENT', 'suv');
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
+                'site_id' => $site->id,
+                'vehicle_id' => $vehicle->id,
+            ]))
+            ->assertCreated();
+
+        $this->requestFor($token, $company)
+            ->getJson('/api/v1/car-rental/customers?q=' . urlencode('jean pi'))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.display_name', 'Jean Pierre')
+            ->assertJsonPath('data.0.email_hint', 'je***@example.test')
+            ->assertJsonPath('data.0.phone_hint', '••• 0000')
+            ->assertJsonPath('data.0.reservation_count', 1)
+            ->assertJsonMissingPath('data.0.email');
+
+        $this->requestFor($token, $company)
+            ->getJson('/api/v1/car-rental/customers?q=' . urlencode('JEAN.PIERRE@example.test'))
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->requestFor($token, $company)
+            ->getJson('/api/v1/car-rental/customers?q=' . urlencode('+509 3700 0000'))
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $profileId = $this->requestFor($token, $company)
+            ->getJson('/api/v1/car-rental/customers?q=jean')
+            ->json('data.0.id');
+
+        // La réservation réutilise la fiche du client connu.
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/reservations', [
+                ...array_diff_key($this->reservationPayload([
+                    'site_id' => $site->id,
+                    'vehicle_id' => $vehicle->id,
+                    'pickup_at' => '2026-11-10T10:00:00-04:00',
+                    'due_at' => '2026-11-12T10:00:00-04:00',
+                ]), ['customer' => true]),
+                'customer_profile_id' => $profileId,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.customer.id', $profileId);
+    }
+
+    public function test_the_hand_over_email_waits_for_the_signed_contract_and_shows_roadside_assistance(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        [, $company, $site, $token] = $this->context([
+            'rental.reservations.create',
+            'rental.reservations.read',
+            'rental.reservations.manage',
+            'rental.payments.submit',
+            'rental.payments.approve',
+        ]);
+        $company->forceFill([
+            'rental_contract_terms' => 'Article 1 - Objet',
+            'roadside_assistance_phone' => '+509 0000-0001',
+        ])->save();
+        $vehicle = $this->vehicle($company, $site, 'SUV-MAIL', 'suv');
+        $reservation = $this->checkedOutReservation($token, $company, $site, $vehicle, deferNotification: true);
+
+        Mail::assertNotSent(
+            CarRentalCustomerNotificationMail::class,
+            static fn (CarRentalCustomerNotificationMail $mail): bool => str_contains($mail->subjectLine, 'en circulation'),
+        );
+
+        $file = $this->requestFor($token, $company)
+            ->postJson('/api/v1/car-rental/files', [
+                'purpose' => 'rental_contract',
+                'site_id' => $site->id,
+                'file' => UploadedFile::fake()->createWithContent('contrat.pdf', "%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n"),
+            ])
+            ->json('data.id');
+
+        $this->requestFor($token, $company)
+            ->postJson("/api/v1/car-rental/reservations/{$reservation['id']}/contract", ['file_id' => $file, 'send_to_customer' => true])
+            ->assertOk()
+            ->assertJsonPath('customer_notification_sent', true);
+
+        Mail::assertSent(CarRentalCustomerNotificationMail::class, static function (CarRentalCustomerNotificationMail $mail): bool {
+            $html = $mail->render();
+
+            return str_contains($mail->subjectLine, 'en circulation')
+                && count($mail->pdfAttachments) === 1
+                && str_contains($mail->intro, 'contrat de location signé est joint')
+                && str_contains($html, 'Assistance routière : +509 0000-0001')
+                && ! str_contains($html, 'SUV-MAIL');
+        });
+    }
+
     /** @return array<string, mixed> */
-    private function checkedOutReservation(string $token, Company $company, Site $site, CarRentalVehicle $vehicle): array
+    private function checkedOutReservation(string $token, Company $company, Site $site, CarRentalVehicle $vehicle, bool $deferNotification = false): array
     {
         $reservation = $this->requestFor($token, $company)
             ->postJson('/api/v1/car-rental/reservations', $this->reservationPayload([
@@ -1037,6 +1138,7 @@ final class CarRentalReservationTest extends TestCase
                 'customer_signature_file_id' => $this->upload($token, $company, $site, 'signature'),
                 'company_signature_file_id' => $this->upload($token, $company, $site, 'signature'),
                 'company_signer_name' => 'Agent Comptoir',
+                'defer_customer_notification' => $deferNotification,
             ])
             ->assertOk()
             ->assertJsonPath('data.checkout_inspection.damage_marks.0.kind', 'dent')

@@ -40,6 +40,7 @@ const legalForm = reactive({
   tax_identification_number: '',
   legal_address: '',
   phone_numbers: '',
+  roadside_assistance_phone: '',
 })
 
 const legalMissing = computed(() => {
@@ -79,6 +80,7 @@ function openLegal(): void {
     tax_identification_number: current.tax_identification_number ?? '',
     legal_address: current.legal_address ?? '',
     phone_numbers: current.phone_numbers ?? '',
+    roadside_assistance_phone: current.roadside_assistance_phone ?? '',
   })
   legalRequest.reset()
   legalOpen.value = true
@@ -93,6 +95,7 @@ async function saveLegal(): Promise<void> {
     tax_identification_number: legalForm.tax_identification_number.trim() || null,
     legal_address: legalForm.legal_address.trim() || null,
     phone_numbers: legalForm.phone_numbers.trim() || null,
+    roadside_assistance_phone: legalForm.roadside_assistance_phone.trim() || null,
   }))
   if (!result) return
   await system.load()
@@ -206,6 +209,10 @@ async function saveRegister(): Promise<void> {
           <dt>Téléphones</dt>
           <dd>{{ company.phone_numbers || 'Non renseignés' }}</dd>
         </div>
+        <div>
+          <dt>Assistance routière</dt>
+          <dd>{{ company.roadside_assistance_phone || 'Non renseignée' }}</dd>
+        </div>
       </dl>
     </section>
 
@@ -270,6 +277,9 @@ async function saveRegister(): Promise<void> {
       </FormField>
       <FormField label="Téléphones" help="Séparez plusieurs numéros par une barre oblique." :error="legalRequest.fieldErrors.value.phone_numbers" v-slot="field">
         <input v-model="legalForm.phone_numbers" v-bind="field.attrs" class="input" type="tel" maxlength="160" autocomplete="off" />
+      </FormField>
+      <FormField label="Assistance routière" help="Numéro affiché dans le pied de page des courriels client. À défaut, les téléphones ci-dessus." :error="legalRequest.fieldErrors.value.roadside_assistance_phone" v-slot="field">
+        <input v-model="legalForm.roadside_assistance_phone" v-bind="field.attrs" class="input" type="tel" maxlength="64" autocomplete="off" />
       </FormField>
       <div v-if="legalMissing.length" class="missing" role="status">
         <strong>À compléter</strong>

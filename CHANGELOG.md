@@ -2,6 +2,21 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## 0.7.1-alpha.1 - 2026-10-13
+
+Détail : `docs/27_Courriels_facture_au_retour_et_clients_connus_0.7.1.md`.
+
+### Ajouté
+
+- Contrat signé joint au courriel de remise, envoyé une seule fois après la création du PDF.
+- Assistance routière et coordonnées de la société dans le pied de page des courriels client ; champ dans Configuration.
+- Facture finale envoyée au client au retour (règlement du dépôt sur l'écran de retour pour l'administration, sinon dès le règlement).
+- Recherche des clients connus à la réservation, coordonnées masquées, réutilisation de la fiche.
+
+### Modifié
+
+- Après l'enregistrement d'un retour, retour à l'écran d'accueil.
+
 ## 0.7.0-alpha.1 - 2026-10-12
 
 Socle commun, premier volet. Détail : `docs/26_Taux_HTG_USD_et_recus_0.7.0.md`.

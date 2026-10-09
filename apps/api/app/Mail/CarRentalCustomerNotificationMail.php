@@ -20,7 +20,10 @@ final class CarRentalCustomerNotificationMail extends Mailable
     /** @var array<int, array{name: string, content: string, mime: string}> */
     public readonly array $pdfAttachments;
 
-    /** @param array<int, array{name: string, content: string, mime: string}> $pdfAttachments */
+    /**
+     * @param array<int, array{name: string, content: string, mime: string}> $pdfAttachments
+     * @param array{name?: string|null, address?: string|null, phones?: string|null, roadside?: string|null} $contact
+     */
     public function __construct(
         public readonly string $recipientName,
         public readonly string $subjectLine,
@@ -31,6 +34,8 @@ final class CarRentalCustomerNotificationMail extends Mailable
         public readonly ?string $vehicleImageUrl = null,
         public readonly ?string $vehicleImageAlt = null,
         array $pdfAttachments = [],
+        /** Coordonnées de la société et assistance routière, en pied de page. */
+        public readonly array $contact = [],
     ) {
         $this->pdfAttachments = $pdfAttachments;
     }

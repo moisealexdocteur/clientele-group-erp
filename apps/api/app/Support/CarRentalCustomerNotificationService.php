@@ -68,6 +68,11 @@ final class CarRentalCustomerNotificationService
 
         $content = $this->contentFor($company, $reservation, $event);
 
+        // Mise en circulation avec contrat signé : le même courriel annonce la remise et joint le contrat.
+        if ($event === self::CHECKED_OUT && $pdfAttachments !== []) {
+            $content['intro'] = 'Le véhicule a été remis. Votre contrat de location signé est joint à ce courriel.';
+        }
+
         try {
             Mail::to($profile->email, $profile->display_name)->send(new CarRentalCustomerNotificationMail(
                 $profile->display_name,
@@ -79,6 +84,12 @@ final class CarRentalCustomerNotificationService
                 $content['vehicle_image_url'],
                 $content['vehicle_image_alt'],
                 $pdfAttachments,
+                [
+                    'name' => $company->display_name ?: $company->legal_name,
+                    'address' => $company->legal_address,
+                    'phones' => $company->phone_numbers,
+                    'roadside' => $company->roadside_assistance_phone,
+                ],
             ));
         } catch (Throwable) {
             $this->record($company, $reservation, $event, 'failed');

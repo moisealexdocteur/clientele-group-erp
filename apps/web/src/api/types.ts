@@ -487,6 +487,7 @@ export interface SystemCompany {
   legal_address?: string | null
   phone_numbers?: string | null
   rental_contract_terms?: string | null
+  roadside_assistance_phone?: string | null
   sites: SystemSite[]
 }
 

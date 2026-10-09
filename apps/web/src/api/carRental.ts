@@ -174,11 +174,28 @@ export function fetchReservation(reservationId: string) {
   return api<{ data: CarRentalReservation }>(`${base}/reservations/${reservationId}`)
 }
 
+export interface KnownCustomer {
+  id: string
+  display_name: string
+  customer_type: 'individual' | 'institution'
+  email_hint: string | null
+  phone_hint: string | null
+  reservation_count: number
+  last_pickup_at: string | null
+}
+
+/** Clients connus de la société active, coordonnées masquées. */
+export function searchCustomers(query: string) {
+  return api<{ data: KnownCustomer[] }>(`${base}/customers?q=${encodeURIComponent(query)}`)
+}
+
 export interface NewReservationPayload {
   site_id: string
   vehicle_id?: string
   category: RentalCategory
-  customer: {
+  /** Fiche d'un client connu ; remplace les champs client. */
+  customer_profile_id?: string
+  customer?: {
     customer_type: 'individual' | 'institution'
     display_name: string
     email?: string
@@ -265,6 +282,8 @@ export interface CheckOutPayload {
   customer_signature_file_id: string
   company_signature_file_id: string
   company_signer_name: string
+  /** Le courriel de remise part avec le contrat signé, une fois le PDF créé. */
+  defer_customer_notification?: boolean
 }
 
 export function checkOutReservation(reservation: CarRentalReservation, payload: CheckOutPayload) {
@@ -275,13 +294,13 @@ export function checkOutReservation(reservation: CarRentalReservation, payload: 
 }
 
 /**
- * Rattache le contrat PDF signé. Le contrat est définitif. Il n'est pas
- * envoyé par courriel : il contient la plaque et le numéro de permis.
+ * Rattache le contrat PDF signé. Le contrat est définitif. À la mise en
+ * circulation, il est joint au courriel de remise envoyé au client.
  */
-export function attachContract(reservationId: string, fileId: string) {
+export function attachContract(reservationId: string, fileId: string, sendToCustomer = true) {
   return api<{ data: CarRentalReservation; customer_notification_sent?: boolean }>(
     `${base}/reservations/${reservationId}/contract`,
-    { method: 'POST', body: { file_id: fileId } },
+    { method: 'POST', body: { file_id: fileId, send_to_customer: sendToCustomer } },
   )
 }
 

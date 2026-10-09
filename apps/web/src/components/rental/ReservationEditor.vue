@@ -10,6 +10,8 @@ import { vehicleName, vehiclePlate } from '../../lib/text'
 import FormField from '../ui/FormField.vue'
 import InlineAlert from '../ui/InlineAlert.vue'
 import VehiclePicker from './VehiclePicker.vue'
+import CustomerLookup from './CustomerLookup.vue'
+import type { KnownCustomer } from '../../api/carRental'
 import VehicleThumb from './VehicleThumb.vue'
 import type { ReservationFormValues } from './reservationForm'
 
@@ -92,6 +94,23 @@ function resetRateToVehicle(): void {
   form.daily_rate = selectedVehicle.value.daily_rate_usd ?? ''
 }
 
+/* ---------- Client connu ---------- */
+
+function useKnownCustomer(customer: KnownCustomer): void {
+  form.customer_profile_id = customer.id
+  form.customer_type = customer.customer_type
+  form.customer_name = customer.display_name
+  form.customer_hint = [customer.email_hint, customer.phone_hint].filter(Boolean).join(' - ')
+  form.customer_email = ''
+  form.customer_phone = ''
+}
+
+function forgetKnownCustomer(): void {
+  form.customer_profile_id = ''
+  form.customer_hint = ''
+  form.customer_name = ''
+}
+
 function onSiteChange(): void {
   session.setOfficeSite(form.site_id)
 }
@@ -103,7 +122,7 @@ const missing = computed(() => {
   if (!periodValid.value) items.push({ field: 'due_at', label: 'Une date de retour après la prise en charge' })
   if (!form.vehicle_id) items.push({ field: 'vehicle_id', label: 'Le véhicule' })
   if (!form.customer_name.trim()) items.push({ field: 'customer_name', label: form.customer_type === 'individual' ? 'Le nom du client' : 'La raison sociale' })
-  if (!form.customer_email.trim() && !form.customer_phone.trim()) items.push({ field: 'customer_contact', label: 'Un courriel ou un téléphone du client' })
+  if (!form.customer_profile_id && !form.customer_email.trim() && !form.customer_phone.trim()) items.push({ field: 'customer_contact', label: 'Un courriel ou un téléphone du client' })
   if (form.pickup_location_type === 'custom' && !form.pickup_location_detail.trim()) items.push({ field: 'pickup_location_detail', label: 'Le lieu de départ' })
   if (form.dropoff_location_type === 'custom' && !form.dropoff_location_detail.trim()) items.push({ field: 'dropoff_location_detail', label: 'Le lieu de retour' })
   if (!form.daily_rate) items.push({ field: 'daily_rate', label: 'Le tarif journalier' })
@@ -172,9 +191,18 @@ defineExpose({ form })
           <button type="button" :aria-pressed="form.customer_type === 'individual'" @click="form.customer_type = 'individual'">Particulier</button>
           <button type="button" :aria-pressed="form.customer_type === 'institution'" @click="form.customer_type = 'institution'">Institution</button>
         </div>
-        <FormField :label="form.customer_type === 'individual' ? 'Nom complet' : 'Raison sociale'" required :error="fieldErrors['customer.display_name']" v-slot="field">
+        <div v-if="form.customer_profile_id" class="known-customer">
+          <span class="stack" style="gap: 2px">
+            <strong>{{ form.customer_name }}</strong>
+            <span class="text-small text-secondary">Client connu<template v-if="form.customer_hint"> - {{ form.customer_hint }}</template></span>
+          </span>
+          <button class="btn btn-ghost" type="button" @click="forgetKnownCustomer">Changer</button>
+        </div>
+        <template v-else>
+        <FormField :label="form.customer_type === 'individual' ? 'Nom complet' : 'Raison sociale'" required :help="mode === 'create' ? 'Saisissez le nom, le courriel ou le téléphone : les clients connus sont proposés.' : undefined" :error="fieldErrors['customer.display_name']" v-slot="field">
           <input v-model.trim="form.customer_name" v-bind="field.attrs" class="input" autocomplete="off" maxlength="160" required />
         </FormField>
+        <CustomerLookup v-if="mode === 'create'" :query="form.customer_name" @select="useKnownCustomer" />
         <div class="grid-2">
           <FormField label="Courriel" help="Pour envoyer la confirmation." :error="fieldErrors['customer.email']" v-slot="field">
             <input v-model.trim="form.customer_email" v-bind="field.attrs" class="input" type="email" inputmode="email" autocomplete="off" maxlength="254" />
@@ -183,6 +211,8 @@ defineExpose({ form })
             <input v-model.trim="form.customer_phone" v-bind="field.attrs" class="input" type="tel" inputmode="tel" autocomplete="off" maxlength="64" />
           </FormField>
         </div>
+        <CustomerLookup v-if="mode === 'create'" :query="form.customer_email.includes('@') ? form.customer_email : form.customer_phone" @select="useKnownCustomer" />
+        </template>
       </section>
 
       <!-- Lieux -->
@@ -391,6 +421,17 @@ defineExpose({ form })
   display: grid;
   gap: 0;
   min-width: 0;
+}
+
+.known-customer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
 }
 
 .missing-count {

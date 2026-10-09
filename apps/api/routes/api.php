@@ -75,6 +75,9 @@ Route::prefix('v1')->group(function (): void {
             ->name('api.v1.exchange-rates.store');
 
         Route::prefix('car-rental')->group(function (): void {
+            Route::get('/customers', [CarRentalController::class, 'customers'])
+                ->middleware('company.permission:rental.reservations.create')
+                ->name('api.v1.car-rental.customers.index');
             Route::get('/payments/{payment}/receipt', [ReceiptController::class, 'show'])
                 ->middleware('company.permission:rental.reservations.read')
                 ->name('api.v1.car-rental.receipts.show');
