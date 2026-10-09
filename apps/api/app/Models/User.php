@@ -49,6 +49,8 @@ class User extends Authenticatable
             'two_factor_email_enabled' => 'boolean',
             'two_factor_email_verified_at' => 'immutable_datetime',
             'last_login_at' => 'immutable_datetime',
+            // Droit de saisir le taux du groupe, accordé par le propriétaire (jamais par affectation de masse).
+            'can_manage_exchange_rates' => 'boolean',
         ];
     }
 
@@ -65,5 +67,11 @@ class User extends Authenticatable
     public function emailOtpChallenges(): HasMany
     {
         return $this->hasMany(EmailOtpChallenge::class);
+    }
+
+    /** Le propriétaire et les personnes qu'il désigne saisissent le taux HTG/USD du groupe. */
+    public function canManageExchangeRates(): bool
+    {
+        return $this->system_role === 'owner' || (bool) $this->can_manage_exchange_rates;
     }
 }

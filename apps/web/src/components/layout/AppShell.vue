@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useAppStore } from '../../stores/app'
 import { useSessionStore } from '../../stores/session'
 import { formatDate, formatTime } from '../../lib/time'
@@ -32,7 +32,7 @@ const rate = computed(() => session.context?.exchange_rate ?? null)
 
 async function openRates(): Promise<void> {
   accountOpen.value = false
-  await router.push({ name: 'finance.rates' })
+  await router.push({ name: 'system.rates' })
 }
 
 function isActive(item: NavItem): boolean {
@@ -84,10 +84,16 @@ async function signOut(): Promise<void> {
         </RouterLink>
       </nav>
       <div class="rail-footer">
-        <RouterLink v-if="session.context" class="rail-rate" :class="{ warning: !rate || rate.below_brh }" :to="{ name: 'finance.rates' }">
+        <component
+          :is="session.canManageRates ? RouterLink : 'div'"
+          v-if="session.context"
+          class="rail-rate"
+          :class="{ warning: !rate || rate.below_brh }"
+          :to="session.canManageRates ? { name: 'system.rates' } : undefined"
+        >
           <span class="text-small">{{ rate ? formatRate(rate.rate_htg_per_usd) : 'Taux HTG/USD non défini' }}</span>
           <span v-if="rate?.below_brh" class="text-small">Sous la référence BRH</span>
-        </RouterLink>
+        </component>
         <p class="rail-clock">
           <span class="display display-sm">{{ clockTime }}</span>
           <span class="text-muted text-small">{{ clockDate }}, Cap-Haïtien</span>
@@ -168,7 +174,7 @@ async function signOut(): Promise<void> {
         </div>
       </dl>
       <div class="account-actions">
-        <button v-if="session.context" class="btn btn-secondary btn-block" type="button" @click="openRates">Taux de change</button>
+        <button v-if="session.canManageRates && !session.isOwner" class="btn btn-secondary btn-block" type="button" @click="openRates">Taux de change</button>
         <button v-if="session.companies.length > 1 || session.isOwner" class="btn btn-secondary btn-block" type="button" @click="changeCompany">
           Changer de société
         </button>

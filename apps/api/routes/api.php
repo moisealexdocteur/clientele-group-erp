@@ -39,6 +39,15 @@ Route::prefix('v1')->group(function (): void {
         });
     });
 
+    /*
+     * Taux HTG/USD du groupe : lecture pour toute personne connectée,
+     * saisie par le propriétaire ou une personne désignée (contrôlée par le contrôleur).
+     */
+    Route::middleware('api.token')->group(function (): void {
+        Route::get('/exchange-rates', [ExchangeRateController::class, 'index'])->name('api.v1.exchange-rates.index');
+        Route::post('/exchange-rates', [ExchangeRateController::class, 'store'])->name('api.v1.exchange-rates.store');
+    });
+
     Route::middleware(['api.token', 'system.owner'])
         ->prefix('system/configuration')
         ->group(function (): void {
@@ -58,6 +67,8 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.company-users.store');
             Route::patch('/companies/{company}/users/{companyUserAccess}', [SystemConfigurationController::class, 'updateCompanyUser'])
                 ->name('api.v1.system.configuration.company-users.update');
+            Route::patch('/companies/{company}/users/{companyUserAccess}/exchange-rate-access', [SystemConfigurationController::class, 'updateExchangeRateAccess'])
+                ->name('api.v1.system.configuration.company-users.exchange-rate-access');
             Route::patch('/companies/{company}/users/{companyUserAccess}/status', [SystemConfigurationController::class, 'updateCompanyUserStatus'])
                 ->name('api.v1.system.configuration.company-users.status');
             Route::post('/companies/{company}/users/{companyUserAccess}/reset-password', [SystemConfigurationController::class, 'resetCompanyUserPassword'])
@@ -69,10 +80,6 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware(['api.token', 'company.context'])->group(function (): void {
         Route::get('/context', CompanyContextController::class)->name('api.v1.context');
 
-        Route::get('/exchange-rates', [ExchangeRateController::class, 'index'])->name('api.v1.exchange-rates.index');
-        Route::post('/exchange-rates', [ExchangeRateController::class, 'store'])
-            ->middleware('company.permission:finance.rates.manage')
-            ->name('api.v1.exchange-rates.store');
 
         Route::prefix('car-rental')->group(function (): void {
             Route::get('/customers', [CarRentalController::class, 'customers'])

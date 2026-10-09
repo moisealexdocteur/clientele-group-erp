@@ -7,19 +7,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Taux manuel HTG/USD d'une société. Chaque saisie crée une nouvelle ligne :
- * l'historique n'est jamais modifié.
+ * Taux manuel HTG/USD du groupe, réglé dans Configuration. Chaque saisie
+ * crée une nouvelle ligne : l'historique n'est jamais modifié.
  */
 final class ExchangeRate extends Model
 {
     use HasUuids;
+
+    protected $table = 'group_exchange_rates';
 
     public $incrementing = false;
 
     protected $keyType = 'string';
 
     protected $fillable = [
-        'company_id',
         'rate_htg_per_usd',
         'brh_reference_rate',
         'brh_reference_date',

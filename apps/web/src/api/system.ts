@@ -59,6 +59,15 @@ export function updateCompanyUser(companyId: string, accessId: string, payload: 
   return api<{ data: SystemCompanyUser }>(`${base}/${companyId}/users/${accessId}`, { ...global, method: 'PATCH', body: payload })
 }
 
+/** Droit de saisir le taux HTG/USD du groupe, porté par la personne. */
+export function updateExchangeRateAccess(companyId: string, accessId: string, allowed: boolean) {
+  return api<{ data: SystemCompanyUser }>(`${base}/${companyId}/users/${accessId}/exchange-rate-access`, {
+    ...global,
+    method: 'PATCH',
+    body: { allowed },
+  })
+}
+
 export function updateCompanyUserStatus(companyId: string, accessId: string, isActive: boolean) {
   return api<{ data: SystemCompanyUser }>(`${base}/${companyId}/users/${accessId}/status`, {
     ...global,

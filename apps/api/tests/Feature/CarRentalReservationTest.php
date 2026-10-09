@@ -831,15 +831,16 @@ final class CarRentalReservationTest extends TestCase
         );
     }
 
-    public function test_exchange_rate_is_manual_with_brh_alert_and_converts_payments_in_another_currency(): void
+    public function test_group_exchange_rate_is_manual_with_brh_alert_and_converts_payments_in_another_currency(): void
     {
-        [, $company, $site, $token] = $this->context([
+        [$user, $company, $site, $token] = $this->context([
             'rental.reservations.create',
             'rental.reservations.read',
             'rental.payments.submit',
             'rental.payments.approve',
-            'finance.rates.manage',
         ]);
+        // Droit accordé par le propriétaire dans Configuration.
+        $user->forceFill(['can_manage_exchange_rates' => true])->save();
         $agentToken = $this->additionalUser($company, ['rental.reservations.read']);
 
         $this->requestFor($agentToken, $company)
@@ -873,10 +874,11 @@ final class CarRentalReservationTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.below_brh', false);
 
-        $this->requestFor($agentToken, $company)
+        $this->withToken($agentToken)
             ->getJson('/api/v1/exchange-rates')
             ->assertOk()
             ->assertJsonPath('current.rate_htg_per_usd', '130.0000')
+            ->assertJsonPath('can_manage', false)
             ->assertJsonCount(2, 'history');
 
         $this->requestFor($agentToken, $company)

@@ -48,6 +48,8 @@ export const useSessionStore = defineStore('session', () => {
 
   const isAuthenticated = computed(() => Boolean(token.value && user.value))
   const isOwner = computed(() => user.value?.system_role === 'owner')
+  /** Saisie du taux HTG/USD du groupe : propriétaire ou personne désignée. */
+  const canManageRates = computed(() => isOwner.value || Boolean(user.value?.can_manage_exchange_rates))
   const sites = computed<ContextSite[]>(() => context.value?.sites ?? [])
   const officeSite = computed(() => sites.value.find((site) => site.id === officeSiteId.value) ?? null)
 
@@ -202,6 +204,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   return {
+    canManageRates,
     refreshContext,
     token,
     user,

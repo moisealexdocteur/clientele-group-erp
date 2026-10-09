@@ -2,34 +2,32 @@
 
 namespace App\Support;
 
-use App\Models\Company;
 use App\Models\ExchangeRate;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Taux HTG/USD en vigueur et conversions. Les montants convertis sont
+ * Taux HTG/USD du groupe en vigueur et conversions. Les montants convertis sont
  * arrondis au centime ; le taux appliqué est toujours conservé avec la
  * transaction pour pouvoir la justifier.
  */
 final class ExchangeRateService
 {
-    public function current(Company $company): ?ExchangeRate
+    public function current(): ?ExchangeRate
     {
         return ExchangeRate::query()
-            ->where('company_id', $company->id)
             ->where('effective_at', '<=', now()->utc())
             ->orderByDesc('effective_at')
             ->orderByDesc('created_at')
             ->first();
     }
 
-    public function requireCurrent(Company $company, string $field): ExchangeRate
+    public function requireCurrent(string $field): ExchangeRate
     {
-        $rate = $this->current($company);
+        $rate = $this->current();
 
         if (! $rate instanceof ExchangeRate) {
             throw ValidationException::withMessages([
-                $field => 'Aucun taux HTG/USD n’est défini pour cette société. Un administrateur doit le saisir avant un paiement dans une autre devise.',
+                $field => 'Aucun taux HTG/USD n’est défini pour le groupe. Il doit être saisi dans Configuration avant un paiement dans une autre devise.',
             ]);
         }
 

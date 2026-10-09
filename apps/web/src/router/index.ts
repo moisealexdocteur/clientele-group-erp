@@ -18,6 +18,10 @@ declare module 'vue-router' {
     company?: boolean
     /** Réservé au propriétaire du système. */
     owner?: boolean
+    /** Zone Configuration : propriétaire, ou personne désignée pour le taux. */
+    configuration?: boolean
+    /** Écran du taux : propriétaire ou personne désignée. */
+    rates?: boolean
     /** Permission de société requise. */
     permission?: string
     /** Nom de la rubrique à marquer comme active dans la navigation. */
@@ -57,8 +61,9 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/configuration',
     component: () => import('../views/system/SystemLayout.vue'),
-    meta: { auth: true, owner: true },
+    meta: { auth: true, configuration: true },
     children: [
+      { path: 'taux', name: 'system.rates', component: () => import('../views/system/RatesView.vue'), meta: { title: 'Taux de change', navMatch: 'system.rates', rates: true } },
       { path: '', name: 'system.companies', component: () => import('../views/system/CompaniesView.vue'), meta: { title: 'Sociétés', navMatch: 'system.companies' } },
       { path: 'societes/nouvelle', name: 'system.company.new', component: () => import('../views/system/CompanyNewView.vue'), meta: { title: 'Ajouter une société', navMatch: 'system.companies' } },
       { path: 'societes/:companyId', name: 'system.company', component: () => import('../views/system/CompanyDetailView.vue'), props: true, meta: { title: 'Société', navMatch: 'system.companies' } },
@@ -79,7 +84,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'reservations/:reservationId/retour', name: 'rental.reservation.return', component: () => import('../views/rental/ReturnView.vue'), props: true, meta: { title: 'Retour du véhicule', permission: 'rental.reservations.manage', navMatch: 'rental.reservations' } },
       { path: 'reservations/:reservationId/modifier', name: 'rental.reservation.edit', component: () => import('../views/rental/ReservationEditView.vue'), props: true, meta: { title: 'Modifier la réservation', permission: 'rental.reservations.manage', navMatch: 'rental.reservations' } },
       { path: 'reservations/:reservationId', name: 'rental.reservation', component: () => import('../views/rental/ReservationDetailView.vue'), props: true, meta: { title: 'Réservation', permission: 'rental.reservations.read', navMatch: 'rental.reservations' } },
-      { path: 'taux', name: 'finance.rates', component: () => import('../views/finance/RatesView.vue'), meta: { title: 'Taux de change' } },
       { path: 'planning', name: 'rental.planning', component: () => import('../views/rental/PlanningView.vue'), meta: { title: 'Planning', permission: 'rental.calendar.read', navMatch: 'rental.planning' } },
       { path: 'vehicules', name: 'rental.vehicles', component: () => import('../views/rental/VehiclesView.vue'), meta: { title: 'Véhicules', permission: 'rental.vehicles.read', navMatch: 'rental.vehicles' } },
       { path: 'vehicules/nouveau', name: 'rental.vehicle.new', component: () => import('../views/rental/VehicleNewView.vue'), meta: { title: 'Ajouter un véhicule', permission: 'rental.vehicles.manage', navMatch: 'rental.vehicles' } },
@@ -138,6 +142,12 @@ router.beforeEach(async (to) => {
 
   if (ownerOnly && !session.isOwner) {
     return { name: 'home' }
+  }
+
+  // Configuration : le propriétaire voit tout ; une personne désignée voit seulement le taux.
+  const inConfiguration = to.matched.some((record) => record.meta.configuration)
+  if (inConfiguration && !session.isOwner && !(to.meta.rates && session.canManageRates)) {
+    return session.canManageRates ? { name: 'system.rates' } : { name: 'home' }
   }
 
   if (needsCompany && !session.context) {

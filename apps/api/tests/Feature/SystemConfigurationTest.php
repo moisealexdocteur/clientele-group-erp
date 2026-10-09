@@ -413,6 +413,58 @@ final class SystemConfigurationTest extends TestCase
             ->assertJsonPath('company.legal.rental_contract_terms', "Article 1 - Objet\nTexte de test.");
     }
 
+    public function test_the_owner_designates_who_may_set_the_group_exchange_rate(): void
+    {
+        $owner = User::factory()->create(['is_active' => true, 'system_role' => 'owner']);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $companyId = $this->createCompany($ownerToken, 'RENT-RATE', 'Clientèle Rent a Car');
+        $employee = User::factory()->create(['is_active' => true]);
+        $access = CompanyUserAccess::query()->create([
+            'company_id' => $companyId,
+            'user_id' => $employee->id,
+            'role_key' => 'car_rental_administrator',
+            'site_scope' => 'all',
+            'permissions' => ['rental.reservations.read'],
+            'is_active' => true,
+        ]);
+        [, $employeeToken] = ApiAccessToken::issueFor($employee, Request::create('/api/v1/auth/login', 'POST'));
+
+        $this->withToken($employeeToken)
+            ->postJson('/api/v1/exchange-rates', ['rate_htg_per_usd' => 131])
+            ->assertForbidden();
+
+        $this->withToken($ownerToken)
+            ->postJson('/api/v1/exchange-rates', ['rate_htg_per_usd' => 130.5])
+            ->assertCreated();
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}/users/{$access->id}/exchange-rate-access", ['allowed' => true])
+            ->assertOk()
+            ->assertJsonPath('data.can_manage_exchange_rates', true);
+
+        $this->withToken($employeeToken)
+            ->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('user.can_manage_exchange_rates', true);
+
+        $this->withToken($employeeToken)
+            ->postJson('/api/v1/exchange-rates', ['rate_htg_per_usd' => 131])
+            ->assertCreated();
+
+        $this->withToken($employeeToken)
+            ->getJson('/api/v1/exchange-rates')
+            ->assertOk()
+            ->assertJsonPath('current.rate_htg_per_usd', '131.0000')
+            ->assertJsonPath('can_manage', true);
+
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}/users/{$access->id}/exchange-rate-access", ['allowed' => false])
+            ->assertOk()
+            ->assertJsonPath('data.can_manage_exchange_rates', false);
+
+        self::assertTrue(AuditEvent::query()->where('event_type', 'configuration.exchange_rate_access_revoked')->exists());
+    }
+
     private function createCompany(string $token, string $code, string $name): string
     {
         return $this->withToken($token)

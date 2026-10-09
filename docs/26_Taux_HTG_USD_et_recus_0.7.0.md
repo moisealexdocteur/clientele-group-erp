@@ -4,6 +4,8 @@ Premier volet du socle commun, utilisé d'abord par Car Rental puis par les modu
 
 ## 1. Taux HTG/USD
 
+Remplacé en 0.8.0 par un taux unique du groupe réglé dans Configuration : `docs/28_Taux_unique_du_groupe_0.8.0.md`.
+
 - Taux manuel par société : nombre de gourdes pour 1 USD, jusqu'à quatre décimales.
 - Saisi par un administrateur (`finance.rates.manage`) ou le propriétaire, depuis l'écran « Taux de change » (rail de navigation ou menu du compte sur téléphone).
 - Chaque saisie crée une ligne d'historique : un taux n'est jamais modifié après coup.

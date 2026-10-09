@@ -1860,7 +1860,7 @@ final class CarRentalController extends Controller
 
         // Un paiement dans l'autre devise est converti au taux en vigueur, conservé avec le paiement.
         $rate = $data['currency'] !== $model->currency
-            ? $this->exchangeRates->requireCurrent($company, 'currency')
+            ? $this->exchangeRates->requireCurrent('currency')
             : null;
         $converted = $this->exchangeRates->convert(
             (float) $data['amount'],

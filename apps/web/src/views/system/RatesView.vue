@@ -15,7 +15,7 @@ import SheetDialog from '../../components/ui/SheetDialog.vue'
 import StatusPill from '../../components/ui/StatusPill.vue'
 
 /*
- * Taux HTG/USD manuel de la société active. Le formulaire reprend le
+ * Taux HTG/USD du groupe, réglage du socle commun dans Configuration. Le formulaire reprend le
  * dernier taux ; un taux sous la référence BRH demande une confirmation
  * et un motif, et reste signalé dans l'historique.
  */
@@ -28,7 +28,7 @@ const saving = useRequest()
 const current = ref<ExchangeRate | null>(null)
 const history = ref<ExchangeRate[]>([])
 const open = ref(false)
-const canManage = computed(() => session.can('finance.rates.manage'))
+const canManage = ref(false)
 const today = toDateInput()
 
 const form = reactive({
@@ -61,6 +61,7 @@ async function load(): Promise<void> {
   if (!result) return
   current.value = result.current
   history.value = result.history
+  canManage.value = result.can_manage
 }
 
 onMounted(load)
@@ -94,7 +95,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <PageHeader title="Taux de change" description="Taux manuel de la société, appliqué aux paiements dans une autre devise que celle de la transaction.">
+  <PageHeader title="Taux de change" description="Taux unique du groupe, appliqué par toutes les sociétés aux paiements dans une autre devise que celle de la transaction.">
     <template #actions>
       <button v-if="canManage" class="btn btn-primary" type="button" :disabled="!app.canReachServer" @click="openForm">Saisir le taux du jour</button>
     </template>
@@ -117,7 +118,7 @@ async function save(): Promise<void> {
         <p v-if="current.below_brh" class="alert alert-warning">Ce taux est inférieur à la référence BRH. Motif : {{ current.note }}</p>
       </template>
       <p v-else class="alert alert-warning">
-        Aucun taux n’est défini. Les paiements dans une autre devise sont refusés tant qu’un administrateur ne l’a pas saisi.
+        Aucun taux n’est défini. Les paiements dans une autre devise sont refusés tant qu’il n’est pas saisi.
       </p>
     </section>
 
