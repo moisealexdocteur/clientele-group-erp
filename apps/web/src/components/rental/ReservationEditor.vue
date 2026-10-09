@@ -46,7 +46,7 @@ const emit = defineEmits<{
 const session = useSessionStore()
 
 /* Frais aéroport réglé dans Configuration, par trajet. */
-const airportFeeUsd = computed(() => Number(session.context?.company.legal?.rental_fees?.airport_usd ?? '0') || 0)
+const airportFeeUsd = computed(() => Number(session.context?.company.rental_fees?.airport_usd ?? '0') || 0)
 const app = useAppStore()
 
 const form = reactive<ReservationFormValues>({ ...props.initial })

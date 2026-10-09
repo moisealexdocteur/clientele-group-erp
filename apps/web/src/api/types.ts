@@ -65,6 +65,8 @@ export interface CompanyContext {
     base_currency: Currency
     /** Identité du loueur imprimée sur le contrat de location. */
     legal?: CompanyLegalIdentity
+    /** Frais de service Car Rental en vigueur, réglés dans Configuration. */
+    rental_fees?: { airport_usd: string; cleaning_usd: string }
   }
   access: {
     role_key: string
@@ -82,8 +84,6 @@ export interface CompanyLegalIdentity {
   address: string | null
   phone_numbers: string | null
   rental_contract_terms?: string | null
-  /** Frais de service en vigueur, réglés dans Configuration. */
-  rental_fees?: { airport_usd: string; cleaning_usd: string }
 }
 
 export type FuelType = 'gasoline' | 'diesel'

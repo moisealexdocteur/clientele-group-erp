@@ -112,7 +112,7 @@ function removeOtherCharge(index: number): void {
 }
 
 /* Frais de nettoyage réglé dans Configuration. */
-const cleaningFeeUsd = computed(() => Number(session.context?.company.legal?.rental_fees?.cleaning_usd ?? '0') || 0)
+const cleaningFeeUsd = computed(() => Number(session.context?.company.rental_fees?.cleaning_usd ?? '0') || 0)
 
 const chargesTotal = computed(() => {
   let total = 0

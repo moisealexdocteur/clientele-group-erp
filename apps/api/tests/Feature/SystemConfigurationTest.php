@@ -407,8 +407,8 @@ final class SystemConfigurationTest extends TestCase
             ->withHeader('X-Clientele-Company-Id', $companyId)
             ->getJson('/api/v1/context')
             ->assertOk()
-            ->assertJsonPath('company.legal.rental_fees.airport_usd', '25.00')
-            ->assertJsonPath('company.legal.rental_fees.cleaning_usd', '15.50');
+            ->assertJsonPath('company.rental_fees.airport_usd', '25.00')
+            ->assertJsonPath('company.rental_fees.cleaning_usd', '15.50');
     }
 
     public function test_the_owner_records_the_rental_contract_terms_without_losing_them_on_identity_updates(): void
