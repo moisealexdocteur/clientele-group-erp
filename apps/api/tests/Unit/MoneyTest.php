@@ -11,7 +11,10 @@ final class MoneyTest extends TestCase
     public function test_amounts_are_converted_to_cents_without_floating_point_drift(): void
     {
         self::assertSame(1010, Money::toCents('10.10'));
-        self::assertSame(1010, Money::toCents(10.1));
+        self::assertSame(1010, Money::toCents('10.1'));
+        self::assertSame('7.56', Money::convert('1000', 'HTG', 'USD', '132.3456'));
+        self::assertSame('13125.00', Money::convert('100', 'USD', 'HTG', '131.25'));
+        self::assertSame('1 250,50', Money::formatFr('1250.5'));
         self::assertSame(1235, Money::toCents('12.345'));
         self::assertSame(-500, Money::toCents('-5.004'));
         self::assertSame(0, Money::toCents(null));
