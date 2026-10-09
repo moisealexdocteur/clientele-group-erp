@@ -86,9 +86,11 @@ final class CashSessionService
      * Sortie d'espèces : la part non retenue d'un dépôt versé en espèces est
      * rendue depuis la caisse qui l'a reçu, dans sa session ouverte.
      */
-    public function recordDepositRefund(Company $company, CarRentalSecurityDeposit $deposit, float $refund, ?User $actor): ?CashMovement
+    public function recordDepositRefund(Company $company, CarRentalSecurityDeposit $deposit, string|float $refund, ?User $actor): ?CashMovement
     {
-        if ($deposit->method !== 'cash' || $refund <= 0.0 || $deposit->payment_id === null) {
+        $cents = Money::toCents($refund);
+
+        if ($deposit->method !== 'cash' || $cents <= 0 || $deposit->payment_id === null) {
             return null;
         }
 
@@ -109,7 +111,7 @@ final class CashSessionService
             'kind' => 'deposit_refund',
             'direction' => 'out',
             'currency' => $deposit->currency ?? 'USD',
-            'amount' => number_format($refund, 2, '.', ''),
+            'amount' => Money::fromCents($cents),
             'deposit_id' => $deposit->id,
             'reservation_id' => $deposit->reservation_id,
             'recorded_by' => $actor?->id,
@@ -132,26 +134,31 @@ final class CashSessionService
         $totals = [];
 
         foreach (self::CURRENCIES as $currency) {
-            $opening = (float) ($currency === 'USD' ? $session->opening_usd : $session->opening_htg);
-            $in = (float) $movements->where('currency', $currency)->where('direction', 'in')->sum(static fn (CashMovement $movement): float => (float) $movement->amount);
-            $out = (float) $movements->where('currency', $currency)->where('direction', 'out')->sum(static fn (CashMovement $movement): float => (float) $movement->amount);
+            $opening = Money::toCents((string) ($currency === 'USD' ? $session->opening_usd : $session->opening_htg));
+            $in = 0;
+            $out = 0;
+
+            foreach ($movements->where('currency', $currency) as $movement) {
+                if ($movement->direction === 'in') {
+                    $in += Money::toCents((string) $movement->amount);
+                } else {
+                    $out += Money::toCents((string) $movement->amount);
+                }
+            }
 
             $totals[$currency] = [
-                'opening' => $this->money($opening),
-                'in' => $this->money($in),
-                'out' => $this->money($out),
-                'expected' => $this->money($opening + $in - $out),
+                'opening' => Money::fromCents($opening),
+                'in' => Money::fromCents($in),
+                'out' => Money::fromCents($out),
+                'expected' => Money::fromCents($opening + $in - $out),
             ];
         }
 
         return $totals;
     }
 
-    public function money(float $value): string
+    public function money(string|int|float $value): string
     {
-        $rounded = round($value, 2);
-
-        // Évite « -0.00 ».
-        return number_format(abs($rounded) < 0.005 ? 0.0 : $rounded, 2, '.', '');
+        return Money::normalize($value);
     }
 }

@@ -25,6 +25,7 @@ use App\Support\CompanySiteAuthorizer;
 use App\Support\DocumentNumberService;
 use App\Support\ExchangeRateService;
 use App\Support\FileVault;
+use App\Support\Money;
 use App\Support\ReceiptService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -2765,7 +2766,7 @@ final class CarRentalController extends Controller
                 $remaining = round($remaining - $apply, 2);
 
                 // La part non retenue d'un dépôt en espèces sort de la caisse qui l'a reçu.
-                $this->cash->recordDepositRefund($company, $deposit, round($amount - $apply, 2), $actor);
+                $this->cash->recordDepositRefund($company, $deposit, Money::fromCents(Money::toCents((string) $deposit->amount) - Money::toCents(number_format($apply, 2, '.', ''))), $actor);
 
                 $deposit->forceFill([
                     'status' => $apply <= 0.0 ? 'released' : ($apply + 0.0001 >= $amount ? 'forfeited' : 'partially_applied'),

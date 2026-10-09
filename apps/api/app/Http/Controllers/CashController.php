@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Support\AuditLogger;
 use App\Support\CashSessionService;
 use App\Support\CompanySiteAuthorizer;
+use App\Support\Money;
 use App\Support\ReceiptService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
@@ -132,8 +133,8 @@ final class CashController extends Controller
                     'status' => 'open',
                     'opened_by' => $actor?->id,
                     'opened_at' => now()->utc(),
-                    'opening_usd' => $this->cash->money((float) $data['opening_usd']),
-                    'opening_htg' => $this->cash->money((float) $data['opening_htg']),
+                    'opening_usd' => Money::normalize((string) $data['opening_usd']),
+                    'opening_htg' => Money::normalize((string) $data['opening_htg']),
                 ]);
             });
         } catch (QueryException) {
@@ -214,11 +215,11 @@ final class CashController extends Controller
             }
 
             $totals = $this->cash->totals($model);
-            $declaredUsd = round((float) $data['declared_usd'], 2);
-            $declaredHtg = round((float) $data['declared_htg'], 2);
-            $varianceUsd = round($declaredUsd - (float) $totals['USD']['expected'], 2);
-            $varianceHtg = round($declaredHtg - (float) $totals['HTG']['expected'], 2);
-            $hasVariance = abs($varianceUsd) >= 0.005 || abs($varianceHtg) >= 0.005;
+            $declaredUsd = Money::toCents((string) $data['declared_usd']);
+            $declaredHtg = Money::toCents((string) $data['declared_htg']);
+            $varianceUsd = $declaredUsd - Money::toCents($totals['USD']['expected']);
+            $varianceHtg = $declaredHtg - Money::toCents($totals['HTG']['expected']);
+            $hasVariance = $varianceUsd !== 0 || $varianceHtg !== 0;
             $note = trim((string) ($data['variance_note'] ?? ''));
 
             if ($hasVariance && $note === '') {
@@ -233,10 +234,10 @@ final class CashController extends Controller
                 'closed_at' => now()->utc(),
                 'expected_usd' => $totals['USD']['expected'],
                 'expected_htg' => $totals['HTG']['expected'],
-                'declared_usd' => $this->cash->money($declaredUsd),
-                'declared_htg' => $this->cash->money($declaredHtg),
-                'variance_usd' => $this->cash->money($varianceUsd),
-                'variance_htg' => $this->cash->money($varianceHtg),
+                'declared_usd' => Money::fromCents($declaredUsd),
+                'declared_htg' => Money::fromCents($declaredHtg),
+                'variance_usd' => Money::fromCents($varianceUsd),
+                'variance_htg' => Money::fromCents($varianceHtg),
                 'variance_note' => $hasVariance ? $note : null,
                 'review_status' => $hasVariance ? 'pending' : 'none',
             ])->save();
@@ -611,7 +612,7 @@ final class CashController extends Controller
     /** @param Collection<int, string> $values */
     private function sum(Collection $values): string
     {
-        return $this->cash->money((float) $values->sum(static fn ($value): float => (float) $value));
+        return Money::fromCents((int) $values->sum(static fn ($value): int => Money::toCents((string) $value)));
     }
 
     private function assertCanSeeCash(CompanyUserAccess $access): void
