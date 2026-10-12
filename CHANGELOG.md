@@ -2,6 +2,19 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche feat/caisse-session
+
+Ajustements de la caisse demandés en relecture. La version reste `0.9.0-alpha.1` jusqu'à la relecture. Détail : `docs/30_Caisse_et_rapport_journalier_0.9.0.md`.
+
+### Ajouté
+
+- Rapport journalier : tous les encaissements Car Rental approuvés du jour, par mode et devise, y compris les espèces approuvées sans session de caisse.
+- Test d'isolation entre deux sociétés (caisse, session, clôture, rapport).
+
+### Retiré
+
+- Ticket 80 mm de fermeture de caisse et impression 80 mm du rapport journalier. Le rapport s'imprime en A4 et s'exporte en PDF et Excel.
+
 ## 0.9.0-alpha.1 - 2026-10-12
 
 Socle commun, deuxième volet. Détail : `docs/30_Caisse_et_rapport_journalier_0.9.0.md`.

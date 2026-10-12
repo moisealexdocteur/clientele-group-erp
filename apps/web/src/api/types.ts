@@ -589,7 +589,8 @@ export interface DailyCashReport {
   sessions: CashSession[]
   totals: Record<Currency, { opening: string; in: string; out: string; expected: string; declared: string; variance: string }>
   movements_by_kind: Array<{ kind: CashMovementKind; label: string; direction: 'in' | 'out'; currency: Currency; count: number; amount: string }>
-  other_payments: Array<{ method: string; currency: Currency; count: number; amount: string }>
+  /** Encaissements Car Rental approuvés le jour, tous modes ; espèces hors session comprises. */
+  rental_payments: Array<{ method: string; currency: Currency; count: number; amount: string; outside_session_count: number; outside_session_amount: string }>
   open_sessions: number
   pending_reviews: number
   reprints: number

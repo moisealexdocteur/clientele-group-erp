@@ -98,7 +98,6 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/sessions/{session}/review', Cash\ReviewCashSession::class)
                 ->middleware('company.permission:cash.sessions.approve')
                 ->name('api.v1.cash.sessions.review');
-            Route::post('/sessions/{session}/prints', Cash\RecordCashSessionPrint::class)->name('api.v1.cash.sessions.prints');
             Route::get('/reports/daily', Cash\ShowDailyCashReport::class)
                 ->middleware('company.permission:cash.reports.read')
                 ->name('api.v1.cash.reports.daily');

@@ -88,30 +88,35 @@ final class ShowDailyCashReport extends Controller
             ->sortBy(static fn (array $row): string => $row['kind'] . $row['currency'])
             ->values();
 
-        $otherPayments = CarRentalPayment::query()
+        // Encaissements Car Rental approuvés le jour choisi, tous modes, y compris
+        // les espèces approuvées avant la mise en service des caisses (hors session).
+        $rentalPayments = CarRentalPayment::query()
             ->where('company_id', $company->id)
             ->where('status', 'approved')
-            ->where('method', '!=', 'cash')
             ->where('approved_at', '>=', $start->utc())
             ->where('approved_at', '<', $end->utc())
             ->whereIn('reservation_id', CarRentalReservation::query()
                 ->where('company_id', $company->id)
                 ->whereIn('site_id', $siteIds)
                 ->select('id'))
-            ->get(['method', 'currency', 'amount'])
+            ->get(['method', 'currency', 'amount', 'cash_session_id'])
             ->groupBy(static fn (CarRentalPayment $payment): string => $payment->method . '|' . $payment->currency)
             ->map(fn (Collection $group, string $key): array => [
                 'method' => explode('|', $key)[0],
                 'currency' => explode('|', $key)[1],
                 'count' => $group->count(),
                 'amount' => $this->presenter->sum($group->map(static fn (CarRentalPayment $payment): string => (string) $payment->amount)),
+                'outside_session_count' => $group->filter(static fn (CarRentalPayment $payment): bool => $payment->method === 'cash' && $payment->cash_session_id === null)->count(),
+                'outside_session_amount' => $this->presenter->sum($group
+                    ->filter(static fn (CarRentalPayment $payment): bool => $payment->method === 'cash' && $payment->cash_session_id === null)
+                    ->map(static fn (CarRentalPayment $payment): string => (string) $payment->amount)),
             ])
             ->sortBy(static fn (array $row): string => $row['method'] . $row['currency'])
             ->values();
 
         $reprints = AuditEvent::query()
             ->where('company_id', $company->id)
-            ->whereIn('event_type', ['receipt.reprinted', 'cash.session_report_reprinted'])
+            ->where('event_type', 'receipt.reprinted')
             ->where('occurred_at', '>=', $start->utc())
             ->where('occurred_at', '<', $end->utc())
             ->count();
@@ -130,7 +135,7 @@ final class ShowDailyCashReport extends Controller
                 'sessions' => $sessionPayloads,
                 'totals' => $totals,
                 'movements_by_kind' => $byKind,
-                'other_payments' => $otherPayments,
+                'rental_payments' => $rentalPayments,
                 'open_sessions' => $sessions->where('status', 'open')->count(),
                 'pending_reviews' => $sessions->where('review_status', 'pending')->count(),
                 'reprints' => $reprints,

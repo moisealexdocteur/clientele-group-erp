@@ -79,7 +79,7 @@ export async function buildDailyReportPdf(report: DailyCashReport): Promise<Uint
   const notes: string[] = []
   if (report.open_sessions) notes.push(`${report.open_sessions} session(s) encore ouverte(s) : le compté et l'écart ne les incluent pas.`)
   if (report.pending_reviews) notes.push(`${report.pending_reviews} écart(s) en attente d'approbation.`)
-  notes.push(`Réimpressions de reçus et de rapports : ${report.reprints}.`)
+  notes.push(`Réimpressions de reçus : ${report.reprints}.`)
   for (const note of notes) w.text(note, { size: 8.8 })
 
   w.heading('Sessions de caisse')
@@ -128,17 +128,23 @@ export async function buildDailyReportPdf(report: DailyCashReport): Promise<Uint
     )
   }
 
-  w.heading('Autres règlements approuvés')
-  if (!report.other_payments.length) w.text('Aucun virement ni crédit approuvé ce jour.', { size: 9 })
+  w.heading('Encaissements Car Rental approuvés')
+  if (!report.rental_payments.length) w.text('Aucun encaissement approuvé ce jour.', { size: 9 })
   else {
     w.table(
       [
-        { label: 'Mode', weight: 5 },
+        { label: 'Mode', weight: 4 },
         { label: 'Nombre', weight: 2, align: 'right' },
         { label: 'Montant', weight: 3, align: 'right' },
+        { label: 'Dont hors session', weight: 3, align: 'right' },
       ],
-      report.other_payments.map((row) => ({
-        cells: [paymentMethodLabels[row.method] ?? row.method, String(row.count), formatMoney(row.amount, row.currency)],
+      report.rental_payments.map((row) => ({
+        cells: [
+          paymentMethodLabels[row.method] ?? row.method,
+          String(row.count),
+          formatMoney(row.amount, row.currency),
+          row.outside_session_count ? formatMoney(row.outside_session_amount, row.currency) : '-',
+        ],
       })),
     )
   }
@@ -199,8 +205,8 @@ export function buildDailyReportXlsx(report: DailyCashReport): Uint8Array {
     [bold('Mouvements par nature'), bold('Sens'), bold('Devise'), bold('Nombre'), bold('Montant')],
     ...report.movements_by_kind.map((row): XlsxRow => [row.label, row.direction === 'in' ? 'Entrée' : 'Sortie', row.currency, row.count, money(row.amount)]),
     [],
-    [bold('Autres règlements'), bold('Devise'), bold('Nombre'), bold('Montant')],
-    ...report.other_payments.map((row): XlsxRow => [paymentMethodLabels[row.method] ?? row.method, row.currency, row.count, money(row.amount)]),
+    [bold('Encaissements Car Rental'), bold('Devise'), bold('Nombre'), bold('Montant'), bold('Dont hors session')],
+    ...report.rental_payments.map((row): XlsxRow => [paymentMethodLabels[row.method] ?? row.method, row.currency, row.count, money(row.amount), money(row.outside_session_amount)]),
   ]
 
   const sessions: XlsxRow[] = [

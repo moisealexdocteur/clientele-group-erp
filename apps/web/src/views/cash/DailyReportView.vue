@@ -24,7 +24,7 @@ import FormField from '../../components/ui/FormField.vue'
 
 /*
  * Rapport journalier de caisse : chargé tout de suite pour aujourd'hui et
- * toutes les adresses autorisées. Impression A4 ou 80 mm, PDF et Excel ;
+ * toutes les adresses autorisées. Impression A4, PDF et Excel ;
  * chaque impression et chaque export est journalisé.
  */
 const session = useSessionStore()
@@ -36,7 +36,6 @@ const date = ref(toDateInput(app.now))
 const siteId = ref('')
 const report = ref<DailyCashReport | null>(null)
 const exporting = ref<DailyReportFormat | null>(null)
-const printMode = ref<'a4' | '80mm'>('a4')
 
 const sites = computed(() => session.sites)
 const dayLabel = computed(() => formatDate(`${date.value}T12:00:00`))
@@ -80,14 +79,13 @@ async function exportFile(format: 'pdf' | 'xlsx'): Promise<void> {
   }
 }
 
-async function print(mode: 'a4' | '80mm'): Promise<void> {
+async function print(): Promise<void> {
   if (!report.value || exporting.value) return
-  exporting.value = mode === 'a4' ? 'print_a4' : 'print_80mm'
+  exporting.value = 'print_a4'
   const style = document.createElement('style')
-  style.textContent = mode === 'a4' ? '@page { size: A4; margin: 14mm; }' : '@page { size: 80mm auto; margin: 0; }'
+  style.textContent = '@page { size: A4; margin: 14mm; }'
   try {
-    await logExport(mode === 'a4' ? 'print_a4' : 'print_80mm')
-    printMode.value = mode
+    await logExport('print_a4')
     document.head.append(style)
     await nextTick()
     window.print()
@@ -95,14 +93,13 @@ async function print(mode: 'a4' | '80mm'): Promise<void> {
     ui.toast(error instanceof Error ? error.message : 'L’impression n’a pas pu être enregistrée.', 'danger')
   } finally {
     style.remove()
-    printMode.value = 'a4'
     exporting.value = null
   }
 }
 </script>
 
 <template>
-  <div class="report-page" :class="`print-${printMode}`">
+  <div class="report-page">
     <div class="no-print">
       <PageHeader title="Rapport journalier" description="Espèces par caisse et par devise, écarts et autres règlements du jour. Aucune donnée client." :back="{ name: 'cash' }" back-label="Caisse" />
 
@@ -121,8 +118,7 @@ async function print(mode: 'a4' | '80mm'): Promise<void> {
         <div class="btn-row">
           <button class="btn btn-primary" type="button" :disabled="!report || !!exporting || !app.canReachServer" @click="exportFile('pdf')">PDF</button>
           <button class="btn btn-secondary" type="button" :disabled="!report || !!exporting || !app.canReachServer" @click="exportFile('xlsx')">Excel</button>
-          <button class="btn btn-secondary" type="button" :disabled="!report || !!exporting || !app.canReachServer" @click="print('a4')">Imprimer A4</button>
-          <button class="btn btn-secondary" type="button" :disabled="!report || !!exporting || !app.canReachServer" @click="print('80mm')">Imprimer 80 mm</button>
+          <button class="btn btn-secondary" type="button" :disabled="!report || !!exporting || !app.canReachServer" @click="print">Imprimer</button>
         </div>
       </div>
 
@@ -194,15 +190,18 @@ async function print(mode: 'a4' | '80mm'): Promise<void> {
       </section>
 
       <section class="panel">
-        <h2 class="title-section">Autres règlements approuvés</h2>
-        <p v-if="!report.other_payments.length" class="text-secondary">Aucun virement ni crédit approuvé ce jour.</p>
+        <h2 class="title-section">Encaissements Car Rental approuvés</h2>
+        <p v-if="!report.rental_payments.length" class="text-secondary">Aucun encaissement approuvé ce jour.</p>
         <dl v-else class="facts">
-          <div v-for="row in report.other_payments" :key="`${row.method}-${row.currency}`">
-            <dt>{{ paymentMethodLabels[row.method] ?? row.method }} ({{ row.count }})</dt>
+          <div v-for="row in report.rental_payments" :key="`${row.method}-${row.currency}`">
+            <dt>
+              {{ paymentMethodLabels[row.method] ?? row.method }} ({{ row.count }})
+              <template v-if="row.outside_session_count"><br /><span class="text-small">dont {{ formatMoney(row.outside_session_amount, row.currency) }} hors session de caisse ({{ row.outside_session_count }})</span></template>
+            </dt>
             <dd>{{ formatMoney(row.amount, row.currency) }}</dd>
           </div>
         </dl>
-        <p class="text-small text-muted">Réimpressions de reçus et de rapports ce jour : {{ report.reprints }}.</p>
+        <p class="text-small text-muted">Réimpressions de reçus ce jour : {{ report.reprints }}.</p>
       </section>
 
       <section v-if="movements.length" class="panel print-detail">
@@ -222,44 +221,6 @@ async function print(mode: 'a4' | '80mm'): Promise<void> {
       <p class="print-sign">Vérifié par : ____________________________ Signature : ____________________</p>
     </article>
 
-    <!-- Version 80 mm : impression thermique seulement. -->
-    <article v-if="report" class="report-80" aria-hidden="true">
-      <div class="ticket-head">
-        <strong>{{ report.company.display_name }}</strong>
-        <span>RAPPORT JOURNALIER</span>
-        <span>{{ dayLabel }}</span>
-        <span>{{ report.site ?? 'Toutes les adresses' }}</span>
-      </div>
-      <template v-for="currency in CURRENCIES" :key="currency">
-        <p class="ticket-section">{{ currency }}</p>
-        <dl class="ticket-lines">
-          <div><dt>Fond</dt><dd>{{ formatMoney(report.totals[currency].opening, currency) }}</dd></div>
-          <div><dt>Entrées</dt><dd>{{ formatMoney(report.totals[currency].in, currency) }}</dd></div>
-          <div><dt>Sorties</dt><dd>{{ formatMoney(report.totals[currency].out, currency) }}</dd></div>
-          <div class="strong"><dt>Attendu</dt><dd>{{ formatMoney(report.totals[currency].expected, currency) }}</dd></div>
-          <div><dt>Compté</dt><dd>{{ formatMoney(report.totals[currency].declared, currency) }}</dd></div>
-          <div class="strong"><dt>Écart</dt><dd>{{ signed(report.totals[currency].variance, currency) }}</dd></div>
-        </dl>
-      </template>
-      <p class="ticket-section">Sessions ({{ report.sessions.length }})</p>
-      <dl class="ticket-lines">
-        <div v-for="item in report.sessions" :key="item.id">
-          <dt>{{ item.cash_register.name }}</dt>
-          <dd>{{ sessionStateLabel(item) }}</dd>
-        </div>
-      </dl>
-      <template v-if="report.other_payments.length">
-        <p class="ticket-section">Autres règlements</p>
-        <dl class="ticket-lines">
-          <div v-for="row in report.other_payments" :key="`${row.method}-${row.currency}`">
-            <dt>{{ paymentMethodLabels[row.method] ?? row.method }}</dt>
-            <dd>{{ formatMoney(row.amount, row.currency) }}</dd>
-          </div>
-        </dl>
-      </template>
-      <p class="ticket-foot">Établi le {{ formatDateTime(report.generated_at) }}</p>
-      <p class="ticket-sign">Signature</p>
-    </article>
   </div>
 </template>
 
@@ -295,86 +256,31 @@ async function print(mode: 'a4' | '80mm'): Promise<void> {
 
 .print-heading,
 .print-sign,
-.print-detail,
-.report-80 {
+.print-detail {
   display: none;
 }
 
-.ticket-head {
-  display: grid;
-  justify-items: center;
-  text-align: center;
-  padding-bottom: 4px;
-  border-bottom: 1px dashed #000000;
-}
-
-.ticket-section {
-  margin-top: 6px;
-  font-weight: 700;
-  border-bottom: 1px solid #000000;
-}
-
-.ticket-lines div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.ticket-lines dd {
-  margin: 0;
-  text-align: right;
-}
-
-.ticket-lines .strong {
-  font-weight: 700;
-}
-
-.ticket-foot {
-  margin-top: 8px;
-  text-align: center;
-  font-size: 10px;
-}
-
-.ticket-sign {
-  margin-top: 18px;
-  border-top: 1px solid #000000;
-  font-size: 10px;
-}
 
 @media print {
   .no-print {
     display: none !important;
   }
 
-  .print-a4 .print-heading {
+  .print-heading {
     display: grid;
     gap: 2px;
     margin-bottom: 8px;
   }
 
-  .print-a4 .print-detail,
-  .print-a4 .print-sign {
+  .print-detail,
+  .print-sign {
     display: grid;
   }
 
-  .print-a4 .panel {
+  .panel {
     box-shadow: none;
     border: 1px solid #c8c8c8;
     break-inside: avoid;
-  }
-
-  .print-80mm .report-a4 {
-    display: none !important;
-  }
-
-  .print-80mm .report-80 {
-    display: block;
-    width: 80mm;
-    padding: 4mm;
-    color: #000000;
-    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-    font-size: 11.5px;
-    line-height: 1.35;
   }
 }
 </style>

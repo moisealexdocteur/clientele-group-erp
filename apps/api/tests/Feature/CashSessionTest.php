@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ApiAccessToken;
 use App\Models\AuditEvent;
+use App\Models\CarRentalPayment;
 use App\Models\CarRentalSecurityDeposit;
 use App\Models\CarRentalVehicle;
 use App\Models\CashRegister;
@@ -196,7 +197,7 @@ final class CashSessionTest extends TestCase
             ->assertJsonPath('data.can_review', false);
     }
 
-    public function test_the_daily_report_totals_cash_and_other_payments_within_the_authorized_sites(): void
+    public function test_the_daily_report_totals_cash_and_all_approved_car_rental_payments_within_the_authorized_sites(): void
     {
         [$company, $site, $token] = $this->context([...self::SUPERVISOR, 'rental.payments.credit']);
         $other = Site::query()->create([
@@ -231,6 +232,19 @@ final class CashSessionTest extends TestCase
             ])
             ->assertCreated();
 
+        // Espèces approuvées avant la mise en service des caisses : hors session.
+        CarRentalPayment::query()->create([
+            'company_id' => $company->id,
+            'reservation_id' => $reservation,
+            'payment_kind' => 'rental',
+            'method' => 'cash',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'amount' => '50.00',
+            'submitted_at' => now()->utc(),
+            'approved_at' => now()->utc(),
+        ]);
+
         $this->requestFor($token, $company)
             ->postJson("/api/v1/cash/sessions/{$session}/close", ['declared_usd' => '140', 'declared_htg' => '500'])
             ->assertOk();
@@ -246,8 +260,13 @@ final class CashSessionTest extends TestCase
             ->assertJsonPath('data.totals.USD.variance', '0.00')
             ->assertJsonPath('data.open_sessions', 1)
             ->assertJsonPath('data.movements_by_kind.0.kind', 'rental_payment')
-            ->assertJsonPath('data.other_payments.0.method', 'credit')
-            ->assertJsonPath('data.other_payments.0.amount', '260.00')
+            ->assertJsonPath('data.rental_payments.0.method', 'cash')
+            ->assertJsonPath('data.rental_payments.0.amount', '180.00')
+            ->assertJsonPath('data.rental_payments.0.outside_session_count', 1)
+            ->assertJsonPath('data.rental_payments.0.outside_session_amount', '50.00')
+            ->assertJsonPath('data.rental_payments.1.method', 'credit')
+            ->assertJsonPath('data.rental_payments.1.amount', '260.00')
+            ->assertJsonPath('data.rental_payments.1.outside_session_amount', '0.00')
             ->json('data');
 
         self::assertStringNotContainsString('Jean Pierre', json_encode($report, JSON_THROW_ON_ERROR));
@@ -280,18 +299,55 @@ final class CashSessionTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_a_company_never_sees_or_closes_the_cash_of_another_company(): void
+    {
+        [$company, $site, $token] = $this->context(self::SUPERVISOR);
+        [$other, , $otherToken] = $this->context(self::SUPERVISOR, 'HOTEL');
+        $register = $this->register($company, $site, 'CAR-05');
+        $session = $this->requestFor($token, $company)
+            ->postJson("/api/v1/cash/registers/{$register->id}/sessions", ['opening_usd' => '25', 'opening_htg' => '0'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->requestFor($otherToken, $other)
+            ->getJson('/api/v1/cash/registers')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $this->requestFor($otherToken, $other)
+            ->getJson("/api/v1/cash/sessions/{$session}")
+            ->assertNotFound();
+        $this->requestFor($otherToken, $other)
+            ->postJson("/api/v1/cash/sessions/{$session}/close", ['declared_usd' => '25', 'declared_htg' => '0'])
+            ->assertNotFound();
+        $this->requestFor($otherToken, $other)
+            ->postJson("/api/v1/cash/registers/{$register->id}/sessions", ['opening_usd' => '0', 'opening_htg' => '0'])
+            ->assertNotFound();
+        $this->requestFor($otherToken, $other)
+            ->getJson('/api/v1/cash/reports/daily')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.sessions')
+            ->assertJsonPath('data.totals.USD.opening', '0.00');
+
+        // La session de la première société reste ouverte et intacte.
+        $this->requestFor($token, $company)
+            ->getJson("/api/v1/cash/sessions/{$session}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'open')
+            ->assertJsonPath('data.totals.USD.opening', '25.00');
+    }
+
     /** @return array{0: Company, 1: Site, 2: string} */
-    private function context(array $permissions): array
+    private function context(array $permissions, string $code = 'RENT'): array
     {
         $company = Company::query()->create([
-            'code' => 'RENT',
+            'code' => $code,
             'legal_name' => 'Clientèle Rent a Car S.A.',
             'display_name' => 'Clientèle Rent a Car',
             'base_currency' => 'USD',
         ]);
         $site = Site::query()->create([
             'company_id' => $company->id,
-            'code' => 'CAP-AERO',
+            'code' => $code . '-CAP',
             'name' => 'Bureau Cap-Haïtien',
             'address' => 'Cap-Haïtien',
         ]);

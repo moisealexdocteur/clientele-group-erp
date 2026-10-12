@@ -29,7 +29,7 @@ final class RecordDailyReportExport extends Controller
         $data = $request->validate([
             'date' => ['required', 'date_format:Y-m-d'],
             'site_id' => ['nullable', 'uuid'],
-            'format' => ['required', 'in:pdf,xlsx,print_a4,print_80mm'],
+            'format' => ['required', 'in:pdf,xlsx,print_a4'],
         ]);
 
         if (filled($data['site_id'] ?? null)) {
