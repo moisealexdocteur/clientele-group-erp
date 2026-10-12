@@ -9,7 +9,7 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `15d247765220cc7e768befc93a05cfff7c606d94` (0.6.0-alpha.1, cycle Car Rental validé en recette le 8 octobre 2026) |
-| Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier). Branche `feat/caisse-session` en relecture : retrait du 80 mm, encaissements Car Rental au rapport, test d'isolation |
+| Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier). PR #33 fusionnée (retrait du 80 mm, encaissements Car Rental au rapport, test d'isolation) ; carte par devise dans la session de caisse |
 | Dernière version déployée | `0.9.0-alpha.1` (déployée le 12 octobre 2026, caisse en relecture). Car Rental validé en recette le 12 octobre 2026 : réservations, courriels |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
 | Image API et web déployée | `sha-fddc19d` |

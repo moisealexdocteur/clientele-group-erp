@@ -80,33 +80,22 @@ async function saveReview(): Promise<void> {
     <div v-else-if="record" class="session-grid">
       <section class="panel">
         <h2 class="title-section">Espèces</h2>
-        <div class="table-scroll">
-          <table class="cash-table">
-            <thead>
-              <tr>
-                <th scope="col">Devise</th>
-                <th scope="col">Fond</th>
-                <th scope="col">Entrées</th>
-                <th scope="col">Sorties</th>
-                <th scope="col">Attendu</th>
-                <th v-if="record.declared" scope="col">Compté</th>
-                <th v-if="record.variance" scope="col">Écart</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="currency in CURRENCIES" :key="currency">
-                <th scope="row">{{ currency }}</th>
-                <td>{{ formatMoney(record.totals[currency].opening, currency) }}</td>
-                <td>{{ formatMoney(record.totals[currency].in, currency) }}</td>
-                <td>{{ formatMoney(record.totals[currency].out, currency) }}</td>
-                <td><strong>{{ formatMoney(record.totals[currency].expected, currency) }}</strong></td>
-                <td v-if="record.declared">{{ formatMoney(record.declared[currency], currency) }}</td>
-                <td v-if="record.variance" :class="{ negative: Number(record.variance[currency]) < 0, positive: Number(record.variance[currency]) > 0 }">
-                  {{ signed(record.variance[currency], currency) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Une carte par devise : lisible sur téléphone, sans colonne coupée. -->
+        <div class="currencies">
+          <div v-for="currency in CURRENCIES" :key="currency" class="currency">
+            <h3 class="currency-title">{{ currency }}</h3>
+            <dl class="facts">
+              <div><dt>Fond</dt><dd>{{ formatMoney(record.totals[currency].opening, currency) }}</dd></div>
+              <div><dt>Entrées</dt><dd>{{ formatMoney(record.totals[currency].in, currency) }}</dd></div>
+              <div><dt>Sorties</dt><dd>{{ formatMoney(record.totals[currency].out, currency) }}</dd></div>
+              <div><dt>Attendu</dt><dd>{{ formatMoney(record.totals[currency].expected, currency) }}</dd></div>
+              <div v-if="record.declared"><dt>Compté</dt><dd>{{ formatMoney(record.declared[currency], currency) }}</dd></div>
+              <div v-if="record.variance">
+                <dt>Écart</dt>
+                <dd :class="{ negative: Number(record.variance[currency]) < 0 }">{{ signed(record.variance[currency], currency) }}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
         <dl class="facts">
           <div><dt>Ouverte par</dt><dd>{{ record.opened_by ?? 'Non renseigné' }}</dd></div>
@@ -187,41 +176,38 @@ async function saveReview(): Promise<void> {
   }
 }
 
-.table-scroll {
-  overflow-x: auto;
+.currencies {
+  display: grid;
+  gap: 16px;
 }
 
-.cash-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
+@media (min-width: 560px) {
+  .currencies {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.currency {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
   font-variant-numeric: tabular-nums;
 }
 
-.cash-table th,
-.cash-table td {
-  padding: 10px 8px;
-  border-top: 1px solid var(--line);
-  text-align: right;
+.currency-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.currency dd {
   white-space: nowrap;
-}
-
-.cash-table thead th {
-  border-top: 0;
-  color: var(--ink-3);
-  font-weight: 400;
-}
-
-.cash-table th:first-child {
-  text-align: left;
 }
 
 .negative {
   color: var(--danger, #c50f1f);
-}
-
-.positive {
-  color: var(--ink-1, inherit);
 }
 
 .movement > div {
