@@ -11,6 +11,9 @@ app.mount('#app')
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js')
+    // Le service worker est toujours relu sur le réseau, puis vérifié toutes les 30 minutes.
+    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
+      window.setInterval(() => void registration.update().catch(() => undefined), 30 * 60 * 1000)
+    })
   })
 }

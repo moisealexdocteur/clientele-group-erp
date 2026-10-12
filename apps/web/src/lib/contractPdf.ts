@@ -195,6 +195,41 @@ export class Writer {
     this.y -= boxHeight + 10
   }
 
+  /**
+   * Tableau simple : en-tête en gras, colonnes de largeur relative, montants
+   * alignés à droite. Une ligne trop longue est coupée dans sa colonne ; l'en-tête
+   * est répété en haut de chaque nouvelle page.
+   */
+  table(columns: Array<{ label: string; weight: number; align?: 'left' | 'right' }>, rows: Array<{ cells: string[]; bold?: boolean }>): void {
+    const size = 8.6
+    const leading = 11.4
+    const totalWeight = columns.reduce((total, column) => total + column.weight, 0)
+    const widths = columns.map((column) => (this.width * column.weight) / totalWeight)
+    const drawRow = (cells: string[], font: PDFFont, header = false): void => {
+      const wrapped = cells.map((cell, index) => this.wrap(cell || '', font, size, widths[index] - 6))
+      const height = Math.max(1, ...wrapped.map((lines) => lines.length)) * leading + 4
+      if (this.y - height < MARGIN + 24) {
+        this.addPage()
+        if (!header) drawRow(columns.map((column) => column.label), this.bold, true)
+      }
+      let x = MARGIN
+      wrapped.forEach((lines, index) => {
+        lines.forEach((line, lineIndex) => {
+          const lineWidth = font.widthOfTextAtSize(line, size)
+          const left = columns[index].align === 'right' ? x + widths[index] - 3 - lineWidth : x + 3
+          this.page.drawText(line, { x: left, y: this.y - size - lineIndex * leading, size, font, color: INK })
+        })
+        x += widths[index]
+      })
+      this.y -= height
+      this.page.drawLine({ start: { x: MARGIN, y: this.y + 1 }, end: { x: MARGIN + this.width, y: this.y + 1 }, thickness: 0.4, color: LINE })
+    }
+    this.ensure(leading * 2 + 8)
+    drawRow(columns.map((column) => column.label), this.bold, true)
+    for (const row of rows) drawRow(row.cells, row.bold ? this.bold : this.regular)
+    this.y -= 6
+  }
+
   footer(reference: string): void {
     const total = this.pages.length
     this.pages.forEach((page, index) => {

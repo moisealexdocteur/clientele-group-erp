@@ -1,6 +1,6 @@
 # Reprise du projet Clientèle Group ERP
 
-Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire), 0.4.0-alpha.1 (réservations, paiements et design Fluent) 0.5.0-alpha.1 (permis, fiche de sortie, signatures et contrat), 0.6.0-alpha.1 (retour, croquis, dépôt et facture), 0.7.0-alpha.1 (taux HTG/USD et reçus), 0.7.1-alpha.1 (courriels, clients connus) et 0.8.0-alpha.1 (taux unique du groupe).
+Ce document est la référence de transition à lire avant toute modification. Il a été figé le 8 octobre 2026 après le déploiement de l'alpha.14 en préproduction, puis mis à jour avec les versions 0.3.0-alpha.1 (interface modulaire), 0.4.0-alpha.1 (réservations, paiements et design Fluent) 0.5.0-alpha.1 (permis, fiche de sortie, signatures et contrat), 0.6.0-alpha.1 (retour, croquis, dépôt et facture), 0.7.0-alpha.1 (taux HTG/USD et reçus), 0.7.1-alpha.1 (courriels, clients connus), 0.8.0-alpha.1 (taux unique du groupe, découpe Car Rental et correctifs de sécurité) et 0.9.0-alpha.1 (caisse et rapport journalier).
 
 ## 1. Source de vérité et état de déploiement
 
@@ -9,10 +9,10 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `15d247765220cc7e768befc93a05cfff7c606d94` (0.6.0-alpha.1, cycle Car Rental validé en recette le 8 octobre 2026) |
-| Version du dépôt | `0.8.0-alpha.1` (taux unique du groupe dans Configuration, à déployer). Branche `fix/car-rental-decoupe` en relecture : découpe Car Rental et correctifs de sécurité, sans nouvelle version |
-| Dernière version déployée | `0.6.0-alpha.1` (validée) |
+| Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier, à déployer) |
+| Dernière version déployée | `0.8.0-alpha.1` avec découpe Car Rental et correctifs (validée en recette le 12 octobre 2026 : réservations, courriels) |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-15d2477` |
+| Image API et web déployée | `sha-6c299d8` |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
@@ -41,7 +41,7 @@ Le script demande un jeton GitHub classique ayant seulement l'autorisation `read
 ## 3. Architecture actuelle
 
 - Frontend : PWA Vue 3, TypeScript, Vue Router et Pinia dans `apps/web`, design Microsoft Fluent 2 (Segoe UI, jetons dans `src/styles/main.css`). Un écran par fichier dans `src/views`, composants par domaine dans `src/components`, appels serveur dans `src/api`, dates et devises dans `src/lib`. Détail : `docs/22_Interface_modulaire_0.3.0.md`. Ne jamais recréer un fichier d'interface unique.
-- Backend : Laravel et PHP dans `apps/api`. Car Rental : un contrôleur invocable par action dans `app/Http/Controllers/CarRental`, règles partagées dans `app/Support/CarRental` (présentation, lecture, planning, véhicules, prix, croquis, clients). Ne jamais recréer un contrôleur unique ni dépasser 500 lignes par contrôleur.
+- Backend : Laravel et PHP dans `apps/api`. Car Rental : un contrôleur invocable par action dans `app/Http/Controllers/CarRental`, règles partagées dans `app/Support/CarRental` (présentation, lecture, planning, véhicules, prix, croquis, clients). Caisse : actions dans `app/Http/Controllers/Cash`, présentation dans `app/Support/Cash`. Ne jamais recréer un contrôleur unique ni dépasser 500 lignes par contrôleur.
 - Montants : `App\Support\Money` en centimes entiers (taux en dix-millièmes). Interdit : `(float)` sur un prix, un dépôt, un taux ou une signature. Saisie contrôlée par `App\Rules\DecimalAmount`.
 - Infrastructure locale : Docker Compose et Traefik dans `infra`.
 - Base de données : PostgreSQL.
@@ -93,6 +93,7 @@ Les tests API pertinents sont notamment dans :
 - Principe figé : tous les réglages et configurations se trouvent dans le menu Configuration. Les écrans métier affichent seulement les valeurs en vigueur.
 - La gestion d'utilisateur doit permettre création, consultation, modification, désactivation, réactivation, réinitialisation et suppression définitive selon les droits.
 - La création d'un compte envoie un courriel au format visuel validé.
+- Permissions ajoutées en 0.9.0 : `cash.sessions.operate` (caisse, administrateur et agent), `cash.sessions.approve` et `cash.reports.read` (administrateur). Un paiement en espèces exige une caisse ouverte.
 - Permissions ajoutées en 0.6.0 : `rental.deposits.settle` (régler le dépôt, autres frais, administrateur) et `rental.invoices.issue` (facture, administrateur et agent).
 - Permissions ajoutées en 0.4.0 : `rental.reservations.override_rate` (modifier le tarif de la fiche), `rental.payments.credit` (accorder un crédit), `rental.documents.sensitive` (voir permis et reçus). Elles sont accordées au rôle administrateur Car Rental, jamais à l'agent par défaut.
 - Les fichiers (photos, reçus, permis) sont privés : volume Docker `clientele-documents`, JPEG, PNG ou PDF seulement (type lu dans le contenu, SVG et HTML refusés), 10 Mo au plus, hash SHA-256, lecture selon la permission et journalisation. Un fichier d'une autre société répond 404.
@@ -168,7 +169,7 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 
 L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent être repris avant d'ajouter d'autres modules.
 
-État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Le cycle Car Rental (remise, retour, croquis, dépôt, facture, P1 courriel) est complet en 0.6.0-alpha.1 : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`. Socle commun : taux HTG/USD avec alerte BRH, reçus 8 chiffres avec QR et impression 80 mm livrés en 0.7.0-alpha.1 (`docs/26_Taux_HTG_USD_et_recus_0.7.0.md`), taux unique du groupe en 0.8.0-alpha.1 (`docs/28_Taux_unique_du_groupe_0.8.0.md`). Restent : écran client, exports PDF et Excel, rapports journaliers.
+État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Le cycle Car Rental (remise, retour, croquis, dépôt, facture, P1 courriel) est complet en 0.6.0-alpha.1 : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`. Socle commun : taux HTG/USD avec alerte BRH, reçus 8 chiffres avec QR et impression 80 mm livrés en 0.7.0-alpha.1 (`docs/26_Taux_HTG_USD_et_recus_0.7.0.md`), taux unique du groupe en 0.8.0-alpha.1 (`docs/28_Taux_unique_du_groupe_0.8.0.md`). Caisse, clôture, écarts et rapport journalier PDF et Excel en 0.9.0-alpha.1 (`docs/30_Caisse_et_rapport_journalier_0.9.0.md`). Reste : écran client.
 
 ### P0 : disponibilité et navigation (fait)
 
