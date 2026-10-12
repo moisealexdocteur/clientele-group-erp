@@ -2,9 +2,25 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
-## Non publié - branche fix/car-rental-decoupe
+## 0.9.0-alpha.1 - 2026-10-12
 
-Détail : `docs/29_Decoupe_Car_Rental_et_securite.md`. Pas de nouvelle version avant relecture.
+Socle commun, deuxième volet. Détail : `docs/30_Caisse_et_rapport_journalier_0.9.0.md`.
+
+### Ajouté
+
+- Caisse : ouverture avec fond USD et HTG, mouvements d'espèces (paiements, dépôts reçus et rendus), clôture avec montants comptés, écart expliqué et approuvé par un superviseur.
+- Rapport de fermeture imprimable en 80 mm, mention de réimpression.
+- Rapport journalier : espèces par devise, sessions, mouvements, virements et crédits ; impression A4 ou 80 mm, PDF et Excel, journalisés.
+- Permissions `cash.sessions.operate`, `cash.sessions.approve` et `cash.reports.read`.
+- Rechargement automatique d'une page gardée par le navigateur lorsqu'une nouvelle version est déployée.
+
+### Modifié
+
+- Un paiement en espèces exige une caisse ouverte ; le dépôt rendu en espèces sort de la caisse qui l'a reçu.
+
+## 0.8.0-alpha.1 (correctifs du 9 octobre 2026, sha-6c299d8)
+
+Détail : `docs/29_Decoupe_Car_Rental_et_securite.md`.
 
 ### Modifié
 

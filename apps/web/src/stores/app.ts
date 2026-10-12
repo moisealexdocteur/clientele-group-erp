@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { BootstrapResponse } from '../api/types'
+import { reloadIfOutdated } from '../lib/appUpdate'
 
 export type ServerStatus = 'checking' | 'online' | 'offline'
 
@@ -37,6 +38,8 @@ export const useAppStore = defineStore('app', () => {
       if (!health.ok || !boot.ok) throw new Error('Réponse invalide')
       bootstrap.value = (await boot.json()) as BootstrapResponse
       serverStatus.value = 'online'
+      // Ancienne version gardée par le navigateur : rechargement unique.
+      void reloadIfOutdated(bootstrap.value.application.version)
     } catch {
       serverStatus.value = 'offline'
     }

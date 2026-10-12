@@ -44,6 +44,7 @@ final class CarRentalPayment extends Model
         'receipt_number',
         'receipt_issued_at',
         'receipt_print_count',
+        'cash_session_id',
     ];
 
     protected function casts(): array
@@ -73,6 +74,11 @@ final class CarRentalPayment extends Model
     public function cashRegister(): BelongsTo
     {
         return $this->belongsTo(CashRegister::class);
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 
     public function approver(): BelongsTo

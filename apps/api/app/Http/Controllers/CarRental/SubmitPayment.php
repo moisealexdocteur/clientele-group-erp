@@ -11,6 +11,7 @@ use App\Models\StoredFile;
 use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRental\CarRentalPresenter;
+use App\Support\CashSessionService;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\ExchangeRateService;
 use App\Support\FileVault;
@@ -31,6 +32,7 @@ final class SubmitPayment extends Controller
         private readonly ExchangeRateService $exchangeRates,
         private readonly FileVault $files,
         private readonly CompanySiteAuthorizer $siteAuthorizer,
+        private readonly CashSessionService $cash,
     ) {
     }
 
@@ -128,12 +130,18 @@ final class SubmitPayment extends Controller
                 }
             }
 
+            // Les espèces entrent dans la session ouverte de la caisse choisie.
+            $cashSession = $cashRegisterId === null
+                ? null
+                : $this->cash->requireOpenSession($company, $cashRegisterId, 'cash_register_id');
+
             // Un crédit n'encaisse rien : il est accordé et approuvé par la même personne autorisée.
             $isCredit = $data['method'] === 'credit';
             $payment = new CarRentalPayment([
                 'company_id' => $company->id,
                 'reservation_id' => $model->id,
                 'cash_register_id' => $cashRegisterId,
+                'cash_session_id' => $cashSession?->id,
                 'payment_kind' => $data['payment_kind'],
                 'method' => $data['method'],
                 'status' => $isCredit ? 'approved' : 'submitted',

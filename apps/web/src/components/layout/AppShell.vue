@@ -506,3 +506,31 @@ async function signOut(): Promise<void> {
   }
 }
 </style>
+
+<style>
+/* Impression depuis un écran de l'application : seul le contenu de la page est imprimé. */
+@media print {
+  .shell .rail,
+  .shell .topbar,
+  .shell .tabbar,
+  .shell .offline-banner,
+  .shell .skip-link {
+    display: none !important;
+  }
+
+  .shell {
+    display: block !important;
+    min-height: 0 !important;
+  }
+
+  .shell .content {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+}
+</style>

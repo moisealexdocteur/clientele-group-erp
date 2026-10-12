@@ -10,6 +10,7 @@ use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\CarRental\CarRentalLookup;
 use App\Support\CarRental\CarRentalPresenter;
+use App\Support\CashSessionService;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ final class SettleDeposit extends Controller
         private readonly CarRentalLookup $lookup,
         private readonly CarRentalPresenter $presenter,
         private readonly AuditLogger $audit,
+        private readonly CashSessionService $cash,
     ) {
     }
 
@@ -84,6 +86,9 @@ final class SettleDeposit extends Controller
                 $amount = Money::toCents((string) $deposit->amount);
                 $apply = min($remaining, $amount);
                 $remaining -= $apply;
+
+                // La part non retenue d'un dépôt en espèces sort de la caisse qui l'a reçu.
+                $this->cash->recordDepositRefund($company, $deposit, Money::fromCents($amount - $apply), $actor);
 
                 $deposit->forceFill([
                     'status' => $apply <= 0 ? 'released' : ($apply >= $amount ? 'forfeited' : 'partially_applied'),

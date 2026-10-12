@@ -9,6 +9,7 @@ use App\Models\CarRentalReservation;
 use App\Models\CarRentalSecurityDeposit;
 use App\Support\AuditLogger;
 use App\Support\CarRental\CarRentalPresenter;
+use App\Support\CashSessionService;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\ReceiptService;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +26,7 @@ final class ApprovePayment extends Controller
         private readonly AuditLogger $audit,
         private readonly ReceiptService $receipts,
         private readonly CompanySiteAuthorizer $siteAuthorizer,
+        private readonly CashSessionService $cash,
     ) {
     }
 
@@ -64,6 +66,8 @@ final class ApprovePayment extends Controller
                 'approved_at' => now()->utc(),
             ])->save();
             $this->receipts->issue($record);
+            // Entrée d'espèces dans la session de caisse du paiement.
+            $this->cash->recordPayment($record, $actor);
 
             if ($record->payment_kind === 'security_deposit') {
                 CarRentalSecurityDeposit::query()->updateOrCreate(

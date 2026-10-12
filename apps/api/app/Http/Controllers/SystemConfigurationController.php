@@ -51,6 +51,9 @@ final class SystemConfigurationController extends Controller
                 'rental.documents.sensitive',
                 'rental.deposits.settle',
                 'rental.invoices.issue',
+                'cash.sessions.operate',
+                'cash.sessions.approve',
+                'cash.reports.read',
             ],
         ],
         'car_rental_agent' => [
@@ -63,6 +66,7 @@ final class SystemConfigurationController extends Controller
                 'rental.calendar.read',
                 'rental.payments.submit',
                 'rental.invoices.issue',
+                'cash.sessions.operate',
             ],
         ],
         'car_rental_fleet' => [

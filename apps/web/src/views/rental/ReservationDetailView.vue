@@ -134,13 +134,25 @@ function openPayment(kind: 'rental' | 'security_deposit' = 'rental', amount = ''
     method: 'cash',
     currency: kind === 'security_deposit' ? 'USD' : (reservation.value?.currency ?? 'USD'),
     amount,
-    cash_register_id: cashRegisters.value[0]?.id ?? '',
+    cash_register_id: (cashRegisters.value.find((register) => register.is_open) ?? cashRegisters.value[0])?.id ?? '',
     bank_reference: '',
     proof_file_id: '',
   })
   action.reset()
   task.value = 'payment'
+  // L'état ouvert ou fermé des caisses peut avoir changé depuis le chargement.
+  void session.refreshContext().then(() => {
+    const selected = cashRegisters.value.find((register) => register.id === paymentForm.cash_register_id)
+    if (selected && !selected.is_open) {
+      paymentForm.cash_register_id = (cashRegisters.value.find((register) => register.is_open) ?? selected).id
+    }
+  })
 }
+
+const selectedRegisterClosed = computed(() => {
+  if (paymentForm.method !== 'cash' || !paymentForm.cash_register_id) return false
+  return cashRegisters.value.find((register) => register.id === paymentForm.cash_register_id)?.is_open === false
+})
 
 function setPaymentKind(kind: 'rental' | 'security_deposit'): void {
   paymentForm.payment_kind = kind
@@ -171,6 +183,7 @@ const paymentMissing = computed(() => {
   const items: string[] = []
   if (!paymentForm.amount || Number(paymentForm.amount) <= 0) items.push('Le montant')
   if (paymentForm.method === 'cash' && !paymentForm.cash_register_id) items.push('La caisse')
+  if (selectedRegisterClosed.value) items.push('Une caisse ouverte')
   if (paymentForm.method === 'bank_transfer' && !paymentForm.proof_file_id) items.push('La photo ou le fichier du reçu Sogebank')
   if (conversion.value && !conversion.value.rate) items.push('Un taux HTG/USD défini par un administrateur')
   return items
@@ -782,10 +795,14 @@ const paymentStatusLabels: Record<CarRentalPayment['status'], string> = {
         <FormField label="Caisse" required :error="action.fieldErrors.value.cash_register_id" v-slot="field">
           <select v-model="paymentForm.cash_register_id" v-bind="field.attrs" class="select" required>
             <option value="" disabled>Sélectionnez une caisse active</option>
-            <option v-for="register in cashRegisters" :key="register.id" :value="register.id">{{ register.name }}</option>
+            <option v-for="register in cashRegisters" :key="register.id" :value="register.id">{{ register.name }}{{ register.is_open === false ? ' (fermée)' : '' }}</option>
           </select>
         </FormField>
         <p v-if="!cashRegisters.length" class="alert alert-warning">Aucune caisse active pour ce bureau. Demandez au propriétaire d’en créer une.</p>
+        <p v-else-if="selectedRegisterClosed" class="alert alert-warning">
+          Cette caisse est fermée. Ouvrez-la avant d’encaisser des espèces.
+          <RouterLink v-if="session.can('cash.sessions.operate')" :to="{ name: 'cash' }">Ouvrir la caisse</RouterLink>
+        </p>
       </template>
 
       <template v-if="paymentForm.method === 'bank_transfer'">
