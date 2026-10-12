@@ -2,14 +2,18 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
-## Non publié - branche feat/caisse-session
+## Non publié - ajustements de la caisse
 
-Ajustements de la caisse demandés en relecture. La version reste `0.9.0-alpha.1` jusqu'à la relecture. Détail : `docs/30_Caisse_et_rapport_journalier_0.9.0.md`.
+Ajustements de la caisse demandés en relecture (PR #33 fusionnée) et en recette. La version reste `0.9.0-alpha.1`. Détail : `docs/30_Caisse_et_rapport_journalier_0.9.0.md`.
 
 ### Ajouté
 
 - Rapport journalier : tous les encaissements Car Rental approuvés du jour, par mode et devise, y compris les espèces approuvées sans session de caisse.
 - Test d'isolation entre deux sociétés (caisse, session, clôture, rapport).
+
+### Corrigé
+
+- Session de caisse sur téléphone : la colonne Compté était coupée (« 40,00 L »). Les montants s'affichent maintenant dans une carte par devise.
 
 ### Retiré
 
