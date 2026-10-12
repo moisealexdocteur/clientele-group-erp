@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
-import { fetchCashSession, recordCashSessionPrint, reviewCashSession } from '../../api/cash'
+import { computed, onMounted, ref } from 'vue'
+import { fetchCashSession, reviewCashSession } from '../../api/cash'
 import type { CashSession, Currency } from '../../api/types'
 import { useRequest } from '../../composables/useRequest'
 import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
-import { useSessionStore } from '../../stores/session'
 import { formatMoney } from '../../lib/money'
 import { formatDateTime, formatTime } from '../../lib/time'
 import { CURRENCIES, sessionStateLabel } from '../../lib/dailyReport'
@@ -17,21 +16,18 @@ import FormField from '../../components/ui/FormField.vue'
 
 /*
  * Session de caisse : totaux par devise, mouvements, écart et décision.
- * Le rapport de fermeture s'imprime en 80 mm ; une seconde impression est
- * marquée « Réimpression ».
+ * Le rapport imprimable est le rapport journalier (A4, PDF, Excel).
  */
 const props = defineProps<{ sessionId: string }>()
 
 const app = useAppStore()
 const ui = useUiStore()
-const session = useSessionStore()
 const loading = useRequest()
 const action = useRequest()
 
 const record = ref<CashSession | null>(null)
 const reviewOpen = ref(false)
 const reviewNote = ref('')
-const printing = ref(false)
 
 const tone = computed(() => {
   const value = record.value
@@ -40,8 +36,6 @@ const tone = computed(() => {
   return value.review_status === 'pending' ? ('warning' as const) : ('neutral' as const)
 })
 
-const isReprint = computed(() => (record.value?.report_print_count ?? 0) > 0)
-const companyName = computed(() => session.context?.company.legal?.name ?? session.context?.company.name ?? '')
 
 onMounted(async () => {
   const result = await loading.run(() => fetchCashSession(props.sessionId))
@@ -65,23 +59,6 @@ async function saveReview(): Promise<void> {
   ui.toast('Écart approuvé.')
 }
 
-async function print(): Promise<void> {
-  if (!record.value || printing.value) return
-  printing.value = true
-  try {
-    // La mention de réimpression doit figurer sur le papier : l'état est relu avant l'impression.
-    const before = record.value.report_print_count
-    const result = await recordCashSessionPrint(props.sessionId)
-    record.value = { ...result.data, report_print_count: before }
-    await nextTick()
-    window.print()
-    record.value = result.data
-  } catch (error) {
-    ui.toast(error instanceof Error ? error.message : 'L’impression n’a pas pu être enregistrée.', 'danger')
-  } finally {
-    printing.value = false
-  }
-}
 </script>
 
 <template>
@@ -94,9 +71,6 @@ async function print(): Promise<void> {
     >
       <template v-if="record" #before-title>
         <StatusPill :tone="tone" :label="sessionStateLabel(record)" />
-      </template>
-      <template v-if="record" #actions>
-        <button class="btn btn-secondary" type="button" :disabled="printing || !app.canReachServer" @click="print">Imprimer le rapport</button>
       </template>
     </PageHeader>
 
@@ -181,48 +155,6 @@ async function print(): Promise<void> {
     </div>
   </div>
 
-  <!-- Rapport de fermeture, imprimé en 80 mm. -->
-  <article v-if="record" class="ticket print-only" aria-hidden="true">
-    <p v-if="isReprint" class="ticket-banner">RÉIMPRESSION</p>
-    <header class="ticket-head">
-      <strong>{{ companyName }}</strong>
-      <span>{{ record.site.name }}</span>
-      <span>{{ record.cash_register.name }}</span>
-    </header>
-    <div class="ticket-title">
-      <span>{{ record.status === 'open' ? 'ÉTAT DE CAISSE' : 'RAPPORT DE FERMETURE' }}</span>
-      <span>Heure de Cap-Haïtien</span>
-    </div>
-    <dl class="ticket-lines">
-      <div><dt>Ouverture</dt><dd>{{ record.opened_at ? formatDateTime(record.opened_at) : '' }}</dd></div>
-      <div><dt>Par</dt><dd>{{ record.opened_by }}</dd></div>
-      <div v-if="record.closed_at"><dt>Clôture</dt><dd>{{ formatDateTime(record.closed_at) }}</dd></div>
-      <div v-if="record.closed_by"><dt>Par</dt><dd>{{ record.closed_by }}</dd></div>
-    </dl>
-    <template v-for="currency in CURRENCIES" :key="currency">
-      <p class="ticket-section">{{ currency }}</p>
-      <dl class="ticket-lines">
-        <div><dt>Fond</dt><dd>{{ formatMoney(record.totals[currency].opening, currency) }}</dd></div>
-        <div><dt>Entrées</dt><dd>{{ formatMoney(record.totals[currency].in, currency) }}</dd></div>
-        <div><dt>Sorties</dt><dd>{{ formatMoney(record.totals[currency].out, currency) }}</dd></div>
-        <div class="strong"><dt>Attendu</dt><dd>{{ formatMoney(record.totals[currency].expected, currency) }}</dd></div>
-        <div v-if="record.declared"><dt>Compté</dt><dd>{{ formatMoney(record.declared[currency], currency) }}</dd></div>
-        <div v-if="record.variance" class="strong"><dt>Écart</dt><dd>{{ signed(record.variance[currency], currency) }}</dd></div>
-      </dl>
-    </template>
-    <p class="ticket-section">Mouvements ({{ record.movements?.length ?? 0 }})</p>
-    <dl class="ticket-lines">
-      <div v-for="movement in record.movements" :key="movement.id">
-        <dt>{{ movement.occurred_at ? formatTime(movement.occurred_at) : '' }} {{ movement.receipt_number ?? movement.label }}</dt>
-        <dd>{{ movement.direction === 'out' ? '-' : '' }}{{ formatMoney(movement.amount, movement.currency) }}</dd>
-      </div>
-    </dl>
-    <p v-if="record.variance_note" class="ticket-note">Écart : {{ record.variance_note }}</p>
-    <p v-if="record.review_status === 'approved'" class="ticket-note">Approuvé par {{ record.reviewed_by }} : {{ record.review_note }}</p>
-    <p class="ticket-sign">Signature caissier</p>
-    <p class="ticket-sign">Signature superviseur</p>
-    <p class="ticket-foot">Impression n° {{ record.report_print_count + 1 }}</p>
-  </article>
 
   <SheetDialog :open="reviewOpen" title="Approuver l’écart" description="Indiquez la décision ou la mesure prise. Elle est journalisée à votre nom." :locked="action.busy.value" @close="reviewOpen = false">
     <form id="review-form" class="form" novalidate @submit.prevent="saveReview">
@@ -309,93 +241,4 @@ async function print(): Promise<void> {
   align-items: center;
 }
 
-.print-only {
-  display: none;
-}
-
-.ticket {
-  width: 80mm;
-  padding: 4mm;
-  background: #ffffff;
-  color: #000000;
-  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-  font-size: 11.5px;
-  line-height: 1.35;
-}
-
-.ticket-banner {
-  padding: 3px 0;
-  border: 1.5px dashed #000000;
-  text-align: center;
-  font-weight: 700;
-}
-
-.ticket-head,
-.ticket-title {
-  display: grid;
-  justify-items: center;
-  text-align: center;
-}
-
-.ticket-title {
-  margin: 6px 0;
-  padding: 4px 0;
-  border-top: 1px dashed #000000;
-  border-bottom: 1px dashed #000000;
-  font-weight: 700;
-}
-
-.ticket-section {
-  margin-top: 6px;
-  font-weight: 700;
-  border-bottom: 1px solid #000000;
-}
-
-.ticket-lines div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.ticket-lines dd {
-  margin: 0;
-  text-align: right;
-}
-
-.ticket-lines .strong {
-  font-weight: 700;
-}
-
-.ticket-note {
-  margin-top: 6px;
-  overflow-wrap: anywhere;
-}
-
-.ticket-sign {
-  margin-top: 18px;
-  padding-top: 2px;
-  border-top: 1px solid #000000;
-  font-size: 10px;
-}
-
-.ticket-foot {
-  margin-top: 8px;
-  text-align: center;
-  font-size: 10px;
-}
-
-@media print {
-  @page {
-    size: 80mm auto;
-    margin: 0;
-  }
-
-  .no-print {
-    display: none !important;
-  }
-
-  .print-only {
-    display: block;
-  }
-}
 </style>

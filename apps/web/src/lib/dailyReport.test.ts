@@ -47,7 +47,10 @@ const report: DailyCashReport = {
     HTG: { opening: '1000.00', in: '0.00', out: '0.00', expected: '1000.00', declared: '1000.00', variance: '0.00' },
   },
   movements_by_kind: [{ kind: 'rental_payment', label: 'Paiement de location', direction: 'in', currency: 'USD', count: 1, amount: '390.00' }],
-  other_payments: [{ method: 'bank_transfer', currency: 'USD', count: 1, amount: '130.00' }],
+  rental_payments: [
+    { method: 'bank_transfer', currency: 'USD', count: 1, amount: '130.00', outside_session_count: 0, outside_session_amount: '0.00' },
+    { method: 'cash', currency: 'USD', count: 2, amount: '440.00', outside_session_count: 1, outside_session_amount: '50.00' },
+  ],
   open_sessions: 0,
   pending_reviews: 1,
   reprints: 2,

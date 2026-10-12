@@ -25,15 +25,12 @@ export function reviewCashSession(sessionId: string, note: string) {
   return api<{ data: CashSession }>(`${base}/sessions/${sessionId}/review`, { method: 'POST', body: { note } })
 }
 
-export function recordCashSessionPrint(sessionId: string) {
-  return api<{ data: CashSession }>(`${base}/sessions/${sessionId}/prints`, { method: 'POST' })
-}
 
 export function fetchDailyCashReport(query: { date?: string; site_id?: string }) {
   return api<{ data: DailyCashReport }>(`${base}/reports/daily`, { query })
 }
 
-export type DailyReportFormat = 'pdf' | 'xlsx' | 'print_a4' | 'print_80mm'
+export type DailyReportFormat = 'pdf' | 'xlsx' | 'print_a4'
 
 export function recordDailyReportExport(payload: { date: string; site_id?: string; format: DailyReportFormat }) {
   return api<{ recorded: boolean }>(`${base}/reports/daily/exports`, { method: 'POST', body: payload })
