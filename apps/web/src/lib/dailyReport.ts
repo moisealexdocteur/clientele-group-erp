@@ -6,7 +6,7 @@ import { formatDate, formatDateTime, formatTime } from './time'
 import { bold, buildXlsx, money, type XlsxRow } from './xlsx'
 
 /*
- * Rapport journalier de caisse : mêmes données à l'écran, en PDF A4 et en
+ * Rapport journalier de caisse : mêmes données à l'écran, en PDF Lettre et en
  * Excel. Aucun nom ni coordonnée de client : réservations et reçus sont
  * identifiés par leur numéro.
  */

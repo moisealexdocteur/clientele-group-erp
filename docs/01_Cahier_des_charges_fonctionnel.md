@@ -131,7 +131,7 @@ L'espace Paramètres globaux est limité au propriétaire et aux administrateurs
 4. Le reçu client et la copie Administration peuvent être imprimés automatiquement selon le profil du poste.
 5. L'utilisateur clôture le quart. Le système compare le théorique aux montants déclarés par devise et demande une explication pour tout écart.
 6. Le superviseur approuve les écarts hors tolérance.
-7. Le rapport journalier est imprimable en 80 mm ou A4 selon le poste et toujours exportable.
+7. Le rapport journalier est imprimable en 80 mm ou au format Lettre US (8,5 x 11 po) selon le poste et toujours exportable.
 
 Chaque écran d'opération montre sans ambiguïté : société, site, adresse configurée, point de vente ou de service, appareil et session active. Un libellé « caisse » seul ne suffit jamais à identifier le lieu d'une transaction.
 

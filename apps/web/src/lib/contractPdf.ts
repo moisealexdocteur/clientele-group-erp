@@ -7,7 +7,7 @@ import { formatDate, formatDateTime, rentalDays } from './time'
 import { damageKindLabels, SKETCH_BODY, SKETCH_DETAILS, SKETCH_HEIGHT, SKETCH_WHEELS, SKETCH_WIDTH, type DamageMark } from './damageSketch'
 
 /*
- * Contrat de location au format PDF A4, construit uniquement à partir de
+ * Contrat de location au format PDF Lettre (8,5 x 11 po), construit uniquement à partir de
  * la copie figée enregistrée par le serveur au moment de la signature
  * (identité du loueur, conditions générales, véhicule) et des données de
  * la réservation. Les signatures sont les images tracées au comptoir.
@@ -18,7 +18,8 @@ export interface ContractImages {
   companySignature: Uint8Array
 }
 
-export const A4 = { width: 595.28, height: 841.89 }
+/** Format Lettre US (8,5 x 11 po, 612 x 792 points) : papier usuel en Haïti. */
+export const PAGE = { width: 612, height: 792 }
 export const MARGIN = 48
 export const INK = rgb(0.07, 0.09, 0.15)
 export const MUTED = rgb(0.38, 0.4, 0.45)
@@ -39,13 +40,13 @@ export class Writer {
   }
 
   private get width(): number {
-    return A4.width - MARGIN * 2
+    return PAGE.width - MARGIN * 2
   }
 
   addPage(): void {
-    this.page = this.doc.addPage([A4.width, A4.height])
+    this.page = this.doc.addPage([PAGE.width, PAGE.height])
     this.pages.push(this.page)
-    this.y = A4.height - MARGIN
+    this.y = PAGE.height - MARGIN
   }
 
   ensure(height: number): void {
@@ -165,7 +166,7 @@ export class Writer {
     }
     marks.forEach((mark, index) => {
       const text = this.clean(`${index + 1}. ${damageKindLabels[mark.kind]}${mark.note ? ` - ${mark.note}` : ''}`)
-      for (const line of this.wrap(text, this.regular, 9, A4.width - MARGIN - listX)) {
+      for (const line of this.wrap(text, this.regular, 9, PAGE.width - MARGIN - listX)) {
         this.page.drawText(line, { x: listX, y: listY, size: 9, font: this.regular, color: INK })
         listY -= 12
       }

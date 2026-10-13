@@ -11,6 +11,10 @@ Ajustements de la caisse demandés en relecture (PR #33 fusionnée) et en recett
 - Rapport journalier : tous les encaissements Car Rental approuvés du jour, par mode et devise, y compris les espèces approuvées sans session de caisse.
 - Test d'isolation entre deux sociétés (caisse, session, clôture, rapport).
 
+### Modifié
+
+- Format de papier : contrat, fiche de sortie, facture et rapport journalier en Lettre US (8,5 x 11 po), papier usuel en Haïti, au lieu de l'A4. Le 80 mm des reçus ne change pas.
+
 ### Corrigé
 
 - Session de caisse sur téléphone : la colonne Compté était coupée (« 40,00 L »). Les montants s'affichent maintenant dans une carte par devise.

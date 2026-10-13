@@ -6,7 +6,7 @@ import { formatMoney, formatRate } from './money'
 import { formatDateTime } from './time'
 
 /*
- * Facture de location au format PDF A4, construite uniquement à partir du
+ * Facture de location au format PDF Lettre (8,5 x 11 po), construite uniquement à partir du
  * contenu figé par le serveur à l'émission. Elle ne mentionne ni la plaque
  * ni le permis : elle peut être envoyée au client par courriel.
  */

@@ -9,7 +9,7 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Dépôt | `https://github.com/moisealexdocteur/clientele-group-erp` |
 | Branche de référence | `main` |
 | Commit figé | `15d247765220cc7e768befc93a05cfff7c606d94` (0.6.0-alpha.1, cycle Car Rental validé en recette le 8 octobre 2026) |
-| Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier). PR #33 fusionnée (retrait du 80 mm, encaissements Car Rental au rapport, test d'isolation) ; carte par devise dans la session de caisse |
+| Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier). PR #33 fusionnée (retrait du 80 mm, encaissements Car Rental au rapport, test d'isolation) ; carte par devise dans la session de caisse ; documents au format Lettre |
 | Dernière version déployée | `0.9.0-alpha.1` (déployée le 12 octobre 2026, caisse en relecture). Car Rental validé en recette le 12 octobre 2026 : réservations, courriels |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
 | Image API et web déployée | `sha-fddc19d` |
@@ -98,7 +98,7 @@ Les tests API pertinents sont notamment dans :
 - Permissions ajoutées en 0.4.0 : `rental.reservations.override_rate` (modifier le tarif de la fiche), `rental.payments.credit` (accorder un crédit), `rental.documents.sensitive` (voir permis et reçus). Elles sont accordées au rôle administrateur Car Rental, jamais à l'agent par défaut.
 - Les fichiers (photos, reçus, permis) sont privés : volume Docker `clientele-documents`, JPEG, PNG ou PDF seulement (type lu dans le contenu, SVG et HTML refusés), 10 Mo au plus, hash SHA-256, lecture selon la permission et journalisation. Un fichier d'une autre société répond 404.
 - QR des reçus : HMAC-SHA256 complet (64 caractères hexadécimaux, plus de troncature à 20 caractères) sur la chaîne décimale du montant avec `QR_SIGNING_SECRET` (32 caractères au moins). L'application refuse de démarrer sans cette clé hors développement et tests ; aucun repli sur `APP_KEY`.
-- Formats d'impression : contrat, fiche de sortie et facture Car Rental en PDF A4. Le 80 mm est réservé aux reçus d'encaissement et aux futures caisses (Market, bar, station, pièces). Une imprimante absente ne bloque jamais la recette.
+- Formats d'impression : contrat, fiche de sortie, facture Car Rental et rapport journalier en PDF Lettre US (8,5 x 11 po), format usuel en Haïti (décision du propriétaire, 12 octobre 2026). Ne pas revenir à l'A4. Le 80 mm est réservé aux reçus d'encaissement et aux futures caisses (Market, bar, station, pièces). Une imprimante absente ne bloque jamais la recette.
 
 ## 5. Périmètre global à préserver
 

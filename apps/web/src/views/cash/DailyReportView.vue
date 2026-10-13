@@ -24,7 +24,7 @@ import FormField from '../../components/ui/FormField.vue'
 
 /*
  * Rapport journalier de caisse : chargé tout de suite pour aujourd'hui et
- * toutes les adresses autorisées. Impression A4, PDF et Excel ;
+ * toutes les adresses autorisées. Impression Lettre, PDF et Excel ;
  * chaque impression et chaque export est journalisé.
  */
 const session = useSessionStore()
@@ -81,11 +81,11 @@ async function exportFile(format: 'pdf' | 'xlsx'): Promise<void> {
 
 async function print(): Promise<void> {
   if (!report.value || exporting.value) return
-  exporting.value = 'print_a4'
+  exporting.value = 'print_letter'
   const style = document.createElement('style')
-  style.textContent = '@page { size: A4; margin: 14mm; }'
+  style.textContent = '@page { size: letter; margin: 0.5in; }'
   try {
-    await logExport('print_a4')
+    await logExport('print_letter')
     document.head.append(style)
     await nextTick()
     window.print()
@@ -127,8 +127,8 @@ async function print(): Promise<void> {
 
     <div v-if="loading.busy.value && !report" class="skeleton no-print" style="height: 320px"></div>
 
-    <!-- Version A4 : écran et impression pleine page. -->
-    <article v-if="report" class="report-a4 stack-lg">
+    <!-- Version Lettre : écran et impression pleine page. -->
+    <article v-if="report" class="report-letter stack-lg">
       <header class="print-heading">
         <strong>{{ report.company.name }}</strong>
         <span v-if="report.company.tax_identification_number">NIF {{ report.company.tax_identification_number }}</span>

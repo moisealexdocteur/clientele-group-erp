@@ -57,11 +57,13 @@ const report: DailyCashReport = {
 }
 
 describe('rapport journalier', () => {
-  it('produit un PDF A4 lisible', async () => {
+  it('produit un PDF Lettre lisible', async () => {
     const bytes = await buildDailyReportPdf(report)
     const pdf = await PDFDocument.load(bytes)
     expect(pdf.getPageCount()).toBeGreaterThanOrEqual(1)
     expect(pdf.getTitle()).toContain('Rapport journalier de caisse')
+    // Format Lettre US : 8,5 x 11 po.
+    for (const page of pdf.getPages()) expect(page.getSize()).toEqual({ width: 612, height: 792 })
   })
 
   it('produit un classeur Excel avec trois feuilles et des montants numériques', () => {

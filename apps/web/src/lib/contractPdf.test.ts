@@ -83,6 +83,8 @@ describe('contrat PDF', () => {
     const doc = await PDFDocument.load(bytes)
     expect(doc.getPageCount()).toBeGreaterThan(2)
     expect(doc.getTitle()).toBe('Contrat de location 0000 0042')
+    // Format Lettre US : 8,5 x 11 po.
+    for (const page of doc.getPages()) expect(page.getSize()).toEqual({ width: 612, height: 792 })
   })
 
   it('refuse de produire un contrat sans données signées', async () => {
