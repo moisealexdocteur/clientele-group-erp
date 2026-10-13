@@ -512,6 +512,8 @@ export interface SystemCompanyUser {
   is_system_owner: boolean
   can_manage_exchange_rates?: boolean
   can_edit_personal_profile: boolean
+  /** Réservation, paiement, caisse ou action métier : suppression impossible, désactivation seulement. */
+  has_records: boolean
   can_delete_permanently: boolean
   sites: Array<{
     id: string

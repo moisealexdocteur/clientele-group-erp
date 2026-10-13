@@ -43,6 +43,10 @@ defineProps<{ name: IconName }>()
       <circle cx="12" cy="12" r="2.75" />
       <path d="M6 9.5v5M18 9.5v5" />
     </template>
+    <template v-else-if="name === 'mail'">
+      <rect x="3" y="5.5" width="18" height="13" rx="2" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </template>
     <template v-else-if="name === 'search'">
       <circle cx="10.5" cy="10.5" r="6.5" />
       <path d="M15.5 15.5 20 20" />
