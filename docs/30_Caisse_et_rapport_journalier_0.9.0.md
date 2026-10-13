@@ -22,7 +22,7 @@ Deuxième volet du socle commun : cycle de caisse décrit au cahier des charges 
 - Clôture refusée tant qu'un paiement en espèces de la session attend une approbation.
 - Tout écart exige une explication. Il est journalisé et attend l'approbation d'un superviseur (`cash.sessions.approve`), qui indique sa décision.
 - Clôture : la personne qui a ouvert la caisse, ou un superviseur.
-- Pas de ticket 80 mm de fermeture dans ce lot (branche `feat/caisse-session`) : le document imprimable est le rapport journalier A4.
+- Pas de ticket 80 mm de fermeture dans ce lot (branche `feat/caisse-session`) : le document imprimable est le rapport journalier au format Lettre.
 
 ## 4. Rapport journalier
 
@@ -30,7 +30,7 @@ Deuxième volet du socle commun : cycle de caisse décrit au cahier des charges 
 - Contenu : espèces par devise (fond, entrées, sorties, attendu, compté, écart nommé par devise), sessions, mouvements par nature, réimpressions de reçus.
 - Encaissements Car Rental approuvés le jour choisi, par mode et par devise (espèces, virement Sogebank, crédit accordé). Les espèces approuvées avant la mise en service des caisses, sans session, y figurent avec la mention « hors session de caisse » : elles entrent dans le rapport sans fausser le compte d'une caisse.
 - Aucun nom ni coordonnée de client : réservations et reçus sont identifiés par leur numéro.
-- Sorties : impression A4, PDF A4 et Excel (.xlsx avec feuilles Synthèse, Sessions et Mouvements). Chaque impression et chaque export est journalisé. Pas d'impression 80 mm dans ce lot.
+- Sorties : impression et PDF au format Lettre US (8,5 x 11 po, papier usuel en Haïti) et Excel (.xlsx avec feuilles Synthèse, Sessions et Mouvements). Chaque impression et chaque export est journalisé. Pas d'impression 80 mm dans ce lot.
 
 ## 5. Droits
 

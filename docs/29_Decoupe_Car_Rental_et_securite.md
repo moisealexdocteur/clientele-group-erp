@@ -50,7 +50,7 @@ L'écran parle de « référence saisie » : le chiffre est relevé et saisi à 
 
 ## 7. Formats d'impression
 
-- Contrat, fiche de sortie et facture Car Rental : PDF A4 (déjà le cas).
+- Contrat, fiche de sortie et facture Car Rental : PDF au format Lettre US (8,5 x 11 po) depuis le 12 octobre 2026 ; A4 à l'origine.
 - 80 mm : reçus d'encaissement seulement, puis les futures caisses (Market, bar, station, pièces).
 - Une imprimante absente ne bloque pas la recette : le PDF reste téléchargeable et le reçu s'ouvre dans l'aperçu du navigateur.
 

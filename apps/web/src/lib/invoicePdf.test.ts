@@ -44,6 +44,8 @@ describe('facture PDF', () => {
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-')
     const doc = await PDFDocument.load(bytes)
     expect(doc.getTitle()).toBe('Facture 0000 0001')
+    // Format Lettre US : 8,5 x 11 po.
+    for (const page of doc.getPages()) expect(page.getSize()).toEqual({ width: 612, height: 792 })
     expect(doc.getPageCount()).toBeGreaterThanOrEqual(1)
   })
 })

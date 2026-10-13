@@ -40,7 +40,7 @@ Le détail de la réservation montre le résumé (paiement approuvé, dépôt re
 
 ## 3. Contrat PDF
 
-À la confirmation, le serveur enregistre la remise, la fiche de sortie (inspection `pre_rental` finalisée) et une copie figée du contrat : identité du loueur, conditions, caractéristiques du véhicule. L'application construit ensuite le PDF A4 à partir de cette copie :
+À la confirmation, le serveur enregistre la remise, la fiche de sortie (inspection `pre_rental` finalisée) et une copie figée du contrat : identité du loueur, conditions, caractéristiques du véhicule. L'application construit ensuite le PDF (format Lettre US, 8,5 x 11 po, depuis le 12 octobre 2026) à partir de cette copie :
 
 1. Locataire.
 2. Conducteur et permis (pays et subdivision émettrice).

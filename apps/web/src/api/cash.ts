@@ -30,7 +30,7 @@ export function fetchDailyCashReport(query: { date?: string; site_id?: string })
   return api<{ data: DailyCashReport }>(`${base}/reports/daily`, { query })
 }
 
-export type DailyReportFormat = 'pdf' | 'xlsx' | 'print_a4'
+export type DailyReportFormat = 'pdf' | 'xlsx' | 'print_letter'
 
 export function recordDailyReportExport(payload: { date: string; site_id?: string; format: DailyReportFormat }) {
   return api<{ recorded: boolean }>(`${base}/reports/daily/exports`, { method: 'POST', body: payload })

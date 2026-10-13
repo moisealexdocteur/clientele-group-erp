@@ -16,7 +16,7 @@ import FormField from '../../components/ui/FormField.vue'
 
 /*
  * Session de caisse : totaux par devise, mouvements, écart et décision.
- * Le rapport imprimable est le rapport journalier (A4, PDF, Excel).
+ * Le rapport imprimable est le rapport journalier (Lettre, PDF, Excel).
  */
 const props = defineProps<{ sessionId: string }>()
 

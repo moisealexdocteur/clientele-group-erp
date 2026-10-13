@@ -288,6 +288,12 @@ final class CashSessionTest extends TestCase
             ->assertOk();
         self::assertTrue(AuditEvent::query()->where('event_type', 'report.daily_cash_exported')->exists());
 
+        // Impression au format Lettre US, papier usuel en Haïti.
+        $this->requestFor($token, $company)
+            ->postJson('/api/v1/cash/reports/daily/exports', ['date' => $report['date'], 'format' => 'print_letter'])
+            ->assertOk();
+        self::assertTrue(AuditEvent::query()->where('event_type', 'report.daily_cash_printed')->exists());
+
         // Un accès limité à une adresse ne voit pas la caisse de l'autre.
         $limited = $this->user($company, self::SUPERVISOR, [$site->id]);
         $this->requestFor($limited, $company)
