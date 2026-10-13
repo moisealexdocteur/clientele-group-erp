@@ -2,6 +2,18 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche fix/comptes-et-essai-smtp
+
+Détail : `docs/31_Comptes_avec_ecritures_et_courriel_essai.md`. La version reste `0.9.0-alpha.1`.
+
+### Ajouté
+
+- Configuration > Courriel (propriétaire) : expéditeur et hôte masqué en lecture seule, bouton « Envoyer un courriel d'essai » vers sa propre adresse, échec SMTP expliqué en français.
+
+### Modifié
+
+- Suppression définitive d'un utilisateur refusée s'il a des écritures (réservation, paiement, caisse, action métier journalisée) : « Ce compte a des écritures. Désactivez-le. » La désactivation reste possible.
+
 ## Non publié - ajustements de la caisse
 
 Ajustements de la caisse demandés en relecture (PR #33 fusionnée) et en recette. La version reste `0.9.0-alpha.1`. Détail : `docs/30_Caisse_et_rapport_journalier_0.9.0.md`.

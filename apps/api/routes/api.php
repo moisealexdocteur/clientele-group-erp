@@ -3,6 +3,7 @@
 use App\Http\Controllers\BootstrapController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CarRental;
+use App\Http\Controllers\Configuration;
 use App\Http\Controllers\CarRentalFileController;
 use App\Http\Controllers\Cash;
 use App\Http\Controllers\CompanyContextController;
@@ -76,6 +77,13 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.company-users.reset-password');
             Route::delete('/companies/{company}/users/{companyUserAccess}', [SystemConfigurationController::class, 'destroyCompanyUser'])
                 ->name('api.v1.system.configuration.company-users.destroy');
+
+            // Serveur de courriel : lecture seule (réglé dans l'environnement du serveur) et essai.
+            Route::get('/mail', Configuration\ShowMailSettings::class)
+                ->name('api.v1.system.configuration.mail.show');
+            Route::post('/mail/test', Configuration\SendTestMail::class)
+                ->middleware('throttle:5,10')
+                ->name('api.v1.system.configuration.mail.test');
         });
 
     Route::middleware(['api.token', 'company.context'])->group(function (): void {

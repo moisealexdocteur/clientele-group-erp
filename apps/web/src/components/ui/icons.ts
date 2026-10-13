@@ -1,1 +1,1 @@
-export type IconName = 'today' | 'list' | 'calendar' | 'car' | 'building' | 'users' | 'plus' | 'search' | 'cash'
+export type IconName = 'today' | 'list' | 'calendar' | 'car' | 'building' | 'users' | 'plus' | 'search' | 'cash' | 'mail'

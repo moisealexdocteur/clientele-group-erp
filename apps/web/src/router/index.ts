@@ -64,6 +64,7 @@ const routes: RouteRecordRaw[] = [
     meta: { auth: true, configuration: true },
     children: [
       { path: 'taux', name: 'system.rates', component: () => import('../views/system/RatesView.vue'), meta: { title: 'Taux de change', navMatch: 'system.rates', rates: true } },
+      { path: 'courriel', name: 'system.mail', component: () => import('../views/system/MailView.vue'), meta: { title: 'Serveur de courriel', navMatch: 'system.mail' } },
       { path: '', name: 'system.companies', component: () => import('../views/system/CompaniesView.vue'), meta: { title: 'Sociétés', navMatch: 'system.companies' } },
       { path: 'societes/nouvelle', name: 'system.company.new', component: () => import('../views/system/CompanyNewView.vue'), meta: { title: 'Ajouter une société', navMatch: 'system.companies' } },
       { path: 'societes/:companyId', name: 'system.company', component: () => import('../views/system/CompanyDetailView.vue'), props: true, meta: { title: 'Société', navMatch: 'system.companies' } },

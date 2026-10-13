@@ -15,6 +15,7 @@ use App\Support\AuditLogger;
 use App\Support\CompanyContext;
 use App\Support\Money;
 use App\Support\PasswordPolicy;
+use App\Support\UserRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +82,7 @@ final class SystemConfigurationController extends Controller
     public function __construct(
         private readonly CompanyContext $companyContext,
         private readonly AuditLogger $audit,
+        private readonly UserRecords $records,
     ) {
     }
 
@@ -386,10 +388,11 @@ final class SystemConfigurationController extends Controller
                 ->get()
                 ->sortBy(static fn (CompanyUserAccess $access): string => Str::lower($access->user?->name ?? ''))
                 ->values();
+            $withRecords = $this->records->withRecords($accesses->pluck('user_id')->all());
 
             return response()->json([
                 'data' => $accesses
-                    ->map(fn (CompanyUserAccess $access): array => $this->companyUserPayload($access))
+                    ->map(fn (CompanyUserAccess $access): array => $this->companyUserPayload($access, $withRecords))
                     ->values(),
             ]);
         });
@@ -814,6 +817,14 @@ final class SystemConfigurationController extends Controller
                 ]);
             }
 
+            // Un compte avec écritures (réservation, paiement, caisse, action
+            // métier journalisée) se désactive : son auteur reste lisible.
+            if ($this->records->hasRecords($targetUser->id)) {
+                throw ValidationException::withMessages([
+                    'user' => 'Ce compte a des écritures. Désactivez-le.',
+                ]);
+            }
+
             if (! hash_equals($targetUser->email, $data['confirmation_email'])) {
                 throw ValidationException::withMessages([
                     'confirmation_email' => 'Saisissez exactement le courriel de l’utilisateur à supprimer.',
@@ -1135,9 +1146,15 @@ final class SystemConfigurationController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function companyUserPayload(CompanyUserAccess $access): array
+    /**
+     * @param  array<int, string>|null  $withRecords  comptes avec écritures, déjà calculés pour une liste
+     */
+    private function companyUserPayload(CompanyUserAccess $access, ?array $withRecords = null): array
     {
         $user = $access->user;
+        $hasRecords = $user instanceof User && ($withRecords === null
+            ? $this->records->hasRecords($user->id)
+            : in_array($user->id, $withRecords, true));
 
         return [
             'id' => $access->id,
@@ -1152,9 +1169,11 @@ final class SystemConfigurationController extends Controller
             'can_edit_personal_profile' => $user instanceof User
                 && $access->role_key !== 'owner'
                 && ! $this->userHasOtherActiveCompanyAccess($user, $access->company_id),
+            'has_records' => $hasRecords,
             'can_delete_permanently' => $user instanceof User
                 && $access->role_key !== 'owner'
                 && $user->system_role !== 'owner'
+                && ! $hasRecords
                 && ! $this->userHasAnyOtherCompanyAccess($user, $access->company_id),
             'sites' => $access->relationLoaded('siteGrants')
                 ? $access->siteGrants

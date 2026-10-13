@@ -93,3 +93,22 @@ export function deleteCompanyUser(companyId: string, accessId: string, confirmat
     body: { confirmation_email: confirmationEmail },
   })
 }
+
+/** Serveur de courriel en vigueur : réglé dans l'environnement du serveur, lecture seule ici. */
+export interface MailSettings {
+  mailer: string
+  from_address: string | null
+  from_name: string | null
+  host: string | null
+  port: number | null
+  configured: boolean
+  test_recipient: string | null
+}
+
+export function fetchMailSettings() {
+  return api<{ data: MailSettings }>('/api/v1/system/configuration/mail', global)
+}
+
+export function sendTestMail() {
+  return api<{ message: string; sent_at: string }>('/api/v1/system/configuration/mail/test', { ...global, method: 'POST' })
+}

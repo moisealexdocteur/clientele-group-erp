@@ -91,7 +91,8 @@ Les tests API pertinents sont notamment dans :
 - Connexion par courriel et mot de passe, code de sécurité par courriel, réinitialisation personnelle du mot de passe, sessions révocables et journalisation existent déjà.
 - Le mot de passe initial doit être expliqué avant saisie : au moins 12 caractères, majuscule, minuscule, chiffre et symbole.
 - Principe figé : tous les réglages et configurations se trouvent dans le menu Configuration. Les écrans métier affichent seulement les valeurs en vigueur.
-- La gestion d'utilisateur doit permettre création, consultation, modification, désactivation, réactivation, réinitialisation et suppression définitive selon les droits.
+- La gestion d'utilisateur doit permettre création, consultation, modification, désactivation, réactivation, réinitialisation et suppression définitive selon les droits. Un compte avec écritures (réservation, paiement, caisse, action métier journalisée) ne se supprime pas : il se désactive. Le propriétaire système n'est jamais supprimable.
+- Serveur de courriel : réglé dans l'environnement du serveur seulement. Configuration > Courriel montre l'expéditeur et l'hôte masqué, et envoie un courriel d'essai au propriétaire. Jamais de formulaire pour le mot de passe SMTP.
 - La création d'un compte envoie un courriel au format visuel validé.
 - Permissions ajoutées en 0.9.0 : `cash.sessions.operate` (caisse, administrateur et agent), `cash.sessions.approve` et `cash.reports.read` (administrateur). Un paiement en espèces exige une caisse ouverte.
 - Permissions ajoutées en 0.6.0 : `rental.deposits.settle` (régler le dépôt, autres frais, administrateur) et `rental.invoices.issue` (facture, administrateur et agent).

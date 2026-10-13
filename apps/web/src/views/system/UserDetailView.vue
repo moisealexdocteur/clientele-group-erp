@@ -209,7 +209,7 @@ async function remove(): Promise<void> {
     </form>
 
     <div class="stack">
-      <InlineAlert :message="statusRequest.error.value" />
+      <InlineAlert :message="statusRequest.fieldErrors.value.user || statusRequest.error.value" />
       <section class="panel">
         <h2 class="title-section">Accès à la société</h2>
         <p class="text-secondary">{{ user.is_active ? 'L’utilisateur peut accéder à cette société.' : 'L’accès à cette société est désactivé.' }}</p>
@@ -236,11 +236,13 @@ async function remove(): Promise<void> {
 
       <section class="panel danger-zone">
         <h2 class="title-section">Supprimer définitivement</h2>
-        <p class="text-secondary">Le compte sera supprimé. Les transactions et le journal d’audit restent conservés.</p>
+        <p class="text-secondary">Réservé à un compte sans écriture. Un compte qui a des réservations, des paiements, une caisse ou des actions journalisées se désactive.</p>
         <button class="btn btn-danger" type="button" :disabled="statusRequest.busy.value || !user.can_delete_permanently || !app.canReachServer" @click="remove">
           Supprimer l’utilisateur
         </button>
-        <p v-if="!user.can_delete_permanently" class="field-help">Indisponible pour un compte rattaché à une autre société.</p>
+        <p v-if="user.has_records" class="field-help">Ce compte a des écritures. Désactivez-le.</p>
+        <p v-else-if="user.is_system_owner" class="field-help">Le compte propriétaire ne peut pas être supprimé.</p>
+        <p v-else-if="!user.can_delete_permanently" class="field-help">Indisponible pour un compte rattaché à une autre société.</p>
       </section>
     </div>
   </div>

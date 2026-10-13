@@ -30,6 +30,7 @@ const nav = computed<NavItem[]>(() => {
       match: 'system.users',
     })
   }
+  items.push({ to: { name: 'system.mail' }, label: 'Courriel', icon: 'mail', match: 'system.mail' })
   items.push({ to: { name: 'companies' }, label: 'Activités', icon: 'list', match: 'companies' })
   return items
 })

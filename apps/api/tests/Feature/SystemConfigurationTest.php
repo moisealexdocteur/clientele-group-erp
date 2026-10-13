@@ -7,6 +7,7 @@ use App\Models\ApiAccessToken;
 use App\Models\AuditEvent;
 use App\Models\CompanyUserAccess;
 use App\Models\User;
+use App\Support\AuditLogger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -347,6 +348,72 @@ final class SystemConfigurationTest extends TestCase
             'event_type' => 'configuration.company_user_deleted',
             'subject_id' => $created['user_id'],
         ]);
+    }
+
+    public function test_a_user_with_records_or_the_owner_can_only_be_deactivated(): void
+    {
+        Mail::fake();
+
+        $owner = User::factory()->create([
+            'is_active' => true,
+            'system_role' => 'owner',
+        ]);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $companyId = $this->createCompany($ownerToken, 'RENT-RECORDS', 'Clientèle Rent a Car');
+
+        $created = $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$companyId}/users", [
+                'name' => 'Agent avec écritures',
+                'email' => 'agent.ecritures@example.test',
+                'password' => 'MotDePasse!2026',
+                'password_confirmation' => 'MotDePasse!2026',
+                'role_key' => 'car_rental_agent',
+                'site_scope' => 'all',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.has_records', false)
+            ->json('data');
+
+        // Une réservation créée par l'agent laisse une écriture journalisée.
+        app(AuditLogger::class)->record(
+            eventType: 'car_rental.reservation_created',
+            companyId: $companyId,
+            actorId: $created['user_id'],
+            actorType: 'USER',
+        );
+
+        $listed = collect($this->withToken($ownerToken)
+            ->getJson("/api/v1/system/configuration/companies/{$companyId}/users")
+            ->assertOk()
+            ->json('data'))->keyBy('id');
+        self::assertTrue($listed[$created['id']]['has_records']);
+        self::assertFalse($listed[$created['id']]['can_delete_permanently']);
+
+        $this->withToken($ownerToken)
+            ->deleteJson("/api/v1/system/configuration/companies/{$companyId}/users/{$created['id']}", [
+                'confirmation_email' => 'agent.ecritures@example.test',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.user.0', 'Ce compte a des écritures. Désactivez-le.');
+        $this->assertDatabaseHas('users', ['id' => $created['user_id']]);
+
+        // La désactivation reste possible.
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$companyId}/users/{$created['id']}/status", ['is_active' => false])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        // Le propriétaire système n'est jamais supprimable.
+        $ownerAccess = $listed->first(fn (array $user): bool => $user['is_system_owner']);
+        self::assertNotNull($ownerAccess);
+        self::assertFalse($ownerAccess['can_delete_permanently']);
+        $this->withToken($ownerToken)
+            ->deleteJson("/api/v1/system/configuration/companies/{$companyId}/users/{$ownerAccess['id']}", [
+                'confirmation_email' => $owner->email,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('user');
+        $this->assertDatabaseHas('users', ['id' => $owner->id]);
     }
 
     public function test_the_owner_records_the_legal_identity_printed_on_rental_contracts(): void
