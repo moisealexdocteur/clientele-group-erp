@@ -49,11 +49,18 @@ export interface ContextCashRegister {
   is_open?: boolean
 }
 
+/** Activité d'une société : elle choisit les écrans et les profils proposés. */
+export type CompanyActivity = 'car_rental' | 'auto_parts'
+
+/** office : bureau ; store : magasin qui vend ; warehouse : entrepôt. */
+export type SiteKind = 'office' | 'store' | 'warehouse'
+
 export interface ContextSite {
   id: string
   code: string
   name: string
   address: string
+  kind?: SiteKind
   cash_registers: ContextCashRegister[]
 }
 
@@ -65,6 +72,7 @@ export interface CompanyContext {
     timezone: string
     timezone_label: string
     base_currency: Currency
+    activity?: CompanyActivity
     /** Identité du loueur imprimée sur le contrat de location. */
     legal?: CompanyLegalIdentity
     /** Frais de service Car Rental en vigueur, réglés dans Configuration. */
@@ -475,6 +483,7 @@ export interface SystemSite {
   code: string
   name: string
   address: string
+  kind?: SiteKind
   is_active: boolean
   cash_registers: SystemCashRegister[]
 }
@@ -485,6 +494,9 @@ export interface SystemCompany {
   legal_name: string
   display_name: string
   base_currency: Currency
+  activity?: CompanyActivity
+  /** Profils proposés pour cette activité. */
+  role_options?: Array<{ key: string; label: string }>
   timezone: string
   timezone_label: string
   is_active: boolean
@@ -500,6 +512,8 @@ export interface SystemCompany {
 }
 
 export type CarRentalUserRole = 'car_rental_administrator' | 'car_rental_agent' | 'car_rental_fleet'
+export type AutoPartsUserRole = 'auto_parts_administrator' | 'auto_parts_seller' | 'auto_parts_storekeeper'
+export type UserRoleKey = CarRentalUserRole | AutoPartsUserRole
 
 export interface SystemCompanyUser {
   id: string
@@ -526,7 +540,7 @@ export interface SystemCompanyUser {
 
 export type CashCurrencyTotals = Record<Currency, { opening: string; in: string; out: string; expected: string }>
 
-export type CashMovementKind = 'rental_payment' | 'deposit_payment' | 'deposit_refund'
+export type CashMovementKind = 'rental_payment' | 'deposit_payment' | 'deposit_refund' | 'parts_sale'
 
 export interface CashMovement {
   id: string
@@ -538,6 +552,8 @@ export interface CashMovement {
   occurred_at: string | null
   receipt_number: string | null
   payment_id: string | null
+  /** Vente Auto Parts encaissée par ce mouvement. */
+  sale_id?: string | null
   reservation_id: string | null
   reservation_number: string | null
   recorded_by: string | null
@@ -593,7 +609,137 @@ export interface DailyCashReport {
   movements_by_kind: Array<{ kind: CashMovementKind; label: string; direction: 'in' | 'out'; currency: Currency; count: number; amount: string }>
   /** Encaissements Car Rental approuvés le jour, tous modes ; espèces hors session comprises. */
   rental_payments: Array<{ method: string; currency: Currency; count: number; amount: string; outside_session_count: number; outside_session_amount: string }>
+  /** Activité de la société : les sections propres à l'activité en dépendent. */
+  activity?: CompanyActivity
+  /** Ventes Auto Parts du jour par liste de prix. */
+  parts_sales?: Array<{ price_list: PartsPriceList; label: string; count: number; item_count: number; currency: 'HTG'; amount: string }>
   open_sessions: number
   pending_reviews: number
   reprints: number
+}
+
+/* Auto Parts et motocyclettes */
+
+export type PartsPriceList = 'retail' | 'wholesale'
+/** Mouvement saisi depuis la fiche article. */
+export type PartsStockAction = 'receipt' | 'transfer' | 'adjust'
+export type PartsMovementKind = 'receipt' | 'adjustment' | 'transfer_out' | 'transfer_in' | 'sale'
+
+export interface PartsFitment {
+  id?: string
+  make: string
+  model: string | null
+  year_from: number | null
+  year_to: number | null
+  label?: string
+}
+
+export interface PartsStockEntry {
+  site_id: string
+  site_name: string
+  kind: SiteKind
+  quantity: number
+}
+
+export interface PartsMovement {
+  id: string
+  kind: PartsMovementKind
+  label: string
+  site: { id: string; name: string | null }
+  quantity: number
+  balance_after: number
+  unit_cost_htg: string | null
+  reference: string | null
+  note: string | null
+  sale_id: string | null
+  recorded_by: string | null
+  occurred_at: string | null
+  product?: { id: string; sku: string | null; name: string | null }
+}
+
+export interface PartsProduct {
+  id: string
+  sku: string
+  barcode: string | null
+  name: string
+  category: string | null
+  brand: string | null
+  unit: string
+  retail_price_htg: string
+  /** Visible seulement par les rôles qui appliquent ou gèrent le prix de gros. */
+  wholesale_price_htg: string | null
+  has_wholesale_price: boolean
+  reorder_level: number
+  notes: string | null
+  is_active: boolean
+  photo_file_id: string | null
+  photo_url: string | null
+  fitments: PartsFitment[]
+  /** Absent pour un rôle qui ne consulte pas le stock. */
+  stock: PartsStockEntry[] | null
+  total_stock: number | null
+  is_low: boolean
+  movements?: PartsMovement[]
+}
+
+export interface PartsProductInput {
+  sku: string
+  barcode: string | null
+  name: string
+  category: string | null
+  brand: string | null
+  unit: string
+  retail_price_htg: string
+  wholesale_price_htg: string | null
+  reorder_level: number
+  notes: string | null
+}
+
+export interface PartsSaleSummary {
+  id: string
+  number: string
+  status: string
+  price_list: PartsPriceList
+  price_list_label: string
+  site: { id: string; name: string | null }
+  cash_register: { id: string; name: string | null }
+  seller: string | null
+  sold_at: string | null
+  item_count: number
+  currency: 'HTG'
+  total: string
+}
+
+export interface PartsSaleLine {
+  id: string
+  product_id: string
+  sku: string
+  name: string
+  quantity: number
+  unit_price: string
+  line_total: string
+  stock_site: { id: string; name: string | null }
+}
+
+export interface PartsSale extends PartsSaleSummary {
+  customer_name: string | null
+  amount_received: string
+  change_given: string
+  cash_session_id: string
+  print_count: number
+  site_address: string | null
+  verification_url: string | null
+  company: {
+    display_name: string
+    name: string
+    address: string | null
+    phone_numbers: string | null
+    tax_identification_number: string | null
+  }
+  lines: PartsSaleLine[]
+}
+
+export interface PartsSalesDayResponse {
+  data: PartsSaleSummary[]
+  meta: { date: string; count: number; item_count: number; total: string; currency: 'HTG' }
 }

@@ -1,5 +1,6 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router'
 import { useSessionStore } from '../stores/session'
+import type { CompanyActivity } from '../api/types'
 
 /*
  * Navigation par adresse : chaque écran a une URL, le bouton Retour du
@@ -24,10 +25,24 @@ declare module 'vue-router' {
     rates?: boolean
     /** Permission de société requise. */
     permission?: string
+    /** Activité de société requise (Car Rental ou Auto Parts). */
+    activity?: CompanyActivity
     /** Nom de la rubrique à marquer comme active dans la navigation. */
     navMatch?: string
     title?: string
   }
+}
+
+/** Premier écran de la société active, selon son activité et le rôle. */
+function homeRoute(): RouteLocationRaw {
+  const session = useSessionStore()
+  if (!session.context) return { name: 'companies' }
+  if ((session.context.company.activity ?? 'car_rental') === 'auto_parts') {
+    if (session.can('parts.sales.create')) return { name: 'parts.sale' }
+    if (session.can('parts.catalog.read')) return { name: 'parts.products' }
+    return { name: 'cash' }
+  }
+  return { name: 'rental.today' }
 }
 
 const routes: RouteRecordRaw[] = [
@@ -37,8 +52,7 @@ const routes: RouteRecordRaw[] = [
     redirect: () => {
       const session = useSessionStore()
       if (!session.isAuthenticated) return { name: 'sign-in' }
-      if (session.context) return { name: 'rental.today' }
-      return { name: 'companies' }
+      return homeRoute()
     },
   },
   {
@@ -75,8 +89,8 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/location',
-    component: () => import('../views/rental/RentalLayout.vue'),
-    meta: { auth: true, company: true },
+    component: () => import('../views/WorkspaceLayout.vue'),
+    meta: { auth: true, company: true, activity: 'car_rental' },
     children: [
       { path: '', name: 'rental.today', component: () => import('../views/rental/TodayView.vue'), meta: { title: 'Aujourd’hui' } },
       { path: 'reservations', name: 'rental.reservations', component: () => import('../views/rental/ReservationsView.vue'), meta: { title: 'Réservations', permission: 'rental.reservations.read', navMatch: 'rental.reservations' } },
@@ -88,11 +102,41 @@ const routes: RouteRecordRaw[] = [
       { path: 'planning', name: 'rental.planning', component: () => import('../views/rental/PlanningView.vue'), meta: { title: 'Planning', permission: 'rental.calendar.read', navMatch: 'rental.planning' } },
       { path: 'vehicules', name: 'rental.vehicles', component: () => import('../views/rental/VehiclesView.vue'), meta: { title: 'Véhicules', permission: 'rental.vehicles.read', navMatch: 'rental.vehicles' } },
       { path: 'vehicules/nouveau', name: 'rental.vehicle.new', component: () => import('../views/rental/VehicleNewView.vue'), meta: { title: 'Ajouter un véhicule', permission: 'rental.vehicles.manage', navMatch: 'rental.vehicles' } },
-      { path: 'caisse', name: 'cash', component: () => import('../views/cash/CashView.vue'), meta: { title: 'Caisse', navMatch: 'cash' } },
-      { path: 'caisse/sessions/:sessionId', name: 'cash.session', component: () => import('../views/cash/CashSessionView.vue'), props: true, meta: { title: 'Session de caisse', navMatch: 'cash' } },
-      { path: 'caisse/rapport-journalier', name: 'cash.report', component: () => import('../views/cash/DailyReportView.vue'), meta: { title: 'Rapport journalier', permission: 'cash.reports.read', navMatch: 'cash' } },
+      // Anciennes adresses de la caisse, conservées pour les favoris.
+      { path: 'caisse/:rest(.*)*', redirect: (to) => `/caisse/${([] as string[]).concat(to.params.rest ?? []).join('/')}` },
       { path: 'vehicules/:vehicleId', name: 'rental.vehicle', component: () => import('../views/rental/VehicleDetailView.vue'), props: true, meta: { title: 'Véhicule', permission: 'rental.vehicles.read', navMatch: 'rental.vehicles' } },
     ],
+  },
+  {
+    // Caisse commune à toutes les activités.
+    path: '/caisse',
+    component: () => import('../views/WorkspaceLayout.vue'),
+    meta: { auth: true, company: true },
+    children: [
+      { path: '', name: 'cash', component: () => import('../views/cash/CashView.vue'), meta: { title: 'Caisse', navMatch: 'cash' } },
+      { path: 'sessions/:sessionId', name: 'cash.session', component: () => import('../views/cash/CashSessionView.vue'), props: true, meta: { title: 'Session de caisse', navMatch: 'cash' } },
+      { path: 'rapport-journalier', name: 'cash.report', component: () => import('../views/cash/DailyReportView.vue'), meta: { title: 'Rapport journalier', permission: 'cash.reports.read', navMatch: 'cash' } },
+    ],
+  },
+  {
+    path: '/pieces',
+    component: () => import('../views/WorkspaceLayout.vue'),
+    meta: { auth: true, company: true, activity: 'auto_parts' },
+    children: [
+      { path: '', name: 'parts.sale', component: () => import('../views/parts/CounterSaleView.vue'), meta: { title: 'Vente au comptoir', permission: 'parts.sales.create', navMatch: 'parts.sale' } },
+      { path: 'ventes', name: 'parts.sales', component: () => import('../views/parts/SalesView.vue'), meta: { title: 'Ventes du jour', permission: 'parts.sales.read', navMatch: 'parts.sales' } },
+      { path: 'articles', name: 'parts.products', component: () => import('../views/parts/ProductsView.vue'), meta: { title: 'Articles', permission: 'parts.catalog.read', navMatch: 'parts.products' } },
+      { path: 'articles/nouveau', name: 'parts.product.new', component: () => import('../views/parts/ProductNewView.vue'), meta: { title: 'Ajouter un article', permission: 'parts.catalog.manage', navMatch: 'parts.products' } },
+      { path: 'articles/:productId', name: 'parts.product', component: () => import('../views/parts/ProductDetailView.vue'), props: true, meta: { title: 'Article', permission: 'parts.catalog.read', navMatch: 'parts.products' } },
+      { path: 'stock', name: 'parts.stock', component: () => import('../views/parts/StockView.vue'), meta: { title: 'Stock', permission: 'parts.stock.read', navMatch: 'parts.stock' } },
+    ],
+  },
+  {
+    path: '/pieces/recu/:saleId',
+    name: 'parts.receipt',
+    component: () => import('../views/receipts/SaleReceiptView.vue'),
+    props: true,
+    meta: { auth: true, company: true, activity: 'auto_parts', permission: 'parts.sales.read', title: 'Reçu de vente' },
   },
   {
     path: '/recu/:paymentId',
@@ -158,9 +202,15 @@ router.beforeEach(async (to) => {
     return { name: 'companies', query: { suite: to.fullPath } }
   }
 
+  // Écrans d'une autre activité que celle de la société active.
+  const activity = to.matched.map((record) => record.meta.activity).find(Boolean)
+  if (activity && (session.context?.company.activity ?? 'car_rental') !== activity) {
+    return homeRoute()
+  }
+
   const permission = to.meta.permission
   if (permission && !session.can(permission)) {
-    return { name: 'rental.today' }
+    return homeRoute()
   }
 
   return true

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { createCashRegister, createSite, updateCompany } from '../../api/system'
+import { createCashRegister, createSite, updateCompany, updateCompanyActivity, updateSiteKind } from '../../api/system'
+import type { CompanyActivity, SiteKind, SystemSite } from '../../api/types'
+import { companyActivityLabels, siteKindLabels } from '../../lib/labels'
 import { useSystemStore } from '../../stores/system'
 import { useSessionStore } from '../../stores/session'
 import { useAppStore } from '../../stores/app'
@@ -54,7 +56,14 @@ const legalMissing = computed(() => {
   return items
 })
 
-const siteForm = reactive({ code: '', name: '', address: CLIENTELE_CAR_RENTAL_FLEET_ADDRESS })
+const isRental = computed(() => (company.value?.activity ?? 'car_rental') === 'car_rental')
+const siteForm = reactive({ code: '', name: '', address: CLIENTELE_CAR_RENTAL_FLEET_ADDRESS, kind: 'office' as SiteKind })
+const activityOpen = ref(false)
+const activityDraft = ref<CompanyActivity>('car_rental')
+const activityRequest = useRequest()
+const kindSite = ref<SystemSite | null>(null)
+const kindDraft = ref<SiteKind>('store')
+const kindRequest = useRequest()
 const registerForm = reactive({ site_id: '', code: '', name: '' })
 
 onMounted(() => {
@@ -63,7 +72,9 @@ onMounted(() => {
 })
 
 function openSite(): void {
-  Object.assign(siteForm, { code: '', name: '', address: CLIENTELE_CAR_RENTAL_FLEET_ADDRESS })
+  Object.assign(siteForm, isRental.value
+    ? { code: '', name: '', address: CLIENTELE_CAR_RENTAL_FLEET_ADDRESS, kind: 'office' }
+    : { code: '', name: '', address: '', kind: 'store' })
   siteRequest.reset()
   siteOpen.value = true
 }
@@ -171,6 +182,38 @@ async function saveSite(): Promise<void> {
   ui.toast('Adresse créée.')
 }
 
+function openActivity(): void {
+  activityDraft.value = company.value?.activity ?? 'car_rental'
+  activityRequest.reset()
+  activityOpen.value = true
+}
+
+async function saveActivity(): Promise<void> {
+  const result = await activityRequest.run(() => updateCompanyActivity(props.companyId, activityDraft.value))
+  if (!result) return
+  await system.load()
+  if (session.context?.company.id === props.companyId) await session.refreshContext().catch(() => undefined)
+  activityOpen.value = false
+  ui.toast('Activité enregistrée.')
+}
+
+function openKind(site: SystemSite): void {
+  kindSite.value = site
+  kindDraft.value = site.kind ?? 'office'
+  kindRequest.reset()
+}
+
+async function saveKind(): Promise<void> {
+  const site = kindSite.value
+  if (!site) return
+  const result = await kindRequest.run(() => updateSiteKind(props.companyId, site.id, kindDraft.value))
+  if (!result) return
+  await system.load()
+  if (session.context?.company.id === props.companyId) await session.refreshContext().catch(() => undefined)
+  kindSite.value = null
+  ui.toast('Type d’adresse enregistré.')
+}
+
 async function saveRegister(): Promise<void> {
   registerForm.code = normalizeCode(registerForm.code)
   const result = await registerRequest.run(() => createCashRegister(props.companyId, { ...registerForm }))
@@ -199,6 +242,13 @@ async function saveRegister(): Promise<void> {
 
   <div v-else-if="company" class="stack-lg">
     <dl class="panel facts">
+      <div>
+        <dt>Activité</dt>
+        <dd class="activity">
+          {{ companyActivityLabels[company.activity ?? 'car_rental'] }}
+          <button class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openActivity">Modifier</button>
+        </dd>
+      </div>
       <div>
         <dt>Devise de base</dt>
         <dd>{{ company.base_currency }}</dd>
@@ -249,7 +299,7 @@ async function saveRegister(): Promise<void> {
       </dl>
     </section>
 
-    <section class="panel" aria-labelledby="fees-title">
+    <section v-if="isRental" class="panel" aria-labelledby="fees-title">
       <div class="panel-header">
         <div>
           <h2 id="fees-title" class="title-section">Frais de service Car Rental</h2>
@@ -269,7 +319,7 @@ async function saveRegister(): Promise<void> {
       </dl>
     </section>
 
-    <section class="panel" aria-labelledby="terms-title">
+    <section v-if="isRental" class="panel" aria-labelledby="terms-title">
       <div class="panel-header">
         <div>
           <h2 id="terms-title" class="title-section">Conditions du contrat de location</h2>
@@ -295,7 +345,7 @@ async function saveRegister(): Promise<void> {
         <div class="panel-header">
           <div>
             <h3 class="title-section">{{ site.name }}</h3>
-            <p class="text-muted text-small">{{ site.code }} - {{ site.address }}</p>
+            <p class="text-muted text-small">{{ siteKindLabels[site.kind ?? 'office'] }} - {{ site.code }} - {{ site.address }}</p>
           </div>
           <StatusPill v-if="!site.is_active" tone="neutral" label="Inactive" />
         </div>
@@ -306,7 +356,10 @@ async function saveRegister(): Promise<void> {
           </li>
         </ul>
         <p v-else class="text-muted text-small">Aucune caisse pour cette adresse.</p>
-        <button class="btn btn-secondary" type="button" @click="openRegister(site.id)">Ajouter une caisse</button>
+        <div class="btn-row">
+          <button class="btn btn-secondary" type="button" @click="openRegister(site.id)">Ajouter une caisse</button>
+          <button class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openKind(site)">Type d’adresse</button>
+        </div>
       </article>
     </section>
   </div>
@@ -394,6 +447,11 @@ async function saveRegister(): Promise<void> {
       <FormField label="Adresse complète" :error="siteRequest.fieldErrors.value.address" v-slot="field">
         <textarea v-model.trim="siteForm.address" v-bind="field.attrs" class="textarea" rows="3" maxlength="1000" required></textarea>
       </FormField>
+      <FormField label="Type d’adresse" help="Un magasin vend au comptoir ; un entrepôt garde du stock sans caisse." :error="siteRequest.fieldErrors.value.kind" v-slot="field">
+        <select v-model="siteForm.kind" v-bind="field.attrs" class="select">
+          <option v-for="(label, key) in siteKindLabels" :key="key" :value="key">{{ label }}</option>
+        </select>
+      </FormField>
       <InlineAlert :message="siteRequest.error.value" />
     </form>
     <template #footer>
@@ -426,9 +484,51 @@ async function saveRegister(): Promise<void> {
       </button>
     </template>
   </SheetDialog>
+
+  <SheetDialog :open="activityOpen" title="Activité de la société" description="Elle choisit les écrans et les profils d’utilisateurs. Les comptes actifs d’une autre activité doivent d’abord être désactivés." :locked="activityRequest.busy.value" @close="activityOpen = false">
+    <form id="activity-form" class="form" novalidate @submit.prevent="saveActivity">
+      <FormField label="Activité" :error="activityRequest.fieldErrors.value.activity" v-slot="field">
+        <select v-model="activityDraft" v-bind="field.attrs" class="select">
+          <option v-for="(label, key) in companyActivityLabels" :key="key" :value="key">{{ label }}</option>
+        </select>
+      </FormField>
+      <InlineAlert :message="activityRequest.fieldErrors.value.activity ? '' : activityRequest.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="activityRequest.busy.value" @click="activityOpen = false">Annuler</button>
+      <button class="btn btn-primary" type="submit" form="activity-form" :disabled="activityRequest.busy.value || !app.canReachServer">
+        {{ activityRequest.busy.value ? 'Enregistrement' : 'Enregistrer' }}
+      </button>
+    </template>
+  </SheetDialog>
+
+  <SheetDialog :open="kindSite !== null" :title="kindSite ? `Type d’adresse - ${kindSite.name}` : 'Type d’adresse'" description="Le stock déjà présent reste à cette adresse." :locked="kindRequest.busy.value" @close="kindSite = null">
+    <form id="kind-form" class="form" novalidate @submit.prevent="saveKind">
+      <FormField label="Type" :error="kindRequest.fieldErrors.value.kind" v-slot="field">
+        <select v-model="kindDraft" v-bind="field.attrs" class="select">
+          <option v-for="(label, key) in siteKindLabels" :key="key" :value="key">{{ label }}</option>
+        </select>
+      </FormField>
+      <InlineAlert :message="kindRequest.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="kindRequest.busy.value" @click="kindSite = null">Annuler</button>
+      <button class="btn btn-primary" type="submit" form="kind-form" :disabled="kindRequest.busy.value || !app.canReachServer">
+        {{ kindRequest.busy.value ? 'Enregistrement' : 'Enregistrer' }}
+      </button>
+    </template>
+  </SheetDialog>
 </template>
 
 <style scoped>
+.activity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .terms-preview {
   max-height: 240px;
   overflow-y: auto;

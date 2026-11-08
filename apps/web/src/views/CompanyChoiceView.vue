@@ -22,7 +22,7 @@ async function choose(companyId: string): Promise<void> {
   })
   if (!done) return
   const next = typeof route.query.suite === 'string' && route.query.suite.startsWith('/location') ? route.query.suite : null
-  await router.replace(next ?? { name: 'rental.today' })
+  await router.replace(next ?? { name: 'home' })
 }
 
 async function signOut(): Promise<void> {

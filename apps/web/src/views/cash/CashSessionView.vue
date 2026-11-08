@@ -133,6 +133,7 @@ async function saveReview(): Promise<void> {
               <span class="links">
                 <RouterLink v-if="movement.reservation_id" :to="{ name: 'rental.reservation', params: { reservationId: movement.reservation_id } }">Réservation</RouterLink>
                 <RouterLink v-if="movement.payment_id && movement.receipt_number" :to="{ name: 'receipt', params: { paymentId: movement.payment_id } }">Reçu</RouterLink>
+                <RouterLink v-if="movement.sale_id" :to="{ name: 'parts.receipt', params: { saleId: movement.sale_id } }">Reçu</RouterLink>
               </span>
             </div>
             <strong :class="movement.direction === 'out' ? 'negative' : 'positive'">

@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import type { CarRentalUserRole } from '../../api/types'
-import { carRentalUserRoleLabels } from '../../lib/labels'
+import type { UserRoleKey } from '../../api/types'
 import FormField from '../ui/FormField.vue'
 
 /* Profil et adresses autorisées d'un utilisateur, communs à la création et à la modification. */
 defineProps<{
   sites: Array<{ id: string; name: string; code: string }>
+  /** Profils de l'activité de la société, fournis par le serveur. */
+  roleOptions: Array<{ key: string; label: string }>
   errors: Record<string, string>
   disabled?: boolean
 }>()
 
-const role = defineModel<CarRentalUserRole>('role', { required: true })
+const role = defineModel<UserRoleKey>('role', { required: true })
 const scope = defineModel<'all' | 'selected'>('scope', { required: true })
 const siteIds = defineModel<string[]>('siteIds', { required: true })
 
@@ -20,9 +21,9 @@ function onScopeChange(): void {
 </script>
 
 <template>
-  <FormField label="Profil Car Rental" :error="errors.role_key" v-slot="field">
+  <FormField label="Profil" :error="errors.role_key" v-slot="field">
     <select v-model="role" v-bind="field.attrs" class="select" :disabled="disabled">
-      <option v-for="(label, key) in carRentalUserRoleLabels" :key="key" :value="key">{{ label }}</option>
+      <option v-for="option in roleOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
     </select>
   </FormField>
 

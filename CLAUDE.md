@@ -12,7 +12,7 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier). PR #33 fusionnée (retrait du 80 mm, encaissements Car Rental au rapport, test d'isolation) ; carte par devise dans la session de caisse ; documents au format Lettre |
 | Dernière version déployée | `0.9.0-alpha.1` (déployée le 12 octobre 2026, caisse en relecture). Car Rental validé en recette le 12 octobre 2026 : réservations, courriels |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-fddc19d` |
+| Image API et web déployée | `sha-ff7f77e` (13 octobre 2026 : format Lettre, comptes avec écritures, courriel d'essai) |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
@@ -41,7 +41,7 @@ Le script demande un jeton GitHub classique ayant seulement l'autorisation `read
 ## 3. Architecture actuelle
 
 - Frontend : PWA Vue 3, TypeScript, Vue Router et Pinia dans `apps/web`, design Microsoft Fluent 2 (Segoe UI, jetons dans `src/styles/main.css`). Un écran par fichier dans `src/views`, composants par domaine dans `src/components`, appels serveur dans `src/api`, dates et devises dans `src/lib`. Détail : `docs/22_Interface_modulaire_0.3.0.md`. Ne jamais recréer un fichier d'interface unique.
-- Backend : Laravel et PHP dans `apps/api`. Car Rental : un contrôleur invocable par action dans `app/Http/Controllers/CarRental`, règles partagées dans `app/Support/CarRental` (présentation, lecture, planning, véhicules, prix, croquis, clients). Caisse : actions dans `app/Http/Controllers/Cash`, présentation dans `app/Support/Cash`. Ne jamais recréer un contrôleur unique ni dépasser 500 lignes par contrôleur.
+- Backend : Laravel et PHP dans `apps/api`. Car Rental : un contrôleur invocable par action dans `app/Http/Controllers/CarRental`, règles partagées dans `app/Support/CarRental` (présentation, lecture, planning, véhicules, prix, croquis, clients). Caisse : actions dans `app/Http/Controllers/Cash`, présentation dans `app/Support/Cash`. Auto Parts : actions dans `app/Http/Controllers/AutoParts`, règles dans `app/Support/AutoParts` (journal de stock `StockLedger`, seul point d'écriture du stock). Profils par activité : `App\Support\RoleProfiles`. Ne jamais recréer un contrôleur unique ni dépasser 500 lignes par contrôleur.
 - Montants : `App\Support\Money` en centimes entiers (taux en dix-millièmes). Interdit : `(float)` sur un prix, un dépôt, un taux ou une signature. Saisie contrôlée par `App\Rules\DecimalAmount`.
 - Infrastructure locale : Docker Compose et Traefik dans `infra`.
 - Base de données : PostgreSQL.
@@ -94,6 +94,7 @@ Les tests API pertinents sont notamment dans :
 - La gestion d'utilisateur doit permettre création, consultation, modification, désactivation, réactivation, réinitialisation et suppression définitive selon les droits. Un compte avec écritures (réservation, paiement, caisse, action métier journalisée) ne se supprime pas : il se désactive. Le propriétaire système n'est jamais supprimable.
 - Serveur de courriel : réglé dans l'environnement du serveur seulement. Configuration > Courriel montre l'expéditeur et l'hôte masqué, et envoie un courriel d'essai au propriétaire. Jamais de formulaire pour le mot de passe SMTP.
 - La création d'un compte envoie un courriel au format visuel validé.
+- Activité de société (`car_rental`, `auto_parts`) et type d'adresse (bureau, magasin, entrepôt) réglés dans Configuration. Permissions Auto Parts : `parts.catalog.read`, `parts.catalog.manage`, `parts.stock.read`, `parts.stock.manage`, `parts.sales.create`, `parts.sales.read`, `parts.sales.wholesale` (administrateur seulement). Vente Auto Parts en espèces HTG, caisse ouverte, prix du catalogue côté serveur.
 - Permissions ajoutées en 0.9.0 : `cash.sessions.operate` (caisse, administrateur et agent), `cash.sessions.approve` et `cash.reports.read` (administrateur). Un paiement en espèces exige une caisse ouverte.
 - Permissions ajoutées en 0.6.0 : `rental.deposits.settle` (régler le dépôt, autres frais, administrateur) et `rental.invoices.issue` (facture, administrateur et agent).
 - Permissions ajoutées en 0.4.0 : `rental.reservations.override_rate` (modifier le tarif de la fiche), `rental.payments.credit` (accorder un crédit), `rental.documents.sensitive` (voir permis et reçus). Elles sont accordées au rôle administrateur Car Rental, jamais à l'agent par défaut.
@@ -170,7 +171,7 @@ Les spécifications détaillées déjà versionnées sont dans `docs/01_Cahier_d
 
 L'alpha.14 déployée ne satisfait pas encore les points suivants. Ils doivent être repris avant d'ajouter d'autres modules.
 
-État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Le cycle Car Rental (remise, retour, croquis, dépôt, facture, P1 courriel) est complet en 0.6.0-alpha.1 : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`. Socle commun : taux HTG/USD avec alerte BRH, reçus 8 chiffres avec QR et impression 80 mm livrés en 0.7.0-alpha.1 (`docs/26_Taux_HTG_USD_et_recus_0.7.0.md`), taux unique du groupe en 0.8.0-alpha.1 (`docs/28_Taux_unique_du_groupe_0.8.0.md`). Caisse, clôture, écarts et rapport journalier PDF et Excel en 0.9.0-alpha.1 (`docs/30_Caisse_et_rapport_journalier_0.9.0.md`). Reste : écran client.
+État au 0.5.0-alpha.1 : les P0 sont réalisés. Détail : `docs/23_Reservations_paiements_et_design_0.4.0.md` et `docs/24_Permis_fiche_de_sortie_signatures_et_contrat_0.5.0.md`. Le cycle Car Rental (remise, retour, croquis, dépôt, facture, P1 courriel) est complet en 0.6.0-alpha.1 : `docs/25_Retour_croquis_depot_et_facture_0.6.0.md`. Socle commun : taux HTG/USD avec alerte BRH, reçus 8 chiffres avec QR et impression 80 mm livrés en 0.7.0-alpha.1 (`docs/26_Taux_HTG_USD_et_recus_0.7.0.md`), taux unique du groupe en 0.8.0-alpha.1 (`docs/28_Taux_unique_du_groupe_0.8.0.md`). Caisse, clôture, écarts et rapport journalier PDF et Excel en 0.9.0-alpha.1 (`docs/30_Caisse_et_rapport_journalier_0.9.0.md`). Reste : écran client (reporté par le propriétaire). Module 2 Auto Parts commencé : catalogue, stock et vente au comptoir (`docs/32_Auto_Parts_catalogue_stock_et_vente.md`).
 
 ### P0 : disponibilité et navigation (fait)
 

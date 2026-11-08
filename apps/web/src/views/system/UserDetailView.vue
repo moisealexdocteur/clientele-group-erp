@@ -9,7 +9,7 @@ import {
   updateCompanyUserStatus,
   updateExchangeRateAccess,
 } from '../../api/system'
-import type { CarRentalUserRole, SystemCompanyUser } from '../../api/types'
+import type { UserRoleKey, SystemCompanyUser } from '../../api/types'
 import { useSystemStore } from '../../stores/system'
 import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
@@ -37,11 +37,12 @@ const passwordRequest = useRequest()
 const user = ref<SystemCompanyUser | null>(null)
 const passwordOpen = ref(false)
 const company = computed(() => system.company(props.companyId))
+const roleOptions = computed(() => company.value?.role_options ?? [{ key: 'car_rental_agent', label: 'Agent de location' }])
 
 const form = reactive({
   name: '',
   email: '',
-  role_key: 'car_rental_agent' as CarRentalUserRole,
+  role_key: 'car_rental_agent' as UserRoleKey,
   site_scope: 'all' as 'all' | 'selected',
   site_ids: [] as string[],
 })
@@ -52,7 +53,7 @@ function apply(next: SystemCompanyUser): void {
   Object.assign(form, {
     name: next.name ?? '',
     email: next.email ?? '',
-    role_key: next.role_key as CarRentalUserRole,
+    role_key: next.role_key as UserRoleKey,
     site_scope: next.site_scope,
     site_ids: next.sites.map((site) => site.id),
   })
@@ -199,6 +200,7 @@ async function remove(): Promise<void> {
         v-model:scope="form.site_scope"
         v-model:site-ids="form.site_ids"
         :sites="company?.sites ?? []"
+        :role-options="roleOptions"
         :errors="saving.fieldErrors.value"
         :disabled="saving.busy.value"
       />

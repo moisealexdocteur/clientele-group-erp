@@ -80,6 +80,19 @@ describe('rapport journalier', () => {
     expect(reportFilename(report, 'xlsx')).toBe('Rapport-caisse-2026-10-15.xlsx')
   })
 
+  it('remplace les encaissements Car Rental par les ventes de pièces pour Auto Parts', () => {
+    const parts: DailyCashReport = {
+      ...report,
+      activity: 'auto_parts',
+      rental_payments: [],
+      parts_sales: [{ price_list: 'retail', label: 'Détail', count: 3, item_count: 7, currency: 'HTG', amount: '4500.00' }],
+    }
+    const summary = strFromU8(unzipSync(buildDailyReportXlsx(parts))['xl/worksheets/sheet1.xml'])
+    expect(summary).toContain('Ventes de pièces')
+    expect(summary).not.toContain('Encaissements Car Rental')
+    expect(summary).toContain('<v>4500</v>')
+  })
+
   it('nomme les colonnes au-delà de Z', () => {
     const row = Array.from({ length: 28 }, (_, index) => index)
     const files = unzipSync(buildXlsx([{ name: 'Feuille: test', rows: [row, [money('12.50')]] }], 'Test'))

@@ -29,7 +29,7 @@ async function submit(): Promise<void> {
   const next = typeof route.query.suite === 'string' && route.query.suite.startsWith('/') ? route.query.suite : null
   if (session.companies.length === 1) {
     await session.selectCompany(session.companies[0].id)
-    await router.replace(next ?? { name: 'rental.today' })
+    await router.replace(next ?? { name: 'home' })
   } else {
     await router.replace({ name: 'companies', query: next ? { suite: next } : {} })
   }

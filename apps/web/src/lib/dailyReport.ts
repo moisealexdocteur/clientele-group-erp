@@ -25,6 +25,11 @@ export const reviewLabels: Record<CashSession['review_status'], string> = {
   approved: 'Écart approuvé',
 }
 
+/** Rapport d'une société Auto Parts : ventes de pièces au lieu des encaissements Car Rental. */
+export function isPartsReport(report: DailyCashReport): boolean {
+  return report.activity === 'auto_parts'
+}
+
 export function sessionStateLabel(session: CashSession): string {
   if (session.status === 'open') return 'Ouverte'
   return reviewLabels[session.review_status]
@@ -128,25 +133,42 @@ export async function buildDailyReportPdf(report: DailyCashReport): Promise<Uint
     )
   }
 
-  w.heading('Encaissements Car Rental approuvés')
-  if (!report.rental_payments.length) w.text('Aucun encaissement approuvé ce jour.', { size: 9 })
-  else {
-    w.table(
-      [
-        { label: 'Mode', weight: 4 },
-        { label: 'Nombre', weight: 2, align: 'right' },
-        { label: 'Montant', weight: 3, align: 'right' },
-        { label: 'Dont hors session', weight: 3, align: 'right' },
-      ],
-      report.rental_payments.map((row) => ({
-        cells: [
-          paymentMethodLabels[row.method] ?? row.method,
-          String(row.count),
-          formatMoney(row.amount, row.currency),
-          row.outside_session_count ? formatMoney(row.outside_session_amount, row.currency) : '-',
+  if (isPartsReport(report)) {
+    w.heading('Ventes de pièces')
+    const sales = report.parts_sales ?? []
+    if (!sales.length) w.text('Aucune vente ce jour.', { size: 9 })
+    else {
+      w.table(
+        [
+          { label: 'Prix', weight: 4 },
+          { label: 'Ventes', weight: 2, align: 'right' },
+          { label: 'Articles', weight: 2, align: 'right' },
+          { label: 'Montant', weight: 3, align: 'right' },
         ],
-      })),
-    )
+        sales.map((row) => ({ cells: [row.label, String(row.count), String(row.item_count), formatMoney(row.amount, row.currency)] })),
+      )
+    }
+  } else {
+    w.heading('Encaissements Car Rental approuvés')
+    if (!report.rental_payments.length) w.text('Aucun encaissement approuvé ce jour.', { size: 9 })
+    else {
+      w.table(
+        [
+          { label: 'Mode', weight: 4 },
+          { label: 'Nombre', weight: 2, align: 'right' },
+          { label: 'Montant', weight: 3, align: 'right' },
+          { label: 'Dont hors session', weight: 3, align: 'right' },
+        ],
+        report.rental_payments.map((row) => ({
+          cells: [
+            paymentMethodLabels[row.method] ?? row.method,
+            String(row.count),
+            formatMoney(row.amount, row.currency),
+            row.outside_session_count ? formatMoney(row.outside_session_amount, row.currency) : '-',
+          ],
+        })),
+      )
+    }
   }
 
   w.heading('Détail des mouvements')
@@ -205,8 +227,15 @@ export function buildDailyReportXlsx(report: DailyCashReport): Uint8Array {
     [bold('Mouvements par nature'), bold('Sens'), bold('Devise'), bold('Nombre'), bold('Montant')],
     ...report.movements_by_kind.map((row): XlsxRow => [row.label, row.direction === 'in' ? 'Entrée' : 'Sortie', row.currency, row.count, money(row.amount)]),
     [],
-    [bold('Encaissements Car Rental'), bold('Devise'), bold('Nombre'), bold('Montant'), bold('Dont hors session')],
-    ...report.rental_payments.map((row): XlsxRow => [paymentMethodLabels[row.method] ?? row.method, row.currency, row.count, money(row.amount), money(row.outside_session_amount)]),
+    ...(isPartsReport(report)
+      ? [
+          [bold('Ventes de pièces'), bold('Devise'), bold('Ventes'), bold('Articles'), bold('Montant')] as XlsxRow,
+          ...(report.parts_sales ?? []).map((row): XlsxRow => [row.label, row.currency, row.count, row.item_count, money(row.amount)]),
+        ]
+      : [
+          [bold('Encaissements Car Rental'), bold('Devise'), bold('Nombre'), bold('Montant'), bold('Dont hors session')] as XlsxRow,
+          ...report.rental_payments.map((row): XlsxRow => [paymentMethodLabels[row.method] ?? row.method, row.currency, row.count, money(row.amount), money(row.outside_session_amount)]),
+        ]),
   ]
 
   const sessions: XlsxRow[] = [

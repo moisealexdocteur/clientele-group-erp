@@ -1,10 +1,13 @@
 import type {
+  AutoPartsUserRole,
   CarRentalUserRole,
+  CompanyActivity,
   FuelLevel,
   FuelType,
   RentalAccessory,
   RentalCategory,
   RentalLocation,
+  SiteKind,
   ReservationCancellationReason,
   ReservationState,
   Transmission,
@@ -75,9 +78,26 @@ export const carRentalUserRoleLabels: Record<CarRentalUserRole, string> = {
   car_rental_fleet: 'Gestionnaire de flotte',
 }
 
+export const autoPartsUserRoleLabels: Record<AutoPartsUserRole, string> = {
+  auto_parts_administrator: 'Administrateur Auto Parts',
+  auto_parts_seller: 'Vendeur',
+  auto_parts_storekeeper: 'Magasinier',
+}
+
+export const companyActivityLabels: Record<CompanyActivity, string> = {
+  car_rental: 'Car Rental',
+  auto_parts: 'Auto Parts et motocyclettes',
+}
+
+export const siteKindLabels: Record<SiteKind, string> = {
+  office: 'Bureau',
+  store: 'Magasin',
+  warehouse: 'Entrepôt',
+}
+
 export function roleLabel(roleKey: string): string {
   if (roleKey === 'owner') return 'Propriétaire du système'
-  return carRentalUserRoleLabels[roleKey as CarRentalUserRole] ?? roleKey
+  return carRentalUserRoleLabels[roleKey as CarRentalUserRole] ?? autoPartsUserRoleLabels[roleKey as AutoPartsUserRole] ?? roleKey
 }
 
 /** Tonalité visuelle d'un état, utilisée par les pastilles. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney, formatRate, sumAmounts, toAmount } from './money'
+import { formatMoney, formatRate, fromCents, sumAmounts, toAmount, toCents } from './money'
 import { initials, isStrongPassword, normalizeCode, vehicleName, vehiclePlate } from './text'
 
 describe('montants', () => {
@@ -12,6 +12,16 @@ describe('montants', () => {
   it('signale un montant non configuré', () => {
     expect(formatMoney(null, 'USD')).toBe('À configurer')
     expect(toAmount('abc')).toBeNull()
+  })
+
+  it('convertit une saisie en centimes entiers et retour', () => {
+    expect(toCents('1500')).toBe(150000)
+    expect(toCents('1 250,5')).toBe(125050)
+    expect(toCents('0.07')).toBe(7)
+    expect(toCents('1.234')).toBeNull()
+    expect(toCents('1e3')).toBeNull()
+    expect(fromCents(125050)).toBe('1250.50')
+    expect(fromCents(7)).toBe('0.07')
   })
 
   it('additionne des montants décimaux sans erreur d’arrondi', () => {

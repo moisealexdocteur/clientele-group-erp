@@ -2,6 +2,23 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche feat/auto-parts-pieces
+
+Premier lot Auto Parts et motocyclettes. Détail : `docs/32_Auto_Parts_catalogue_stock_et_vente.md`. La version reste `0.9.0-alpha.1`.
+
+### Ajouté
+
+- Activité de société (Car Rental ou Auto Parts) et type d'adresse (bureau, magasin, entrepôt) dans Configuration.
+- Profils Administrateur Auto Parts, Vendeur et Magasinier.
+- Catalogue de pièces : référence, code-barres, prix de détail et de gros HTG, photo, compatibilités moto.
+- Stock par magasin et entrepôt : entrées, transferts, ajustements, journal immuable sans stock négatif.
+- Vente au comptoir en espèces HTG avec caisse ouverte, reçu 80 mm numéroté et QR, vente idempotente.
+- Rapport journalier : ventes de pièces pour une société Auto Parts.
+
+### Modifié
+
+- La caisse est commune aux activités : adresse `/caisse` (les anciennes adresses `/location/caisse` redirigent).
+
 ## Non publié - branche fix/comptes-et-essai-smtp
 
 Détail : `docs/31_Comptes_avec_ecritures_et_courriel_essai.md`. La version reste `0.9.0-alpha.1`.
