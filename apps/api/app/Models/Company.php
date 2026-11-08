@@ -15,7 +15,11 @@ final class Company extends Model
     protected $keyType = 'string';
 
     /** Valeurs de départ identiques aux valeurs par défaut de la base. */
+    /** Activités prises en charge ; chacune a ses écrans et ses profils. */
+    public const ACTIVITIES = ['car_rental', 'auto_parts'];
+
     protected $attributes = [
+        'activity' => 'car_rental',
         'rental_airport_fee_usd' => '20.00',
         'rental_cleaning_fee_usd' => '20.00',
     ];
@@ -37,6 +41,7 @@ final class Company extends Model
         'roadside_assistance_phone',
         'rental_airport_fee_usd',
         'rental_cleaning_fee_usd',
+        'activity',
     ];
 
     protected function casts(): array

@@ -25,6 +25,9 @@ final class UserRecords
         'cash_movements' => ['recorded_by'],
         'stored_files' => ['uploaded_by'],
         'group_exchange_rates' => ['set_by'],
+        'parts_products' => ['created_by', 'updated_by'],
+        'parts_stock_movements' => ['recorded_by'],
+        'parts_sales' => ['sold_by'],
     ];
 
     /**

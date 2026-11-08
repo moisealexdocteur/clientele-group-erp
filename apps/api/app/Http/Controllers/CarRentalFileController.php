@@ -15,7 +15,7 @@ use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Envoi et lecture des fichiers privés Car Rental.
+ * Envoi et lecture des fichiers privés Car Rental et des photos d’articles Auto Parts.
  *
  * Le droit d'envoyer dépend de l'usage du fichier ; le droit de lire un
  * document d'identité ou bancaire est réservé aux rôles autorisés et à la
@@ -33,6 +33,7 @@ final class CarRentalFileController extends Controller
         StoredFile::PURPOSE_SIGNATURE => 'rental.reservations.manage',
         StoredFile::PURPOSE_RENTAL_CONTRACT => 'rental.reservations.manage',
         StoredFile::PURPOSE_RENTAL_INVOICE => 'rental.invoices.issue',
+        StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO => 'parts.catalog.manage',
     ];
 
     public function __construct(
@@ -63,7 +64,9 @@ final class CarRentalFileController extends Controller
         }
 
         $site = $this->siteAuthorizer->siteFor($company, $access, $data['site_id']);
-        $file = $this->vault->store($request->file('file'), $company, $data['purpose'], $site->id, $request->user());
+        // Photo d'article : le catalogue est commun aux adresses de la société.
+        $siteId = $data['purpose'] === StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO ? null : $site->id;
+        $file = $this->vault->store($request->file('file'), $company, $data['purpose'], $siteId, $request->user());
 
         return response()->json(['data' => $this->payload($file)], 201);
     }
@@ -127,6 +130,7 @@ final class CarRentalFileController extends Controller
             StoredFile::PURPOSE_RENTAL_CONTRACT => $access->allows('rental.reservations.manage')
                 || $access->allows('rental.documents.sensitive'),
             StoredFile::PURPOSE_RENTAL_INVOICE => $access->allows('rental.reservations.read'),
+            StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO => $access->allows('parts.catalog.read'),
             default => $access->allows('rental.documents.sensitive'),
         };
     }

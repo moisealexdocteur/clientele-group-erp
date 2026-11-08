@@ -61,7 +61,13 @@ final class ReceiptService
             return null;
         }
 
-        $signature = $this->signature($company->id, $payment->receipt_number, (string) $payment->amount, $payment->currency);
+        return $this->verificationUrlFor($company, $payment->receipt_number, (string) $payment->amount, $payment->currency);
+    }
+
+    /** Adresse du QR pour tout reçu de la société : paiement Car Rental ou vente Auto Parts. */
+    public function verificationUrlFor(Company $company, string $number, string $amount, string $currency): ?string
+    {
+        $signature = $this->signature($company->id, $number, $amount, $currency);
 
         if ($signature === null) {
             return null;
@@ -71,7 +77,7 @@ final class ReceiptService
             '%s/verification/recu/%s/%s?s=%s',
             rtrim((string) config('app.url'), '/'),
             rawurlencode($company->code),
-            $payment->receipt_number,
+            $number,
             $signature,
         );
     }

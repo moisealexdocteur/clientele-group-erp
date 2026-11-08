@@ -6,6 +6,7 @@ use App\Models\CarRentalPayment;
 use App\Models\CarRentalReservation;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
+use App\Models\PartsSale;
 use App\Support\AuditLogger;
 use App\Support\CompanyContext;
 use App\Support\CompanySiteAuthorizer;
@@ -106,7 +107,7 @@ final class ReceiptController extends Controller
                 ->first();
 
             if (! $payment instanceof CarRentalPayment) {
-                return $invalid;
+                return $this->verifySale($company, $number, $signature, $invalid);
             }
 
             $expected = $this->receipts->signature($company->id, $number, (string) $payment->amount, $payment->currency);
@@ -125,6 +126,35 @@ final class ReceiptController extends Controller
                 'status' => $payment->status,
             ]);
         });
+    }
+
+    /** Reçu d'une vente Auto Parts : même numérotation et même signature que les paiements. */
+    private function verifySale(Company $company, string $number, string $signature, JsonResponse $invalid): JsonResponse
+    {
+        $sale = PartsSale::query()
+            ->where('company_id', $company->id)
+            ->where('number', $number)
+            ->first();
+
+        if (! $sale instanceof PartsSale) {
+            return $invalid;
+        }
+
+        $expected = $this->receipts->signature($company->id, $number, (string) $sale->total, $sale->currency);
+
+        if ($expected === null || ! hash_equals($expected, $signature)) {
+            return $invalid;
+        }
+
+        return response()->json([
+            'valid' => true,
+            'company' => $company->display_name,
+            'number' => $this->receipts->display($number),
+            'issued_at' => $sale->sold_at?->toIso8601String(),
+            'amount' => (string) $sale->total,
+            'currency' => $sale->currency,
+            'status' => $sale->status === 'completed' ? 'approved' : $sale->status,
+        ]);
     }
 
     /** @return array{0: CarRentalPayment, 1: CarRentalReservation} */

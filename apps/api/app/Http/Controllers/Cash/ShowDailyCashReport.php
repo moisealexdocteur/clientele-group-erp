@@ -9,6 +9,8 @@ use App\Models\CarRentalPayment;
 use App\Models\CarRentalReservation;
 use App\Models\CashMovement;
 use App\Models\CashSession;
+use App\Models\PartsSale;
+use App\Support\AutoParts\SalePresenter;
 use App\Support\CashSessionService;
 use App\Support\Cash\CashPresenter;
 use App\Support\CompanySiteAuthorizer;
@@ -114,6 +116,25 @@ final class ShowDailyCashReport extends Controller
             ->sortBy(static fn (array $row): string => $row['method'] . $row['currency'])
             ->values();
 
+        // Ventes Auto Parts du jour, par liste de prix (détail ou gros), réglées en espèces HTG.
+        $partsSales = $company->activity !== 'auto_parts' ? collect() : PartsSale::query()
+            ->where('company_id', $company->id)
+            ->whereIn('site_id', $siteIds)
+            ->where('sold_at', '>=', $start->utc())
+            ->where('sold_at', '<', $end->utc())
+            ->get(['price_list', 'item_count', 'total'])
+            ->groupBy('price_list')
+            ->map(fn (Collection $group, string $priceList): array => [
+                'price_list' => $priceList,
+                'label' => SalePresenter::PRICE_LIST_LABELS[$priceList] ?? $priceList,
+                'count' => $group->count(),
+                'item_count' => (int) $group->sum('item_count'),
+                'currency' => 'HTG',
+                'amount' => $this->presenter->sum($group->map(static fn (PartsSale $sale): string => (string) $sale->total)),
+            ])
+            ->sortBy('price_list')
+            ->values();
+
         $reprints = AuditEvent::query()
             ->where('company_id', $company->id)
             ->where('event_type', 'receipt.reprinted')
@@ -135,7 +156,9 @@ final class ShowDailyCashReport extends Controller
                 'sessions' => $sessionPayloads,
                 'totals' => $totals,
                 'movements_by_kind' => $byKind,
+                'activity' => $company->activity,
                 'rental_payments' => $rentalPayments,
+                'parts_sales' => $partsSales,
                 'open_sessions' => $sessions->where('status', 'open')->count(),
                 'pending_reviews' => $sessions->where('review_status', 'pending')->count(),
                 'reprints' => $reprints,
