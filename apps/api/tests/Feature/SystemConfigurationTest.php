@@ -636,8 +636,8 @@ final class SystemConfigurationTest extends TestCase
         // Même compte, même mot de passe, deux sociétés avec deux profils.
         self::assertSame($passwordHash, User::query()->findOrFail($employee['user_id'])->password);
         self::assertSame(1, User::query()->where('email', 'employee.groupe@example.test')->count());
-        $this->assertDatabaseHas('company_user_accesses', ['user_id' => $employee['user_id'], 'company_id' => $rentalId, 'role_key' => 'car_rental_administrator']);
-        $this->assertDatabaseHas('company_user_accesses', ['user_id' => $employee['user_id'], 'company_id' => $partsId, 'role_key' => 'auto_parts_seller', 'site_scope' => 'selected']);
+        $this->assertDatabaseHas('company_user_access', ['user_id' => $employee['user_id'], 'company_id' => $rentalId, 'role_key' => 'car_rental_administrator']);
+        $this->assertDatabaseHas('company_user_access', ['user_id' => $employee['user_id'], 'company_id' => $partsId, 'role_key' => 'auto_parts_seller', 'site_scope' => 'selected']);
         self::assertTrue(AuditEvent::query()->where('event_type', 'configuration.company_user_attached')->where('company_id', $partsId)->exists());
 
         // Pas de second ajout ; le compte disparaît de la liste.
