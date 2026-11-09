@@ -6,7 +6,7 @@ import { extname, join, normalize } from 'node:path'
 const root = new URL('../apps/web/dist/', import.meta.url).pathname
 const api = process.env.E2E_API ?? 'http://127.0.0.1:8001'
 const port = Number(process.env.E2E_PORT ?? 4180)
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.woff2': 'font/woff2' }
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.woff2': 'font/woff2' }
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost')
