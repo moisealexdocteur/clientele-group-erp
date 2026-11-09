@@ -167,7 +167,7 @@ test('import du bon Novamat en PDF et stock par modèle', async ({ page }) => {
   await page.goto('/pieces/motos')
   await expect(page.getByText(/motos disponibles à la vente/)).toBeVisible()
   await page.goto('/pieces/motos/stock')
-  await expect(page.getByText('Disponibles à la vente')).toBeVisible()
+  await expect(page.locator('.total-label', { hasText: 'Disponibles à la vente' })).toBeVisible()
   await capture(page, 'stock-par-modele')
 
   // Un modèle inutilisé se supprime.
