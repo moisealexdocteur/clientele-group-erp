@@ -121,6 +121,8 @@ function scanned(value: string): void {
 .facts dd {
   margin: 0;
   overflow-wrap: anywhere;
+  text-align: left;
+  font-weight: 400;
 }
 
 .code {
