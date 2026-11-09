@@ -2,6 +2,19 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche feat/motos-photos-scan-lubrifiants
+
+### Ajouté
+
+- Motos : liste des modèles vendus (motos et tricycles Haojin), codes comparés sans tiret, photo générique par modèle, prix et emplacement du stock dans les motos disponibles.
+- Réception : couleurs connues proposées, scan du châssis et du moteur ; scan du code-barres des articles et à la vente au comptoir.
+- Articles : lubrifiants de test (Motex-T, Mille C Rallye, American, Lion, Castrol, Havoline, Texaco Ursa), 10 caisses, 25 000 HTG à corriger.
+- Recette de bout en bout dans un navigateur à chaque pull request (`docs/35_Recette_de_bout_en_bout.md`).
+
+### Corrigé
+
+- Reçu de vente moto : cylindrée imprimée « cm3 » (l'exposant manquait). Essai d'alignement : libellés au-dessus des valeurs, sans chevauchement.
+
 ## Non publié - branche feat/import-haojin
 
 ### Ajouté

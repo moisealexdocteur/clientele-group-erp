@@ -65,13 +65,24 @@ Migration `2026_11_09_000100_create_auto_parts_motorcycle_sales.php` : `moto_mod
 
 ## Modèles Haojin et prix par défaut
 
-Motos > Modèles et stock > « Importer les modèles Haojin » ajoute les modèles vendus en Haïti par Novamat Motors qui manquent encore, au prix par défaut de 200 000 HTG (décision du propriétaire), modifiable ensuite modèle par modèle. Le formulaire « Ajouter un modèle » propose aussi 200 000 HTG.
+Motos > Modèles et stock > « Importer les modèles Haojin » ajoute les modèles vendus qui manquent encore, au prix par défaut de 200 000 HTG (décision du propriétaire), modifiable ensuite modèle par modèle. Le formulaire « Ajouter un modèle » propose aussi 200 000 HTG.
 
-La liste est dans `apps/web/src/data/haojinCatalog.ts`. Elle ne contient que les modèles confirmés par une source :
+Liste confirmée par le propriétaire le 9 novembre 2026, dans `apps/web/src/data/haojinCatalog.ts` :
 
-| Modèle | Source |
+| Modèle | Type |
 | --- | --- |
-| HJ-125A-D | Certificat de vente Novamat Motors 2026 (moteur 157FMI, 1 cylindre) |
-| HJ-150-28 | Catalogue en ligne Novamat Motors |
+| HJ-110-5, HJ-125A, HJ-125A-D, HJ-150-28, HJ-200GY-3 | Motocyclette |
+| HJ-150ZH-6A, HJ-150ZH-85, HJ-150ZH-175, HJ-150ZH-200A, HJ-250ZH-10 | Tricycle |
 
-La cylindrée reste vide tant qu'une fiche du fournisseur ne la confirme pas ; le chiffre du nom n'est pas une preuve. Un autre modèle s'ajoute à la liste quand Novamat le confirme (liste de prix ou fiche technique).
+Les codes sont comparés sans tiret ni espace : « HJ125-A » et « HJ-125A » sont le même modèle. « HJ-200-CY-3 » est reconnu comme l'écriture de « HJ-200GY-3 » (catalogue Haojin) et n'est pas recréé. La cylindrée reste vide tant qu'une fiche du fournisseur ne la confirme pas.
+
+## Photo, prix et emplacement
+
+- Chaque modèle peut recevoir une photo générique (photo du fabricant ou du magasin, sans plaque), téléversée par l'administrateur dans la fiche du modèle (`moto_model_photo`, JPEG ou PNG, fichier privé de la société, lisible avec `parts.motos.read`, journalisé).
+- La photo s'affiche dans la liste des modèles, la liste des motos disponibles et la nouvelle commande.
+- La liste des motos disponibles montre le prix de vente du modèle et l'emplacement du stock (« Stock : Pont Parois, Route Nationale 6 »).
+
+## Saisie rapide à la réception
+
+- Couleur : liste de couleurs connues (Rouge, Rouge Sang, Noir, Blanc, Bleu…) et couleurs déjà utilisées, avec saisie libre.
+- Châssis et moteur : bouton de scan à côté de chaque champ (appareil photo, code-barres ou QR). Il utilise l'API BarcodeDetector de Chrome et Edge ; sinon la saisie au clavier reste possible. Le même bouton sert au code-barres des articles et à la recherche de la vente au comptoir.

@@ -114,7 +114,7 @@ async function save(): Promise<void> {
     <section class="stack" aria-labelledby="models-title">
       <h2 id="models-title" class="title-section">Modèles</h2>
       <div v-if="models.length" class="list">
-        <component :is="canManage ? 'button' : 'div'" v-for="model in models" :key="model.id" class="list-row" type="button" @click="canManage && open(model)">
+        <component :is="canManage ? 'button' : 'div'" v-for="model in models" :key="model.id" class="list-row with-thumb" type="button" @click="canManage && open(model)">
           <ProductThumb :path="model.photo_url ?? null" :alt="model.label" icon="moto" fit="contain" />
           <span class="row-main">
             <strong>{{ model.label }}</strong>
@@ -132,7 +132,7 @@ async function save(): Promise<void> {
     <section class="stack" aria-labelledby="units-title">
       <h2 id="units-title" class="title-section">Motos disponibles</h2>
       <div v-if="units.length" class="list">
-        <div v-for="unit in units" :key="unit.id" class="list-row">
+        <div v-for="unit in units" :key="unit.id" class="list-row with-thumb">
           <ProductThumb :path="unit.model?.photo_url ?? null" :alt="unit.model?.label ?? 'Moto'" icon="moto" fit="contain" />
           <span class="row-main">
             <strong>{{ unit.model?.label }} {{ unit.model_year }} - {{ unit.color }}</strong>
@@ -203,6 +203,22 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
+.with-thumb {
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+}
+
+@media (max-width: 559px) {
+  /* Téléphone : le prix passe sous le texte, la vignette reste à gauche. */
+  .with-thumb {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .with-thumb > .row-side {
+    grid-column: 2;
+    justify-items: start;
+  }
+}
+
 .model-photo {
   display: flex;
   gap: 12px;
