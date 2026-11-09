@@ -2,6 +2,12 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche feat/import-haojin
+
+### Ajouté
+
+- Motos > Modèles et stock : « Importer les modèles Haojin » (modèles vendus en Haïti par Novamat Motors, confirmés par une source), prix par défaut 200 000 HTG. Détail : `docs/33_Auto_Parts_vente_de_motocyclettes.md`.
+
 ## Non publié - branche feat/utilisateur-existant-societe
 
 Détail : `docs/34_Employe_existant_dans_une_autre_societe.md`. La version reste `0.9.0-alpha.1`.
