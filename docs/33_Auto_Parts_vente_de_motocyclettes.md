@@ -62,3 +62,16 @@ Migration `2026_11_09_000100_create_auto_parts_motorcycle_sales.php` : `moto_mod
 ## Tests
 
 `apps/api/tests/Feature/MotoSalesTest.php` : attribution dans l'ordre de paiement avec couleur, contrôles de la remise, dédouanement à remettre, impressions, QR ; couverture du paiement et conversion ; réattribution et annulation ; doublon de châssis ; isolation entre sociétés et adresses. `apps/web/src/lib/motoPdf.test.ts` : reçu et certificat.
+
+## Modèles Haojin et prix par défaut
+
+Motos > Modèles et stock > « Importer les modèles Haojin » ajoute les modèles vendus en Haïti par Novamat Motors qui manquent encore, au prix par défaut de 200 000 HTG (décision du propriétaire), modifiable ensuite modèle par modèle. Le formulaire « Ajouter un modèle » propose aussi 200 000 HTG.
+
+La liste est dans `apps/web/src/data/haojinCatalog.ts`. Elle ne contient que les modèles confirmés par une source :
+
+| Modèle | Source |
+| --- | --- |
+| HJ-125A-D | Certificat de vente Novamat Motors 2026 (moteur 157FMI, 1 cylindre) |
+| HJ-150-28 | Catalogue en ligne Novamat Motors |
+
+La cylindrée reste vide tant qu'une fiche du fournisseur ne la confirme pas ; le chiffre du nom n'est pas une preuve. Un autre modèle s'ajoute à la liste quand Novamat le confirme (liste de prix ou fiche technique).

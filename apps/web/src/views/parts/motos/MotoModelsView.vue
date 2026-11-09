@@ -13,6 +13,7 @@ import InlineAlert from '../../../components/ui/InlineAlert.vue'
 import SheetDialog from '../../../components/ui/SheetDialog.vue'
 import FormField from '../../../components/ui/FormField.vue'
 import StatusPill from '../../../components/ui/StatusPill.vue'
+import { HAOJIN_DEFAULT_PRICE, HAOJIN_HAITI_MODELS } from '../../../data/haojinCatalog'
 
 /* Modèles vendus avec leur prix, et motos disponibles en stock. */
 const session = useSessionStore()
@@ -24,7 +25,7 @@ const action = useRequest()
 const models = ref<MotoModel[]>([])
 const units = ref<MotoUnit[]>([])
 const editing = ref<MotoModel | null | 'new'>(null)
-const form = reactive({ make: 'Haojin', model: '', displacement_cc: '' as string | number, cylinders: 1, price: '', price_currency: 'USD' as Currency, is_active: true })
+const form = reactive({ make: 'Haojin', model: '', displacement_cc: '' as string | number, cylinders: 1, price: HAOJIN_DEFAULT_PRICE.price as string, price_currency: HAOJIN_DEFAULT_PRICE.price_currency as Currency, is_active: true })
 const canManage = computed(() => session.can('parts.motos.models.manage'))
 
 async function load(): Promise<void> {
@@ -40,8 +41,25 @@ function open(model: MotoModel | 'new'): void {
   action.reset()
   editing.value = model
   Object.assign(form, model === 'new'
-    ? { make: 'Haojin', model: '', displacement_cc: '', cylinders: 1, price: '', price_currency: 'USD', is_active: true }
+    ? { make: 'Haojin', model: '', displacement_cc: '', cylinders: 1, ...HAOJIN_DEFAULT_PRICE, is_active: true }
     : { make: model.make, model: model.model, displacement_cc: model.displacement_cc ?? '', cylinders: model.cylinders, price: model.price, price_currency: model.price_currency, is_active: model.is_active })
+}
+
+// Modèles Haojin vendus en Haïti qui ne sont pas encore dans la liste.
+const missing = computed(() => HAOJIN_HAITI_MODELS.filter((ref) => !models.value.some((model) => model.make.toLowerCase() === 'haojin' && model.model.toUpperCase() === ref.model)))
+const importing = ref(false)
+
+async function importHaojin(): Promise<void> {
+  importing.value = true
+  let created = 0
+  for (const ref of missing.value) {
+    const result = await action.run(() => saveMotoModel({ make: 'Haojin', model: ref.model, displacement_cc: ref.displacement_cc, cylinders: ref.cylinders, ...HAOJIN_DEFAULT_PRICE, is_active: true }))
+    if (!result) break
+    created += 1
+  }
+  importing.value = false
+  if (created) ui.toast(`${plural(created, 'modèle ajouté', 'modèles ajoutés')} à 200 000 HTG.`)
+  await load()
 }
 
 async function save(): Promise<void> {
@@ -65,11 +83,15 @@ async function save(): Promise<void> {
 <template>
   <PageHeader title="Modèles et stock" description="Prix de vente par modèle et motos disponibles." :back="{ name: 'parts.motos' }" back-label="Motos">
     <template v-if="canManage" #actions>
+      <button v-if="missing.length" class="btn btn-secondary" type="button" :disabled="importing || !app.canReachServer" @click="importHaojin">
+        {{ importing ? 'Importation' : `Importer les modèles Haojin (${missing.length})` }}
+      </button>
       <button class="btn btn-primary" type="button" :disabled="!app.canReachServer" @click="open('new')">Ajouter un modèle</button>
     </template>
   </PageHeader>
 
   <InlineAlert :message="loading.error.value" />
+  <InlineAlert v-if="!editing" :message="action.error.value" />
   <div class="stack-lg">
     <section class="stack" aria-labelledby="models-title">
       <h2 id="models-title" class="title-section">Modèles</h2>
