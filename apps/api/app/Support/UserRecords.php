@@ -28,6 +28,8 @@ final class UserRecords
         'parts_products' => ['created_by', 'updated_by'],
         'parts_stock_movements' => ['recorded_by'],
         'parts_sales' => ['sold_by'],
+        'moto_batches' => ['received_by'],
+        'moto_orders' => ['submitted_by', 'verified_by', 'assigned_by', 'delivered_by'],
     ];
 
     /**

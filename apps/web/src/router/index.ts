@@ -40,6 +40,7 @@ function homeRoute(): RouteLocationRaw {
   if ((session.context.company.activity ?? 'car_rental') === 'auto_parts') {
     if (session.can('parts.sales.create')) return { name: 'parts.sale' }
     if (session.can('parts.catalog.read')) return { name: 'parts.products' }
+    if (session.can('parts.motos.read')) return { name: 'parts.motos' }
     return { name: 'cash' }
   }
   return { name: 'rental.today' }
@@ -124,7 +125,13 @@ const routes: RouteRecordRaw[] = [
     meta: { auth: true, company: true, activity: 'auto_parts' },
     children: [
       { path: '', name: 'parts.sale', component: () => import('../views/parts/CounterSaleView.vue'), meta: { title: 'Vente au comptoir', permission: 'parts.sales.create', navMatch: 'parts.sale' } },
-      { path: 'ventes', name: 'parts.sales', component: () => import('../views/parts/SalesView.vue'), meta: { title: 'Ventes du jour', permission: 'parts.sales.read', navMatch: 'parts.sales' } },
+      { path: 'ventes', name: 'parts.sales', component: () => import('../views/parts/SalesView.vue'), meta: { title: 'Ventes du jour', permission: 'parts.sales.read', navMatch: 'parts.sale' } },
+      { path: 'motos', name: 'parts.motos', component: () => import('../views/parts/motos/MotosView.vue'), meta: { title: 'Motos', permission: 'parts.motos.read', navMatch: 'parts.motos' } },
+      { path: 'motos/commandes/nouvelle', name: 'parts.moto.order.new', component: () => import('../views/parts/motos/MotoOrderNewView.vue'), meta: { title: 'Nouvelle commande de moto', permission: 'parts.motos.orders.create', navMatch: 'parts.motos' } },
+      { path: 'motos/commandes/:orderId', name: 'parts.moto.order', component: () => import('../views/parts/motos/MotoOrderDetailView.vue'), props: true, meta: { title: 'Commande de moto', permission: 'parts.motos.read', navMatch: 'parts.motos' } },
+      { path: 'motos/commandes/:orderId/remise', name: 'parts.moto.delivery', component: () => import('../views/parts/motos/MotoDeliveryView.vue'), props: true, meta: { title: 'Remettre la moto', permission: 'parts.motos.deliver', navMatch: 'parts.motos' } },
+      { path: 'motos/lots/nouveau', name: 'parts.moto.batch.new', component: () => import('../views/parts/motos/MotoBatchNewView.vue'), meta: { title: 'Réception d’un lot', permission: 'parts.motos.receive', navMatch: 'parts.motos' } },
+      { path: 'motos/modeles', name: 'parts.moto.models', component: () => import('../views/parts/motos/MotoModelsView.vue'), meta: { title: 'Modèles et stock', permission: 'parts.motos.read', navMatch: 'parts.motos' } },
       { path: 'articles', name: 'parts.products', component: () => import('../views/parts/ProductsView.vue'), meta: { title: 'Articles', permission: 'parts.catalog.read', navMatch: 'parts.products' } },
       { path: 'articles/nouveau', name: 'parts.product.new', component: () => import('../views/parts/ProductNewView.vue'), meta: { title: 'Ajouter un article', permission: 'parts.catalog.manage', navMatch: 'parts.products' } },
       { path: 'articles/:productId', name: 'parts.product', component: () => import('../views/parts/ProductDetailView.vue'), props: true, meta: { title: 'Article', permission: 'parts.catalog.read', navMatch: 'parts.products' } },

@@ -73,6 +73,11 @@ final class CompanyContextController extends Controller
                     'phone_numbers' => $company->phone_numbers,
                     'rental_contract_terms' => $company->rental_contract_terms,
                 ],
+                // Alignement de l'impression du certificat de vente moto, réglé dans Configuration.
+                'moto_certificate_offset' => [
+                    'x_mm' => (string) $company->moto_certificate_offset_x_mm,
+                    'y_mm' => (string) $company->moto_certificate_offset_y_mm,
+                ],
                 // Frais de service en vigueur, réglés dans Configuration.
                 'rental_fees' => [
                     'airport_usd' => (string) $company->rental_airport_fee_usd,

@@ -4,6 +4,8 @@ namespace App\Support\AutoParts;
 
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
+use App\Models\MotoModel;
+use App\Models\MotoOrder;
 use App\Models\PartsProduct;
 use App\Models\Site;
 use App\Support\CompanySiteAuthorizer;
@@ -33,6 +35,32 @@ final class PartsLookup
         abort_if($model === null, 404, 'Article introuvable.');
 
         return $model;
+    }
+
+    /** Commande de moto de la société, dans une adresse autorisée. */
+    public function motoOrderFor(Company $company, CompanyUserAccess $access, string $order, bool $lock = false): MotoOrder
+    {
+        $model = MotoOrder::query()
+            ->where('company_id', $company->id)
+            ->whereKey($order)
+            ->when($lock, static fn ($query) => $query->lockForUpdate())
+            ->first();
+
+        abort_if($model === null, 404, 'Commande introuvable.');
+        $this->siteAuthorizer->siteFor($company, $access, $model->site_id);
+
+        return $model;
+    }
+
+    public function motoModelFor(Company $company, string $model, string $field = 'model_id'): MotoModel
+    {
+        $record = MotoModel::query()->where('company_id', $company->id)->whereKey($model)->first();
+
+        if ($record === null) {
+            throw ValidationException::withMessages([$field => 'Modèle introuvable.']);
+        }
+
+        return $record;
     }
 
     /** Magasin ou entrepôt autorisé : seul un emplacement de stock reçoit des pièces. */

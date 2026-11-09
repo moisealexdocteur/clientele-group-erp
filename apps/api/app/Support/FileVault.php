@@ -33,6 +33,7 @@ final class FileVault
         StoredFile::PURPOSE_RENTAL_CONTRACT => ['application/pdf'],
         StoredFile::PURPOSE_RENTAL_INVOICE => ['application/pdf'],
         StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO => ['image/jpeg', 'image/png'],
+        StoredFile::PURPOSE_MOTO_DEPOSIT_PROOF => ['image/jpeg', 'image/png', 'application/pdf'],
     ];
 
     private const EXTENSIONS = [

@@ -105,6 +105,7 @@ export type FilePurpose =
   | 'rental_contract'
   | 'rental_invoice'
   | 'parts_product_photo'
+  | 'moto_deposit_proof'
 
 export interface UploadedFileRef {
   id: string

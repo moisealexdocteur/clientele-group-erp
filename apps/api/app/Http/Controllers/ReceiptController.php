@@ -6,6 +6,7 @@ use App\Models\CarRentalPayment;
 use App\Models\CarRentalReservation;
 use App\Models\Company;
 use App\Models\CompanyUserAccess;
+use App\Models\MotoOrder;
 use App\Models\PartsSale;
 use App\Support\AuditLogger;
 use App\Support\CompanyContext;
@@ -137,7 +138,7 @@ final class ReceiptController extends Controller
             ->first();
 
         if (! $sale instanceof PartsSale) {
-            return $invalid;
+            return $this->verifyMotoSale($company, $number, $signature, $invalid);
         }
 
         $expected = $this->receipts->signature($company->id, $number, (string) $sale->total, $sale->currency);
@@ -154,6 +155,35 @@ final class ReceiptController extends Controller
             'amount' => (string) $sale->total,
             'currency' => $sale->currency,
             'status' => $sale->status === 'completed' ? 'approved' : $sale->status,
+        ]);
+    }
+
+    /** Reçu de vente d'une motocyclette : montant et devise du prix de vente. */
+    private function verifyMotoSale(Company $company, string $number, string $signature, JsonResponse $invalid): JsonResponse
+    {
+        $order = MotoOrder::query()
+            ->where('company_id', $company->id)
+            ->where('receipt_number', $number)
+            ->first();
+
+        if (! $order instanceof MotoOrder) {
+            return $invalid;
+        }
+
+        $expected = $this->receipts->signature($company->id, $number, (string) $order->price, $order->price_currency);
+
+        if ($expected === null || ! hash_equals($expected, $signature)) {
+            return $invalid;
+        }
+
+        return response()->json([
+            'valid' => true,
+            'company' => $company->display_name,
+            'number' => $this->receipts->display($number),
+            'issued_at' => $order->delivered_at?->toIso8601String(),
+            'amount' => (string) $order->price,
+            'currency' => $order->price_currency,
+            'status' => $order->status === 'delivered' ? 'approved' : $order->status,
         ]);
     }
 
