@@ -10,9 +10,9 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Branche de référence | `main` |
 | Commit figé | `15d247765220cc7e768befc93a05cfff7c606d94` (0.6.0-alpha.1, cycle Car Rental validé en recette le 8 octobre 2026) |
 | Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier). PR #33 fusionnée (retrait du 80 mm, encaissements Car Rental au rapport, test d'isolation) ; carte par devise dans la session de caisse ; documents au format Lettre |
-| Dernière version déployée | `0.9.0-alpha.1` (déployée le 12 octobre 2026, caisse en relecture). Car Rental validé en recette le 12 octobre 2026 : réservations, courriels |
+| Dernière version déployée | `0.9.0-alpha.1` (redéployée le 9 novembre 2026 avec Auto Parts, en recette). Car Rental validé en recette le 12 octobre 2026 : réservations, courriels |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-ff7f77e` (13 octobre 2026 : format Lettre, comptes avec écritures, courriel d'essai) |
+| Image API et web déployée | `sha-3761c57` (9 novembre 2026 : Auto Parts, catalogue, stock, vente au comptoir et vente de motocyclettes) |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
