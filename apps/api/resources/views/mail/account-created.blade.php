@@ -20,7 +20,7 @@
                         <td style="padding:30px 28px;">
                             <p style="margin:0 0 14px;font-size:16px;line-height:1.5;">Bonjour {{ $recipientName }},</p>
                             <p style="margin:0 0 18px;font-size:16px;line-height:1.5;">
-                                Votre compte Clientèle Group ERP a été créé pour {{ $companyName }}.
+                                @if ($existingAccount)Un accès à {{ $companyName }} a été ajouté à votre compte Clientèle Group ERP.@else Votre compte Clientèle Group ERP a été créé pour {{ $companyName }}.@endif
                             </p>
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 20px;border-radius:12px;background:#eef0ff;color:#2222e6;">
                                 <tr>
@@ -31,10 +31,10 @@
                                 </tr>
                             </table>
                             <p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#565866;">
-                                Utilisez votre adresse courriel personnelle et le mot de passe transmis par votre administrateur. Un code de sécurité par courriel sera demandé à chaque connexion.
+                                @if ($existingAccount)Connectez-vous avec votre adresse courriel et votre mot de passe habituels, puis choisissez {{ $companyName }}.@else Utilisez votre adresse courriel personnelle et le mot de passe transmis par votre administrateur.@endif Un code de sécurité par courriel sera demandé à chaque connexion.
                             </p>
                             <p style="margin:0;font-size:14px;line-height:1.5;color:#565866;">
-                                Si vous ne reconnaissez pas cette création de compte, contactez immédiatement l’administrateur Clientèle Group.
+                                Si vous ne reconnaissez pas @if ($existingAccount)cet ajout d’accès@else cette création de compte@endif, contactez immédiatement l’administrateur Clientèle Group.
                             </p>
                         </td>
                     </tr>

@@ -2,6 +2,14 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche feat/utilisateur-existant-societe
+
+Détail : `docs/34_Employe_existant_dans_une_autre_societe.md`. La version reste `0.9.0-alpha.1`.
+
+### Ajouté
+
+- Configuration > Utilisateurs : « Ajouter un employé existant » donne à un compte du groupe un accès à une autre société, avec son propre profil et ses adresses, sans nouveau mot de passe. Courriel « Nouvel accès » à l'employé.
+
 ## Non publié - branche feat/auto-parts-motos
 
 Vente de motocyclettes Haojin payées d'avance. Détail : `docs/33_Auto_Parts_vente_de_motocyclettes.md`. La version reste `0.9.0-alpha.1`.

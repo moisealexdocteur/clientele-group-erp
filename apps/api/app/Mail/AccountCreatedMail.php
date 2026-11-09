@@ -17,13 +17,16 @@ final class AccountCreatedMail extends Mailable
         public readonly string $recipientName,
         public readonly string $companyName,
         public readonly string $roleLabel,
+        public readonly bool $existingAccount = false,
     ) {
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Votre compte Clientèle Group ERP a été créé',
+            subject: $this->existingAccount
+                ? 'Nouvel accès à '.$this->companyName.' dans Clientèle Group ERP'
+                : 'Votre compte Clientèle Group ERP a été créé',
         );
     }
 

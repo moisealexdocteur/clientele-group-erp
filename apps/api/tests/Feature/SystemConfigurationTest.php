@@ -564,6 +564,116 @@ final class SystemConfigurationTest extends TestCase
         self::assertTrue(AuditEvent::query()->where('event_type', 'configuration.exchange_rate_access_revoked')->exists());
     }
 
+    public function test_the_owner_gives_an_existing_employee_access_to_another_company(): void
+    {
+        Mail::fake();
+
+        $owner = User::factory()->create(['is_active' => true, 'system_role' => 'owner']);
+        [, $ownerToken] = ApiAccessToken::issueFor($owner, Request::create('/api/v1/auth/login', 'POST'));
+        $rentalId = $this->createCompany($ownerToken, 'RENTAL', 'Clientèle Rent a Car');
+        $partsId = $this->createCompany($ownerToken, 'PARTS', 'Clientèle Auto Parts');
+        $this->withToken($ownerToken)
+            ->patchJson("/api/v1/system/configuration/companies/{$partsId}/activity", ['activity' => 'auto_parts'])
+            ->assertOk();
+        $store = $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$partsId}/sites", ['code' => 'RUE-4A', 'name' => 'Rue 4 A', 'address' => 'Cap-Haïtien'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $employee = $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$rentalId}/users", [
+                'name' => 'Employée du groupe',
+                'email' => 'employee.groupe@example.test',
+                'password' => 'MotDePasse!2026',
+                'password_confirmation' => 'MotDePasse!2026',
+                'role_key' => 'car_rental_administrator',
+                'site_scope' => 'all',
+            ])
+            ->assertCreated()
+            ->json('data');
+        $passwordHash = User::query()->findOrFail($employee['user_id'])->password;
+
+        // Le compte figure parmi les comptes à ajouter ; le propriétaire non.
+        $this->withToken($ownerToken)
+            ->getJson("/api/v1/system/configuration/companies/{$partsId}/users/attachable")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $employee['user_id']);
+
+        // Profil propre à l'activité de la société.
+        $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$partsId}/users/existing", [
+                'user_id' => $employee['user_id'],
+                'role_key' => 'car_rental_agent',
+                'site_scope' => 'all',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('role_key');
+
+        $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$partsId}/users/existing", [
+                'user_id' => $owner->id,
+                'role_key' => 'auto_parts_seller',
+                'site_scope' => 'all',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('user_id');
+
+        $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$partsId}/users/existing", [
+                'user_id' => $employee['user_id'],
+                'role_key' => 'auto_parts_seller',
+                'site_scope' => 'selected',
+                'site_ids' => [$store],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.role_key', 'auto_parts_seller')
+            ->assertJsonPath('notification.sent', true);
+
+        Mail::assertSent(AccountCreatedMail::class, fn (AccountCreatedMail $mail): bool => $mail->existingAccount
+            && $mail->companyName === 'Clientèle Auto Parts');
+
+        // Même compte, même mot de passe, deux sociétés avec deux profils.
+        self::assertSame($passwordHash, User::query()->findOrFail($employee['user_id'])->password);
+        self::assertSame(1, User::query()->where('email', 'employee.groupe@example.test')->count());
+        $this->assertDatabaseHas('company_user_access', ['user_id' => $employee['user_id'], 'company_id' => $rentalId, 'role_key' => 'car_rental_administrator']);
+        $this->assertDatabaseHas('company_user_access', ['user_id' => $employee['user_id'], 'company_id' => $partsId, 'role_key' => 'auto_parts_seller', 'site_scope' => 'selected']);
+        self::assertTrue(AuditEvent::query()->where('event_type', 'configuration.company_user_attached')->where('company_id', $partsId)->exists());
+
+        // Pas de second ajout ; le compte disparaît de la liste.
+        $this->withToken($ownerToken)
+            ->postJson("/api/v1/system/configuration/companies/{$partsId}/users/existing", [
+                'user_id' => $employee['user_id'],
+                'role_key' => 'auto_parts_seller',
+                'site_scope' => 'all',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('user_id');
+        $this->withToken($ownerToken)
+            ->getJson("/api/v1/system/configuration/companies/{$partsId}/users/attachable")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        // Les deux sociétés sont proposées à la connexion de l'employé.
+        $employeeUser = User::query()->findOrFail($employee['user_id']);
+        [, $employeeToken] = ApiAccessToken::issueFor($employeeUser, Request::create('/api/v1/auth/login', 'POST'));
+        $this->withToken($employeeToken)
+            ->withHeader('X-Clientele-Company-Id', $partsId)
+            ->getJson('/api/v1/context')
+            ->assertOk()
+            ->assertJsonPath('access.role_key', 'auto_parts_seller');
+        $this->withToken($employeeToken)
+            ->withHeader('X-Clientele-Company-Id', $rentalId)
+            ->getJson('/api/v1/context')
+            ->assertOk()
+            ->assertJsonPath('access.role_key', 'car_rental_administrator');
+
+        // Un employé n'accède pas à cette configuration.
+        $this->withToken($employeeToken)
+            ->getJson("/api/v1/system/configuration/companies/{$partsId}/users/attachable")
+            ->assertForbidden();
+    }
+
     private function createCompany(string $token, string $code, string $name): string
     {
         return $this->withToken($token)

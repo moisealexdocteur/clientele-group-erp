@@ -398,7 +398,7 @@ final class SystemConfigurationController extends Controller
 
         if (User::query()->where('email', $data['email'])->exists()) {
             throw ValidationException::withMessages([
-                'email' => 'Cette adresse courriel est déjà associée à un compte. Créez un nouvel utilisateur avec une autre adresse.',
+                'email' => 'Cette adresse a déjà un compte dans le groupe. Utilisez « Ajouter un employé existant ».',
             ]);
         }
 

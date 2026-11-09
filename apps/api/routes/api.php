@@ -74,6 +74,10 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.company-users.index');
             Route::post('/companies/{company}/users', [SystemConfigurationController::class, 'storeCompanyUser'])
                 ->name('api.v1.system.configuration.company-users.store');
+            Route::get('/companies/{company}/users/attachable', Configuration\ListAttachableUsers::class)
+                ->name('api.v1.system.configuration.company-users.attachable');
+            Route::post('/companies/{company}/users/existing', Configuration\AttachExistingUser::class)
+                ->name('api.v1.system.configuration.company-users.attach');
             Route::patch('/companies/{company}/users/{companyUserAccess}', [SystemConfigurationController::class, 'updateCompanyUser'])
                 ->name('api.v1.system.configuration.company-users.update');
             Route::patch('/companies/{company}/users/{companyUserAccess}/exchange-rate-access', [SystemConfigurationController::class, 'updateExchangeRateAccess'])

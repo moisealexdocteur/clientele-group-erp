@@ -45,6 +45,7 @@ function scopeText(user: SystemCompanyUser): string {
 <template>
   <PageHeader title="Utilisateurs" description="Création, modification, désactivation et suppression. Chaque action est journalisée.">
     <template #actions>
+      <RouterLink class="btn btn-secondary" :to="{ name: 'system.user.attach', params: { companyId } }">Ajouter un employé existant</RouterLink>
       <RouterLink class="btn btn-primary" :to="{ name: 'system.user.new', params: { companyId } }">Ajouter un utilisateur</RouterLink>
     </template>
   </PageHeader>
@@ -86,7 +87,10 @@ function scopeText(user: SystemCompanyUser): string {
 
     <div v-else-if="!request.busy.value" class="empty">
       <p>Aucun utilisateur n’est encore attribué à {{ company?.display_name ?? 'cette société' }}.</p>
-      <RouterLink class="btn btn-primary" :to="{ name: 'system.user.new', params: { companyId } }">Ajouter un utilisateur</RouterLink>
+      <div class="btn-row">
+        <RouterLink class="btn btn-primary" :to="{ name: 'system.user.new', params: { companyId } }">Ajouter un utilisateur</RouterLink>
+        <RouterLink class="btn btn-secondary" :to="{ name: 'system.user.attach', params: { companyId } }">Ajouter un employé existant</RouterLink>
+      </div>
     </div>
 
     <p class="field-help">Le compte propriétaire se gère depuis la sécurité de son propre compte.</p>
