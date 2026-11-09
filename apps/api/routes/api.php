@@ -66,6 +66,8 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.sites.kind');
             Route::patch('/companies/{company}/activity', Configuration\UpdateCompanyActivity::class)
                 ->name('api.v1.system.configuration.companies.activity');
+            Route::patch('/companies/{company}/moto-certificate', Configuration\UpdateMotoCertificateOffset::class)
+                ->name('api.v1.system.configuration.companies.moto-certificate');
             Route::post('/companies/{company}/cash-registers', [SystemConfigurationController::class, 'storeCashRegister'])
                 ->name('api.v1.system.configuration.cash-registers.store');
             Route::get('/companies/{company}/users', [SystemConfigurationController::class, 'companyUsers'])
@@ -171,6 +173,58 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/sales/{sale}/receipt/prints', AutoParts\RecordSaleReceiptPrint::class)
                 ->middleware('company.permission:parts.sales.read')
                 ->name('api.v1.parts.sales.receipt-prints');
+
+            // Vente de motocyclettes : commandes payées d'avance, lots du fournisseur, remise.
+            Route::prefix('motos')->group(function (): void {
+                Route::get('/models', AutoParts\Motos\ListMotoModels::class)
+                    ->middleware('company.permission:parts.motos.read')
+                    ->name('api.v1.parts.motos.models.index');
+                Route::post('/models', AutoParts\Motos\SaveMotoModel::class)
+                    ->middleware('company.permission:parts.motos.models.manage')
+                    ->name('api.v1.parts.motos.models.store');
+                Route::patch('/models/{model}', AutoParts\Motos\SaveMotoModel::class)
+                    ->middleware('company.permission:parts.motos.models.manage')
+                    ->name('api.v1.parts.motos.models.update');
+                Route::get('/units', AutoParts\Motos\ListMotoUnits::class)
+                    ->middleware('company.permission:parts.motos.read')
+                    ->name('api.v1.parts.motos.units.index');
+                Route::post('/batches', AutoParts\Motos\ReceiveMotoBatch::class)
+                    ->middleware('company.permission:parts.motos.receive')
+                    ->name('api.v1.parts.motos.batches.store');
+                Route::post('/allocate', AutoParts\Motos\AllocateMotos::class)
+                    ->middleware('company.permission:parts.motos.assign')
+                    ->name('api.v1.parts.motos.allocate');
+                Route::get('/orders', AutoParts\Motos\ListMotoOrders::class)
+                    ->middleware('company.permission:parts.motos.read')
+                    ->name('api.v1.parts.motos.orders.index');
+                Route::post('/orders', AutoParts\Motos\StoreMotoOrder::class)
+                    ->middleware('company.permission:parts.motos.orders.create')
+                    ->name('api.v1.parts.motos.orders.store');
+                Route::get('/orders/{order}', AutoParts\Motos\ShowMotoOrder::class)
+                    ->middleware('company.permission:parts.motos.read')
+                    ->name('api.v1.parts.motos.orders.show');
+                Route::post('/orders/{order}/verify', AutoParts\Motos\VerifyMotoPayment::class)
+                    ->middleware('company.permission:parts.motos.payments.verify')
+                    ->name('api.v1.parts.motos.orders.verify');
+                Route::post('/orders/{order}/cancel', AutoParts\Motos\CancelMotoOrder::class)
+                    ->middleware('company.permission:parts.motos.payments.verify')
+                    ->name('api.v1.parts.motos.orders.cancel');
+                Route::post('/orders/{order}/assign', AutoParts\Motos\AssignMotoUnit::class)
+                    ->middleware('company.permission:parts.motos.assign')
+                    ->name('api.v1.parts.motos.orders.assign');
+                Route::post('/orders/{order}/called', AutoParts\Motos\MarkMotoOrderCalled::class)
+                    ->middleware('company.permission:parts.motos.orders.create')
+                    ->name('api.v1.parts.motos.orders.called');
+                Route::post('/orders/{order}/deliver', AutoParts\Motos\DeliverMotoOrder::class)
+                    ->middleware('company.permission:parts.motos.deliver')
+                    ->name('api.v1.parts.motos.orders.deliver');
+                Route::post('/orders/{order}/customs-document', AutoParts\Motos\DeliverCustomsDocument::class)
+                    ->middleware('company.permission:parts.motos.deliver')
+                    ->name('api.v1.parts.motos.orders.customs-document');
+                Route::post('/orders/{order}/prints', AutoParts\Motos\RecordMotoDocumentPrint::class)
+                    ->middleware('company.permission:parts.motos.deliver')
+                    ->name('api.v1.parts.motos.orders.prints');
+            });
         });
 
         Route::prefix('car-rental')->group(function (): void {

@@ -20,6 +20,8 @@ final class Company extends Model
 
     protected $attributes = [
         'activity' => 'car_rental',
+        'moto_certificate_offset_x_mm' => '0.0',
+        'moto_certificate_offset_y_mm' => '0.0',
         'rental_airport_fee_usd' => '20.00',
         'rental_cleaning_fee_usd' => '20.00',
     ];
@@ -42,6 +44,8 @@ final class Company extends Model
         'rental_airport_fee_usd',
         'rental_cleaning_fee_usd',
         'activity',
+        'moto_certificate_offset_x_mm',
+        'moto_certificate_offset_y_mm',
     ];
 
     protected function casts(): array
@@ -50,6 +54,8 @@ final class Company extends Model
             'is_active' => 'boolean',
             'rental_airport_fee_usd' => 'decimal:2',
             'rental_cleaning_fee_usd' => 'decimal:2',
+            'moto_certificate_offset_x_mm' => 'decimal:1',
+            'moto_certificate_offset_y_mm' => 'decimal:1',
         ];
     }
 

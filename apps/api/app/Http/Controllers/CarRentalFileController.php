@@ -34,6 +34,7 @@ final class CarRentalFileController extends Controller
         StoredFile::PURPOSE_RENTAL_CONTRACT => 'rental.reservations.manage',
         StoredFile::PURPOSE_RENTAL_INVOICE => 'rental.invoices.issue',
         StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO => 'parts.catalog.manage',
+        StoredFile::PURPOSE_MOTO_DEPOSIT_PROOF => 'parts.motos.orders.create',
     ];
 
     public function __construct(
@@ -131,6 +132,9 @@ final class CarRentalFileController extends Controller
                 || $access->allows('rental.documents.sensitive'),
             StoredFile::PURPOSE_RENTAL_INVOICE => $access->allows('rental.reservations.read'),
             StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO => $access->allows('parts.catalog.read'),
+            // Fiche de dépôt bancaire : vérification du paiement et remise de la moto.
+            StoredFile::PURPOSE_MOTO_DEPOSIT_PROOF => $access->allows('parts.motos.payments.verify')
+                || $access->allows('parts.motos.deliver'),
             default => $access->allows('rental.documents.sensitive'),
         };
     }

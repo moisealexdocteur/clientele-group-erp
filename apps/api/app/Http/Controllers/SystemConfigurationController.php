@@ -1059,6 +1059,10 @@ final class SystemConfigurationController extends Controller
             'base_currency' => $company->base_currency,
             'activity' => $company->activity,
             'role_options' => RoleProfiles::optionsFor($company->activity),
+            'moto_certificate_offset' => [
+                'x_mm' => (string) $company->moto_certificate_offset_x_mm,
+                'y_mm' => (string) $company->moto_certificate_offset_y_mm,
+            ],
             'timezone' => $company->timezone,
             'timezone_label' => $company->timezone_display_name,
             'is_active' => $company->is_active,
