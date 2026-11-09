@@ -12,7 +12,7 @@ Ce document est la référence de transition à lire avant toute modification. I
 | Version du dépôt | `0.9.0-alpha.1` (caisse, clôture et rapport journalier). PR #33 fusionnée (retrait du 80 mm, encaissements Car Rental au rapport, test d'isolation) ; carte par devise dans la session de caisse ; documents au format Lettre |
 | Dernière version déployée | `0.9.0-alpha.1` (redéployée le 9 novembre 2026 avec Auto Parts, en recette). Car Rental validé en recette le 12 octobre 2026 : réservations, courriels |
 | Préproduction | `https://preprod.erp.clientelegroup.tech` |
-| Image API et web déployée | `sha-dcd5574` (9 novembre 2026 : Auto Parts, vente de motocyclettes, employé existant dans une autre société, modèles Haojin à 200 000 HTG) |
+| Image API et web déployée | `sha-ca477fb` (9 novembre 2026 : stock de motos par modèle, import du bon Novamat, clients Auto Parts, reçu de vente infalsifiable, lubrifiants de départ ; précédente `sha-dcd5574`) |
 | État technique confirmé | API, PostgreSQL, Redis et routage HTTPS opérationnels |
 | Environnement | Ubuntu 26.04 LTS, Hostinger KVM1, Docker, Traefik, PostgreSQL, Redis |
 
