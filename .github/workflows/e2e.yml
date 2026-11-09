@@ -50,14 +50,6 @@ jobs:
       - name: Installer l'API
         working-directory: apps/api
         run: composer install --no-interaction --prefer-dist --no-progress
-      - name: Publier les dépendances API (diagnostic, 1 jour)
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependances-api
-          path: |
-            apps/api/vendor
-            apps/api/composer.lock
-          retention-days: 1
       - name: Préparer la base
         working-directory: apps/api
         run: php artisan migrate --force
