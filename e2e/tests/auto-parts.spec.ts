@@ -117,7 +117,7 @@ test('remise de la moto, reçu de vente et certificat', async ({ page }) => {
   await page.goto(`/pieces/motos/commandes/${orderId}/remise`)
   await page.getByText('Le client présente la fiche de dépôt originale, au même numéro.').click()
   await page.getByLabel('Pièce présentée').selectOption('cin')
-  await page.getByLabel(/^Numéro/).fill('01-23-45-6789-00-12345')
+  await page.getByRole('textbox', { name: /^Numéro/ }).fill('01-23-45-6789-00-12345')
   for (const box of await page.locator('.checks input[type=checkbox]:not(:checked)').all()) await box.check()
   await page.getByText('Le client a vérifié la moto et accepte la vente finale, sans garantie.').click()
   await capture(page, 'remise')
@@ -147,9 +147,19 @@ test('lubrifiants de test et réception de marchandises', async ({ page }) => {
   await expect(page.getByText('Huile moteur Motex-T SAE 40')).toBeVisible()
   await capture(page, 'articles-lubrifiants')
 
-  // Réception d'un complément de marchandises au magasin.
+  // Réception d'un complément de marchandises au magasin : 5 caisses de Castrol.
+  await page.getByText('Huile moteur Castrol', { exact: true }).click()
+  await page.getByRole('button', { name: 'Entrée de stock' }).click()
+  await page.getByLabel('Emplacement').selectOption(storeId)
+  await page.getByLabel('Quantité reçue').fill('5')
+  await page.getByLabel('Référence du bon ou de la facture').fill('FOURNISSEUR-LUB-0001')
+  await capture(page, 'entree-de-stock')
+  await page.locator('#stock-action-form').evaluate((form: HTMLFormElement) => form.requestSubmit())
+  await expect(page.getByText('15', { exact: true }).first()).toBeVisible()
+  await capture(page, 'article-castrol-15-caisses')
+
   await page.goto('/pieces/stock')
-  await capture(page, 'stock')
+  await capture(page, 'mouvements-de-stock')
 })
 
 test('caisse, vente au comptoir en gros et reçu de caisse', async ({ page }) => {
@@ -161,8 +171,8 @@ test('caisse, vente au comptoir en gros et reçu de caisse', async ({ page }) =>
   await page.locator('#open-form').evaluate((form: HTMLFormElement) => form.requestSubmit())
   await expect(page.getByText(/Ouverte/).first()).toBeVisible()
 
-  await page.goto('/pieces/vente')
-  await page.getByRole('button', { name: 'Gros' }).click().catch(() => undefined)
+  await page.goto('/pieces')
+  await page.getByRole('button', { name: 'Gros' }).click()
   await page.getByLabel('Rechercher un article').fill('Motex')
   await page.getByText('Huile moteur Motex-T SAE 40').first().click()
   await page.getByRole('button', { name: 'Augmenter' }).click()
@@ -171,7 +181,7 @@ test('caisse, vente au comptoir en gros et reçu de caisse', async ({ page }) =>
   await page.getByLabel('Montant reçu (HTG)').fill('50000')
   await page.getByLabel('Nom du client').fill('Garage Recette')
   await page.getByRole('button', { name: /Encaisser 50 000,00 HTG/ }).click()
-  await expect(page).toHaveURL(/vente|recu|sale/)
+  await expect(page).toHaveURL(/\/pieces\/recu\//)
   await capture(page, 'recu-caisse')
 })
 
