@@ -56,6 +56,10 @@ defineProps<{ name: IconName }>()
       <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
       <path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" />
     </template>
+    <template v-else-if="name === 'scan'">
+      <path d="M4 8V5.5a1.5 1.5 0 0 1 1.5-1.5H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" />
+      <path d="M8 8v8M11 8v8M14 8v8M17 8v8" />
+    </template>
     <template v-else-if="name === 'tag'">
       <path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9z" />
       <circle cx="8.5" cy="8.5" r="1.5" />

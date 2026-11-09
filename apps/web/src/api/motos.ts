@@ -23,6 +23,10 @@ export function saveMotoModel(payload: MotoModelPayload, modelId?: string) {
   return api<{ data: MotoModel }>(modelId ? `${base}/models/${modelId}` : `${base}/models`, { method: modelId ? 'PATCH' : 'POST', body: payload })
 }
 
+export function updateMotoModelPhoto(modelId: string, fileId: string | null) {
+  return api<{ data: MotoModel }>(`${base}/models/${modelId}/photo`, { method: 'PATCH', body: { file_id: fileId } })
+}
+
 export function fetchMotoOrders(query: { status?: MotoOrderFilter; q?: string } = {}) {
   return api<{ data: MotoOrder[]; meta: { status: MotoOrderFilter; counts: Record<MotoOrderFilter, number> } }>(`${base}/orders`, { query })
 }

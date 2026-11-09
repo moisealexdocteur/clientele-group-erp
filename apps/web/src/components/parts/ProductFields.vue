@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PartsProductInput } from '../../api/types'
 import FormField from '../ui/FormField.vue'
+import ScanButton from '../ui/ScanButton.vue'
 
 /* Champs d'un article, communs à la création et à la modification. */
 defineProps<{
@@ -21,7 +22,10 @@ const emit = defineEmits<{ clear: [field: string] }>()
         <input v-model.trim="form.sku" v-bind="field.attrs" class="input" maxlength="64" autocapitalize="characters" autocomplete="off" @input="emit('clear', 'sku')" />
       </FormField>
       <FormField label="Code-barres" :error="errors.barcode" v-slot="field">
-        <input v-model.trim="form.barcode" v-bind="field.attrs" class="input" maxlength="64" inputmode="numeric" autocomplete="off" @input="emit('clear', 'barcode')" />
+        <div class="input-action">
+          <input v-model.trim="form.barcode" v-bind="field.attrs" class="input" maxlength="64" inputmode="numeric" autocomplete="off" @input="emit('clear', 'barcode')" />
+          <ScanButton label="code-barres" :disabled="disabled" @scanned="(value) => { form.barcode = value; emit('clear', 'barcode') }" />
+        </div>
       </FormField>
     </div>
     <FormField label="Désignation" required :error="errors.name" v-slot="field">

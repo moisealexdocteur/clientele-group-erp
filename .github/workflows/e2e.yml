@@ -1,0 +1,71 @@
+name: Recette de bout en bout
+
+# Parcours réels dans un navigateur, sur l'API et la PWA compilées, avec
+# PostgreSQL : vente de motos, certificat, reçus, réception de marchandises,
+# vente au comptoir. Les captures d'écran et les PDF sont publiés en artefact.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: clientele_e2e
+          POSTGRES_USER: clientele
+          POSTGRES_PASSWORD: clientele
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U clientele -d clientele_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: local
+      APP_DEBUG: 'false'
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      APP_URL: http://127.0.0.1:4180
+      QR_SIGNING_SECRET: e2e-qr-signing-secret-0123456789abcdef
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: clientele_e2e
+      DB_USERNAME: clientele
+      DB_PASSWORD: clientele
+      MAIL_MAILER: log
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, gd, intl, zip
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Installer l'API
+        working-directory: apps/api
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Préparer la base
+        working-directory: apps/api
+        run: php artisan migrate --force
+      - name: Compiler la PWA
+        working-directory: apps/web
+        run: npm ci && npm run build
+      - name: Installer Playwright
+        working-directory: e2e
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Lancer la recette
+        working-directory: e2e
+        run: npx playwright test
+      - name: Publier les captures et les PDF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recette-e2e
+          path: e2e/output
+          retention-days: 14

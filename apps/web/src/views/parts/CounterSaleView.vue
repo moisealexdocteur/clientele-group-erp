@@ -14,6 +14,7 @@ import InlineAlert from '../../components/ui/InlineAlert.vue'
 import SheetDialog from '../../components/ui/SheetDialog.vue'
 import FormField from '../../components/ui/FormField.vue'
 import ProductRow from '../../components/parts/ProductRow.vue'
+import ScanButton from '../../components/ui/ScanButton.vue'
 
 /*
  * Vente au comptoir : chercher, ajouter au panier, puis encaisser en
@@ -172,7 +173,10 @@ async function confirm(): Promise<void> {
         <RouterLink :to="{ name: 'cash' }">Ouvrir la caisse</RouterLink>
       </p>
 
-      <input v-model="query" class="input" type="search" inputmode="search" placeholder="Référence, désignation, code-barres ou modèle de moto" aria-label="Rechercher un article" autocomplete="off" />
+      <div class="input-action">
+        <input v-model="query" class="input" type="search" inputmode="search" placeholder="Référence, désignation, code-barres ou modèle de moto" aria-label="Rechercher un article" autocomplete="off" />
+        <ScanButton label="code-barres de l’article" @scanned="(value) => (query = value)" />
+      </div>
     </section>
 
     <section class="stack results" aria-label="Résultats">

@@ -23,6 +23,7 @@ final class MotoModel extends Model
         'price',
         'price_currency',
         'is_active',
+        'photo_file_id',
     ];
 
     protected function casts(): array

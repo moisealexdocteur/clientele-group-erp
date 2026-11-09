@@ -14,7 +14,9 @@ use App\Support\AutoParts\MotoRules;
 use App\Support\RoleProfiles;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -258,6 +260,56 @@ final class MotoSalesTest extends TestCase
         $this->requestFor($storekeeper, $company)
             ->postJson('/api/v1/parts/motos/orders', $this->orderPayload($store, $model, []))
             ->assertForbidden();
+    }
+
+    public function test_a_model_photo_is_shown_to_sellers_and_managed_by_administrators(): void
+    {
+        Storage::fake('local');
+        [$company, $store] = $this->company('PHOTO');
+        $admin = $this->user($company, RoleProfiles::permissions('auto_parts_administrator'));
+        $seller = $this->user($company, RoleProfiles::permissions('auto_parts_seller'));
+        $model = $this->model($admin, $company, 'HJ-110-5', '200000.00', 'HTG');
+        $png = (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+
+        // Le vendeur ne téléverse pas la photo d'un modèle.
+        $this->requestFor($seller, $company)
+            ->post('/api/v1/car-rental/files', ['purpose' => 'moto_model_photo', 'site_id' => $store->id, 'file' => UploadedFile::fake()->createWithContent('hj110.png', $png)], ['Accept' => 'application/json'])
+            ->assertForbidden();
+
+        $fileId = $this->requestFor($admin, $company)
+            ->post('/api/v1/car-rental/files', ['purpose' => 'moto_model_photo', 'site_id' => $store->id, 'file' => UploadedFile::fake()->createWithContent('hj110.png', $png)], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->requestFor($seller, $company)
+            ->patchJson("/api/v1/parts/motos/models/{$model}/photo", ['file_id' => $fileId])
+            ->assertForbidden();
+        $this->requestFor($admin, $company)
+            ->patchJson("/api/v1/parts/motos/models/{$model}/photo", ['file_id' => $fileId])
+            ->assertOk()
+            ->assertJsonPath('data.photo_url', '/api/v1/car-rental/files/' . $fileId);
+
+        // Le vendeur voit la photo dans la liste et peut l'ouvrir.
+        $this->requestFor($seller, $company)
+            ->getJson('/api/v1/parts/motos/models')
+            ->assertOk()
+            ->assertJsonPath('data.0.photo_url', '/api/v1/car-rental/files/' . $fileId);
+        $this->requestFor($seller, $company)->get('/api/v1/car-rental/files/' . $fileId)->assertOk();
+
+        // Une photo d'un autre usage est refusée.
+        $other = $this->requestFor($admin, $company)
+            ->post('/api/v1/car-rental/files', ['purpose' => 'parts_product_photo', 'site_id' => $store->id, 'file' => UploadedFile::fake()->createWithContent('piece.png', $png)], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('data.id');
+        $this->requestFor($admin, $company)
+            ->patchJson("/api/v1/parts/motos/models/{$model}/photo", ['file_id' => $other])
+            ->assertUnprocessable();
+
+        $this->requestFor($admin, $company)
+            ->patchJson("/api/v1/parts/motos/models/{$model}/photo", ['file_id' => null])
+            ->assertOk()
+            ->assertJsonPath('data.photo_url', null);
+        self::assertTrue(AuditEvent::query()->where('event_type', 'parts.moto_model_photo_updated')->exists());
     }
 
     /** @return array{0: Company, 1: Site, 2: Site} */

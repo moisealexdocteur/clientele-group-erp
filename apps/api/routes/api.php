@@ -189,6 +189,9 @@ Route::prefix('v1')->group(function (): void {
                 Route::patch('/models/{model}', AutoParts\Motos\SaveMotoModel::class)
                     ->middleware('company.permission:parts.motos.models.manage')
                     ->name('api.v1.parts.motos.models.update');
+                Route::patch('/models/{model}/photo', AutoParts\Motos\UpdateMotoModelPhoto::class)
+                    ->middleware('company.permission:parts.motos.models.manage')
+                    ->name('api.v1.parts.motos.models.photo');
                 Route::get('/units', AutoParts\Motos\ListMotoUnits::class)
                     ->middleware('company.permission:parts.motos.read')
                     ->name('api.v1.parts.motos.units.index');

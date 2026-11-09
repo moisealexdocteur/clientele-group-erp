@@ -762,6 +762,8 @@ export interface MotoModel {
   price: string
   price_currency: Currency
   is_active: boolean
+  /** Photo générique du modèle (fichier privé). */
+  photo_url?: string | null
   /** Motos du modèle disponibles en stock. */
   available?: number
 }

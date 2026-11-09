@@ -57,7 +57,8 @@ export async function buildMotoReceiptPdf(order: MotoOrderDetail): Promise<Uint8
     ['Marque et modèle', motoLine(order)],
     ['Année', unit ? String(unit.model_year) : null],
     ['Couleur', unit?.color ?? null],
-    ['Cylindrée', unit?.displacement_cc ? `${unit.displacement_cc} cm³` : null],
+    // « cm3 » : l'exposant ³ n'existe pas dans la police standard du PDF.
+    ['Cylindrée', unit?.displacement_cc ? `${unit.displacement_cc} cm3` : null],
     ['Cylindres', unit ? String(unit.cylinders) : null],
     ['Numéro de châssis', unit?.frame_number ?? null],
     ['Numéro de moteur', unit?.engine_number ?? null],
@@ -159,12 +160,17 @@ export async function buildMotoCertificatePdf(order: MotoOrderDetail, offset?: {
   const clean = (text: string) => Array.from(text).map((char) => (supported.has(char.codePointAt(0) ?? 0) ? char : '?')).join('')
 
   for (const field of certificateFields(order, offset)) {
-    const text = clean(trial ? `${field.label} : ${field.value}` : field.value)
-    if (!text) continue
-    const width = font.widthOfTextAtSize(text, field.size)
-    const x = field.align === 'center' ? field.x - width / 2 : field.x
-    page.drawText(text, { x, y: field.y, size: field.size, font, color: rgb(0, 0, 0) })
+    const text = clean(field.value)
+    if (text) {
+      const width = font.widthOfTextAtSize(text, field.size)
+      const x = field.align === 'center' ? field.x - width / 2 : field.x
+      page.drawText(text, { x, y: field.y, size: field.size, font, color: rgb(0, 0, 0) })
+    }
     if (trial) {
+      // Libellé en petit, au-dessus de la valeur, pour ne pas chevaucher la colonne voisine.
+      const label = clean(field.label)
+      const labelWidth = font.widthOfTextAtSize(label, 6.5)
+      page.drawText(label, { x: field.align === 'center' ? field.x - labelWidth / 2 : field.x, y: field.y + field.size + 2, size: 6.5, font, color: rgb(0.8, 0, 0) })
       page.drawLine({ start: { x: field.x - 4, y: field.y }, end: { x: field.x + 4, y: field.y }, thickness: 0.5, color: rgb(0.8, 0, 0) })
       page.drawLine({ start: { x: field.x, y: field.y - 4 }, end: { x: field.x, y: field.y + 4 }, thickness: 0.5, color: rgb(0.8, 0, 0) })
     }
