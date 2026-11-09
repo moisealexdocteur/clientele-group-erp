@@ -14,6 +14,7 @@ export default defineConfig({
     locale: 'fr-HT',
     timezoneId: 'America/Port-au-Prince',
     acceptDownloads: true,
+    actionTimeout: 15_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

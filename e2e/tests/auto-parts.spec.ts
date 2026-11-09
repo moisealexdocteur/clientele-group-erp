@@ -117,7 +117,7 @@ test('remise de la moto, reçu de vente et certificat', async ({ page }) => {
   await page.goto(`/pieces/motos/commandes/${orderId}/remise`)
   await page.getByText('Le client présente la fiche de dépôt originale, au même numéro.').click()
   await page.getByLabel('Pièce présentée').selectOption('cin')
-  await page.getByLabel('Numéro', { exact: true }).fill('01-23-45-6789-00-12345')
+  await page.getByLabel(/^Numéro/).fill('01-23-45-6789-00-12345')
   for (const box of await page.locator('.checks input[type=checkbox]:not(:checked)').all()) await box.check()
   await page.getByText('Le client a vérifié la moto et accepte la vente finale, sans garantie.').click()
   await capture(page, 'remise')
