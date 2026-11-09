@@ -85,6 +85,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'societes/:companyId', name: 'system.company', component: () => import('../views/system/CompanyDetailView.vue'), props: true, meta: { title: 'Société', navMatch: 'system.companies' } },
       { path: 'societes/:companyId/utilisateurs', name: 'system.users', component: () => import('../views/system/UsersView.vue'), props: true, meta: { title: 'Utilisateurs', navMatch: 'system.users' } },
       { path: 'societes/:companyId/utilisateurs/nouveau', name: 'system.user.new', component: () => import('../views/system/UserNewView.vue'), props: true, meta: { title: 'Ajouter un utilisateur', navMatch: 'system.users' } },
+      { path: 'societes/:companyId/utilisateurs/employe-existant', name: 'system.user.attach', component: () => import('../views/system/UserAttachView.vue'), props: true, meta: { title: 'Ajouter un employé existant', navMatch: 'system.users' } },
       { path: 'societes/:companyId/utilisateurs/:accessId', name: 'system.user', component: () => import('../views/system/UserDetailView.vue'), props: true, meta: { title: 'Utilisateur', navMatch: 'system.users' } },
     ],
   },

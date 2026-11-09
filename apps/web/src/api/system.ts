@@ -69,6 +69,24 @@ export function createCompanyUser(companyId: string, payload: CompanyUserPayload
   })
 }
 
+export interface AttachableUser {
+  id: string
+  name: string
+  email: string
+}
+
+export function fetchAttachableUsers(companyId: string) {
+  return api<{ data: AttachableUser[] }>(`${base}/${companyId}/users/attachable`, global)
+}
+
+export function attachExistingUser(companyId: string, payload: { user_id: string; role_key: UserRoleKey; site_scope: 'all' | 'selected'; site_ids: string[] }) {
+  return api<{ data: { id: string }; notification?: { sent: boolean } }>(`${base}/${companyId}/users/existing`, {
+    ...global,
+    method: 'POST',
+    body: payload,
+  })
+}
+
 export function updateCompanyUser(companyId: string, accessId: string, payload: CompanyUserPayload) {
   return api<{ data: SystemCompanyUser }>(`${base}/${companyId}/users/${accessId}`, { ...global, method: 'PATCH', body: payload })
 }
