@@ -90,7 +90,8 @@ test('réception d’un lot de motos avec couleurs et numéros', async ({ page }
 test('commande payée par dépôt, vérification et attribution', async ({ page }) => {
   await signIn(page, companyId)
   await page.goto('/pieces/motos/commandes/nouvelle')
-  await page.getByLabel('Modèle').selectOption({ label: /HJ-125A-D/ })
+  const modelSelect = page.getByLabel('Modèle')
+  await modelSelect.selectOption((await modelSelect.locator('option', { hasText: 'HJ-125A-D' }).getAttribute('value')) ?? '')
   await page.getByLabel('Couleur souhaitée').fill('Rouge Sang')
   await page.getByLabel('Retrait au magasin').selectOption(storeId)
   await page.getByLabel('Nom complet').fill('Client Recette')
