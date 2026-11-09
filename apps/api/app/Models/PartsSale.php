@@ -17,6 +17,7 @@ final class PartsSale extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'customer_profile_id',
         'id',
         'company_id',
         'site_id',

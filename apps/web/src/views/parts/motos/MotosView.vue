@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { allocateMotos, fetchMotoOrders } from '../../../api/motos'
+import { allocateMotos, fetchMotoOrders, fetchMotoStock } from '../../../api/motos'
 import type { MotoOrder, MotoOrderFilter } from '../../../api/types'
 import { useRequest } from '../../../composables/useRequest'
 import { useSessionStore } from '../../../stores/session'
@@ -52,6 +52,13 @@ const empty: Record<MotoOrderFilter, string> = {
   cancelled: 'Aucune commande annulée.',
 }
 
+// Résumé du stock, mis à jour à chaque réception et à chaque remise.
+const stock = ref<{ available: number; reserved: number; waiting: number } | null>(null)
+async function loadStock(): Promise<void> {
+  const result = await fetchMotoStock().catch(() => null)
+  stock.value = result?.meta ?? null
+}
+
 async function load(): Promise<void> {
   const result = await request.run(() => fetchMotoOrders({ status: status.value, q: query.value.trim() || undefined }))
   if (!result) return
@@ -81,7 +88,10 @@ async function allocate(): Promise<void> {
   await load()
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void loadStock()
+})
 onBeforeUnmount(() => window.clearTimeout(timer))
 </script>
 
@@ -90,11 +100,16 @@ onBeforeUnmount(() => window.clearTimeout(timer))
     <template #actions>
       <RouterLink v-if="canCreate" class="btn btn-primary" :to="{ name: 'parts.moto.order.new' }"><AppIcon name="plus" />Nouvelle commande</RouterLink>
       <RouterLink v-if="canReceive" class="btn btn-secondary" :to="{ name: 'parts.moto.batch.new' }">Réception d’un lot</RouterLink>
-      <RouterLink class="btn btn-ghost" :to="{ name: 'parts.moto.models' }">Modèles et stock</RouterLink>
+      <RouterLink class="btn btn-ghost" :to="{ name: 'parts.moto.receipt.check' }"><AppIcon name="scan" />Vérifier un reçu</RouterLink>
+      <RouterLink class="btn btn-ghost" :to="{ name: 'parts.moto.models' }">Modèles et prix</RouterLink>
     </template>
   </PageHeader>
 
   <div class="stack">
+    <RouterLink v-if="stock" class="stock-summary" :to="{ name: 'parts.moto.stock' }">
+      <span><strong class="stock-number">{{ stock.available }}</strong> {{ stock.available > 1 ? 'motos disponibles' : 'moto disponible' }} à la vente</span>
+      <span class="text-small text-secondary">{{ stock.reserved }} attribuée{{ stock.reserved > 1 ? 's' : '' }} - {{ stock.waiting }} client{{ stock.waiting > 1 ? 's' : '' }} payé{{ stock.waiting > 1 ? 's' : '' }} sans moto - voir le stock par modèle</span>
+    </RouterLink>
     <div class="segmented" role="group" aria-label="État des commandes">
       <button v-for="tab in tabs" :key="tab.value" type="button" :aria-pressed="status === tab.value" @click="setStatus(tab.value)">
         {{ tab.label }} <span class="count">{{ counts[tab.value] ?? 0 }}</span>
@@ -119,6 +134,23 @@ onBeforeUnmount(() => window.clearTimeout(timer))
 </template>
 
 <style scoped>
+.stock-summary {
+  display: grid;
+  gap: 2px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  color: inherit;
+  text-decoration: none;
+  min-height: 48px;
+}
+
+.stock-number {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
 .count {
   margin-left: 4px;
   color: var(--ink-3);

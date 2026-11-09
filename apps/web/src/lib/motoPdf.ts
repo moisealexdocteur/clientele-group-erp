@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib'
 import QRCode from 'qrcode'
 import type { MotoOrderDetail } from '../api/types'
 import { PAGE, Writer } from './contractPdf'
@@ -41,8 +41,10 @@ export async function buildMotoReceiptPdf(order: MotoOrderDetail): Promise<Uint8
     .filter(Boolean).join(' - ')
   if (contact) w.text(contact, { size: 9 })
   w.text('', { gap: 6 })
-  w.text('REÇU DE VENTE DE MOTOCYCLETTE', { size: 16, font: w.bold })
-  w.text(`N° ${order.receipt_number ?? ''} - ${order.delivered_at ? formatDateTime(order.delivered_at) : ''}, heure de Cap-Haïtien - commande ${order.number}`, { size: 9.5, gap: 4 })
+  const copy = order.receipt_print_count > 1 ? `DUPLICATA ${order.receipt_print_count - 1}` : 'ORIGINAL'
+  w.text(`REÇU DE VENTE DE MOTOCYCLETTE - ${copy}`, { size: 16, font: w.bold })
+  w.text(`N° ${order.receipt_number ?? ''} - ${order.delivered_at ? formatDateTime(order.delivered_at) : ''}, heure de Cap-Haïtien - commande ${order.number}`, { size: 9.5 })
+  if (order.receipt_security_code) w.text(`Code de vérification : ${order.receipt_security_code}`, { size: 11, font: w.bold, gap: 4 })
 
   w.heading('Acheteur')
   w.facts([
@@ -54,12 +56,9 @@ export async function buildMotoReceiptPdf(order: MotoOrderDetail): Promise<Uint8
 
   w.heading('Motocyclette')
   w.facts([
-    ['Marque et modèle', motoLine(order)],
-    ['Année', unit ? String(unit.model_year) : null],
-    ['Couleur', unit?.color ?? null],
+    ['Marque, modèle, année', motoLine(order)],
     // « cm3 » : l'exposant ³ n'existe pas dans la police standard du PDF.
-    ['Cylindrée', unit?.displacement_cc ? `${unit.displacement_cc} cm3` : null],
-    ['Cylindres', unit ? String(unit.cylinders) : null],
+    ['Couleur et moteur', [unit?.color, unit?.displacement_cc ? `${unit.displacement_cc} cm3` : null, unit ? `${unit.cylinders} cylindre${unit.cylinders > 1 ? 's' : ''}` : null].filter(Boolean).join(' - ')],
     ['Numéro de châssis', unit?.frame_number ?? null],
     ['Numéro de moteur', unit?.engine_number ?? null],
   ])
@@ -67,45 +66,52 @@ export async function buildMotoReceiptPdf(order: MotoOrderDetail): Promise<Uint8
   w.heading('Paiement')
   const converted = order.payment_currency !== order.price_currency && order.exchange_rate_htg_per_usd
   w.facts([
-    ['Prix de vente', formatMoney(order.price, order.price_currency)],
-    ['Réglé par', `Dépôt ${order.bank_name} n° ${order.deposit_reference} du ${order.deposit_date ? formatDate(`${order.deposit_date}T12:00:00`) : ''}`],
-    ['Montant déposé', formatMoney(order.payment_amount, order.payment_currency)],
+    ['Prix de vente', `${formatMoney(order.price, order.price_currency)} - payé intégralement`],
+    ['Réglé par', `Dépôt ${order.bank_name} n° ${order.deposit_reference} du ${order.deposit_date ? formatDate(`${order.deposit_date}T12:00:00`) : ''} : ${formatMoney(order.payment_amount, order.payment_currency)}`],
     ...(converted
-      ? [
-          ['Taux appliqué', formatRate(order.exchange_rate_htg_per_usd)] as [string, string],
-          ['Équivalent', formatMoney(order.amount_in_price_currency, order.price_currency)] as [string, string],
-        ]
+      ? [['Conversion', `${formatRate(order.exchange_rate_htg_per_usd)} - équivalent ${formatMoney(order.amount_in_price_currency, order.price_currency)}`] as [string, string]]
       : []),
-    ['Solde', 'Payé intégralement'],
   ])
 
   w.heading('Remis avec la motocyclette')
+  const given = order.accessories.filter((item) => item.delivered).map((item) => `${item.label} (${item.quantity})`)
+  const missing = order.accessories.filter((item) => !item.delivered).map((item) => `${item.label} (${item.quantity})`)
   w.facts([
-    ...order.accessories.map((item): [string, string] => [`${item.label} (${item.quantity})`, item.delivered ? 'Remis' : 'Non remis']),
-    ['Certificat de vente du fournisseur', 'Remis'],
-    ['Document de dédouanement', order.customs_document_delivered
-      ? `Remis${order.customs_document_delivered_at ? ` le ${formatDate(order.customs_document_delivered_at)}` : ''}`
-      : 'Non disponible à la remise. Le client reviendra le récupérer.'],
+    ['Accessoires remis', given.length ? given.join(', ') : 'Aucun'],
+    ...(missing.length ? [['Non remis', missing.join(', ')] as [string, string]] : []),
+    ['Documents', `Certificat de vente du fournisseur remis. Dédouanement : ${order.customs_document_delivered
+      ? `remis${order.customs_document_delivered_at ? ` le ${formatDate(order.customs_document_delivered_at)}` : ''}`
+      : 'non disponible à la remise, le client reviendra le récupérer'}.`],
+    ['Contrôle avec le client', order.checklist.filter((item) => item.ok).map((item) => item.label).join(', ') + '.'],
   ])
-
-  w.heading('Contrôle de conformité fait avec le client')
-  w.text(order.checklist.filter((item) => item.ok).map((item) => item.label).join(', ') + '.', { size: 9 })
 
   w.heading('Conditions')
   w.text('Vente finale, sans garantie. Le client a vérifié la motocyclette et l’a acceptée dans l’état décrit ci-dessus.', { size: 9.5, font: w.bold })
   w.text('Ce reçu, avec le certificat de vente du fournisseur, sert à l’obtention du certificat d’assurance auprès de l’Office d’Assurance des Véhicules Contre Tiers.', { size: 9 })
+  w.text('Authenticité : scannez le QR en haut à droite, ou saisissez le numéro et le code de vérification dans l’ERP (Motos > Vérifier un reçu). Si le QR, le numéro, le code, le châssis ou le moteur ne correspondent pas à la vente enregistrée, le reçu est faux. La remise ne se fait qu’une fois.', { size: 8.5 })
 
-  w.text('', { gap: 18 })
+  w.text('', { gap: 16 })
   w.text('Signature du client : ______________________________      Pour le vendeur : ______________________________', { size: 9 })
-  w.text('', { gap: 10 })
 
+  // QR en haut à droite de la première page, à côté du titre.
   if (order.verification_url) {
     const png = await QRCode.toDataURL(order.verification_url, { margin: 0, errorCorrectionLevel: 'M', width: 240 })
-    w.image(await doc.embedPng(png), 72)
-    w.text('Scannez le code pour vérifier ce reçu.', { size: 8 })
+    const image = await doc.embedPng(png)
+    const first = w.pages[0]
+    first.drawImage(image, { x: PAGE.width - 48 - 76, y: PAGE.height - 48 - 76, width: 76, height: 76 })
   }
 
-  w.footer(`Reçu de vente ${order.receipt_number ?? ''}`)
+  w.footer(`Reçu de vente ${order.receipt_number ?? ''} - ${copy}`)
+
+  // Filigrane sur chaque page : société, numéro et exemplaire, en diagonale, très clair.
+  const mark = w.clean(`${order.company.display_name} - REÇU ${order.receipt_number ?? ''} - ${copy}`)
+  for (const page of w.pages) {
+    for (let y = -40; y < PAGE.height; y += 110) {
+      for (const x of [-80, 230]) {
+        page.drawText(mark, { x: x + ((y / 110) % 2) * 60, y, size: 13, font: w.regular, color: rgb(0.88, 0.88, 0.88), rotate: degrees(28), opacity: 0.5 })
+      }
+    }
+  }
   return doc.save()
 }
 

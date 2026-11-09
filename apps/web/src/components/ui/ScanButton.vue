@@ -8,7 +8,7 @@ import AppIcon from './AppIcon.vue'
  * BarcodeDetector de Chrome et Edge). Sur un appareil sans cette API, le
  * dialogue l'explique et la saisie au clavier reste possible.
  */
-const props = withDefaults(defineProps<{ label: string; disabled?: boolean }>(), { disabled: false })
+const props = withDefaults(defineProps<{ label: string; disabled?: boolean; raw?: boolean }>(), { disabled: false, raw: false })
 const emit = defineEmits<{ scanned: [value: string] }>()
 
 interface DetectedBarcode { rawValue: string }
@@ -48,7 +48,8 @@ async function start(): Promise<void> {
       const codes = await detector.detect(video.value).catch(() => [])
       const value = codes.map((code) => code.rawValue.trim()).find((raw) => raw.length >= 4)
       if (!value) return
-      emit('scanned', value.replace(/\s+/g, '').toUpperCase())
+      // Numéros : sans espace, en majuscules. QR (raw) : texte exact.
+      emit('scanned', props.raw ? value : value.replace(/\s+/g, '').toUpperCase())
       close()
     }, 250)
   } catch {

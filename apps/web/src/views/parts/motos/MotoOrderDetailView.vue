@@ -164,6 +164,7 @@ async function print(document: 'receipt' | 'certificate', trial = false): Promis
         </template>
         <template v-else-if="delivered">
           <p class="text-secondary">Livrée le {{ order.delivered_at ? formatDateTime(order.delivered_at) : '' }}. Reçu n° {{ order.receipt_number }}. Vente finale, sans garantie.</p>
+          <p v-if="order.receipt_security_code" class="text-small">Code de vérification du reçu : <strong class="security-code">{{ order.receipt_security_code }}</strong></p>
           <p v-if="order.customs_document_pending" class="alert alert-warning">Document de dédouanement à remettre : le client revient le récupérer.</p>
           <div v-if="can('parts.motos.deliver')" class="btn-row">
             <button class="btn btn-primary" type="button" @click="print('receipt')">Reçu de vente (PDF)</button>
@@ -286,6 +287,11 @@ async function print(document: 'receipt' | 'certificate', trial = false): Promis
 </template>
 
 <style scoped>
+.security-code {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.05em;
+}
+
 .detail-grid {
   display: grid;
   gap: 24px;

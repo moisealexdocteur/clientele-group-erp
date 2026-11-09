@@ -13,7 +13,7 @@ import ProductRow from '../../components/parts/ProductRow.vue'
 import SheetDialog from '../../components/ui/SheetDialog.vue'
 import FormField from '../../components/ui/FormField.vue'
 import { useUiStore } from '../../stores/ui'
-import { STARTER_LUBRICANTS, STARTER_LUBRICANT_QUANTITY, starterProductInput } from '../../data/starterLubricants'
+import { STARTER_LUBRICANTS, starterProductInput } from '../../data/starterLubricants'
 import { formatMoney } from '../../lib/money'
 
 /*
@@ -86,12 +86,12 @@ function openStarter(): void {
 async function addStarter(): Promise<void> {
   let created = 0
   for (const product of missingStarter.value) {
-    const result = await starter.run(() => createProduct({ ...starterProductInput(product), initial_site_id: starterSite.value, initial_quantity: STARTER_LUBRICANT_QUANTITY }))
+    const result = await starter.run(() => createProduct({ ...starterProductInput(product), initial_site_id: starterSite.value, initial_quantity: product.quantity }))
     if (!result) break
     created += 1
     existingSkus.value.push(product.sku)
   }
-  if (created) ui.toast(`${plural(created, 'lubrifiant ajouté', 'lubrifiants ajoutés')}, ${STARTER_LUBRICANT_QUANTITY} caisses chacun.`)
+  if (created) ui.toast(`${plural(created, 'lubrifiant ajouté', 'lubrifiants ajoutés')} avec leur stock.`)
   if (!starter.error.value) starterOpen.value = false
   await load()
 }
@@ -106,7 +106,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
 <template>
   <PageHeader title="Articles">
     <template #actions>
-      <button v-if="canSeed && missingStarter.length" class="btn btn-secondary" type="button" @click="openStarter">Lubrifiants de test ({{ missingStarter.length }})</button>
+      <button v-if="canSeed && missingStarter.length" class="btn btn-secondary" type="button" @click="openStarter">Lubrifiants de départ ({{ missingStarter.length }})</button>
       <RouterLink v-if="canManage" class="btn btn-primary" :to="{ name: 'parts.product.new' }">
         <AppIcon name="plus" />Ajouter un article
       </RouterLink>
@@ -137,7 +137,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
     </div>
   </div>
 
-  <SheetDialog :open="starterOpen" title="Lubrifiants de test" :description="`${missingStarter.length} articles en caisse, ${STARTER_LUBRICANT_QUANTITY} caisses chacun, à ${formatMoney('25000.00', 'HTG')} la caisse (prix de détail et de gros). Prix, grade et contenance à corriger ensuite.`" :locked="starter.busy.value" @close="starterOpen = false">
+  <SheetDialog :open="starterOpen" title="Lubrifiants de départ" :description="`${missingStarter.length} articles à ${formatMoney('25000.00', 'HTG')} la caisse ou le seau (prix de test, détail et gros). Les quantités marquées « photo » sont comptées sur les photos du stock : confirmez-les par un inventaire.`" :locked="starter.busy.value" @close="starterOpen = false">
     <form id="starter-form" class="form" novalidate @submit.prevent="addStarter">
       <FormField label="Emplacement du stock" required v-slot="field">
         <select v-model="starterSite" v-bind="field.attrs" class="select">
@@ -145,7 +145,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
         </select>
       </FormField>
       <ul class="starter-list text-small">
-        <li v-for="product in missingStarter" :key="product.sku">{{ product.name }}</li>
+        <li v-for="product in missingStarter" :key="product.sku">{{ product.name }} - {{ product.category }} - {{ product.quantity }} {{ product.unit === 'seau' ? (product.quantity > 1 ? 'seaux' : 'seau') : product.quantity > 1 ? `${product.unit}s` : product.unit }}{{ product.estimated ? ' (photo)' : '' }}</li>
       </ul>
       <InlineAlert :message="starter.error.value" />
     </form>

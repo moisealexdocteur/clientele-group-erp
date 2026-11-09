@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Currency, MotoModel, MotoOrder, MotoOrderDetail, MotoOrderFilter, MotoUnit } from './types'
+import type { Currency, MotoModel, MotoOrder, MotoOrderDetail, MotoOrderFilter, MotoReceiptCheck, MotoStockRow, MotoUnit } from './types'
 
 /* Vente de motocyclettes Auto Parts. La société active est ajoutée par le client HTTP. */
 
@@ -39,6 +39,7 @@ export interface MotoOrderPayload {
   site_id: string
   model_id: string
   preferred_color: string | null
+  customer_profile_id?: string | null
   customer_name: string
   customer_phone: string
   customer_email: string | null
@@ -111,4 +112,16 @@ export interface MotoBatchPayload {
 
 export function receiveMotoBatch(payload: MotoBatchPayload) {
   return api<{ data: { id: string; reference: string; units: MotoUnit[]; assigned: number } }>(`${base}/batches`, { method: 'POST', body: payload })
+}
+
+export function deleteMotoModel(modelId: string) {
+  return api<{ message: string }>(`${base}/models/${modelId}`, { method: 'DELETE' })
+}
+
+export function fetchMotoStock() {
+  return api<{ data: MotoStockRow[]; meta: { available: number; reserved: number; waiting: number } }>(`${base}/stock`)
+}
+
+export function checkMotoReceipt(payload: { scanned?: string; number?: string; code?: string }) {
+  return api<MotoReceiptCheck>(`${base}/receipts/check`, { method: 'POST', body: payload })
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { fetchMotoModels, fetchMotoUnits, saveMotoModel, updateMotoModelPhoto } from '../../../api/motos'
+import { deleteMotoModel, fetchMotoModels, fetchMotoUnits, saveMotoModel, updateMotoModelPhoto } from '../../../api/motos'
 import type { Currency, MotoModel, MotoUnit } from '../../../api/types'
 import { useRequest } from '../../../composables/useRequest'
 import { useSessionStore } from '../../../stores/session'
@@ -29,6 +29,22 @@ const units = ref<MotoUnit[]>([])
 const editing = ref<MotoModel | null | 'new'>(null)
 const form = reactive({ make: 'Haojin', model: '', displacement_cc: '' as string | number, cylinders: 1, price: HAOJIN_DEFAULT_PRICE.price as string, price_currency: HAOJIN_DEFAULT_PRICE.price_currency as Currency, is_active: true })
 const canManage = computed(() => session.can('parts.motos.models.manage'))
+// Les modèles retirés de la vente sont rangés à part.
+const activeModels = computed(() => models.value.filter((model) => model.is_active))
+const retiredModels = computed(() => models.value.filter((model) => !model.is_active))
+const showRetired = ref(false)
+const confirmDelete = ref(false)
+
+async function removeModel(): Promise<void> {
+  const target = editing.value
+  if (!target || target === 'new') return
+  const result = await action.run(() => deleteMotoModel(target.id))
+  confirmDelete.value = false
+  if (!result) return
+  editing.value = null
+  ui.toast(`${target.label} supprimé.`)
+  await load()
+}
 
 async function load(): Promise<void> {
   const result = await loading.run(() => Promise.all([fetchMotoModels(), fetchMotoUnits({ status: 'in_stock' })]))
@@ -99,7 +115,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <PageHeader title="Modèles et stock" description="Prix de vente par modèle et motos disponibles." :back="{ name: 'parts.motos' }" back-label="Motos">
+  <PageHeader title="Modèles et prix" description="Modèles en vente, prix, photo et motos disponibles." :back="{ name: 'parts.motos' }" back-label="Motos">
     <template v-if="canManage" #actions>
       <button v-if="missing.length" class="btn btn-secondary" type="button" :disabled="importing || !app.canReachServer" @click="importHaojin">
         {{ importing ? 'Importation' : `Importer les modèles Haojin (${missing.length})` }}
@@ -113,8 +129,8 @@ async function save(): Promise<void> {
   <div class="stack-lg">
     <section class="stack" aria-labelledby="models-title">
       <h2 id="models-title" class="title-section">Modèles</h2>
-      <div v-if="models.length" class="list">
-        <component :is="canManage ? 'button' : 'div'" v-for="model in models" :key="model.id" class="list-row with-thumb" type="button" @click="canManage && open(model)">
+      <div v-if="activeModels.length" class="list">
+        <component :is="canManage ? 'button' : 'div'" v-for="model in activeModels" :key="model.id" class="list-row with-thumb" type="button" @click="canManage && open(model)">
           <ProductThumb :path="model.photo_url ?? null" :alt="model.label" icon="moto" fit="contain" />
           <span class="row-main">
             <strong>{{ model.label }}</strong>
@@ -126,7 +142,17 @@ async function save(): Promise<void> {
           </span>
         </component>
       </div>
-      <div v-else-if="!loading.busy.value" class="empty"><p>Aucun modèle. Ajoutez le premier modèle et son prix.</p></div>
+      <div v-else-if="!loading.busy.value" class="empty"><p>Aucun modèle en vente. Importez les modèles Haojin ou ajoutez un modèle.</p></div>
+      <button v-if="retiredModels.length" class="btn btn-ghost" type="button" :aria-expanded="showRetired" @click="showRetired = !showRetired">
+        {{ showRetired ? 'Masquer' : 'Afficher' }} les modèles retirés ({{ retiredModels.length }})
+      </button>
+      <div v-if="showRetired && retiredModels.length" class="list">
+        <component :is="canManage ? 'button' : 'div'" v-for="model in retiredModels" :key="model.id" class="list-row with-thumb retired" type="button" @click="canManage && open(model)">
+          <ProductThumb :path="model.photo_url ?? null" :alt="model.label" icon="moto" fit="contain" />
+          <span class="row-main"><strong>{{ model.label }}</strong></span>
+          <span class="row-side"><StatusPill tone="neutral" label="Retiré" /></span>
+        </component>
+      </div>
     </section>
 
     <section class="stack" aria-labelledby="units-title">
@@ -196,13 +222,30 @@ async function save(): Promise<void> {
       <InlineAlert :message="action.error.value" />
     </form>
     <template #footer>
+      <button v-if="editing && editing !== 'new'" class="btn btn-ghost btn-danger-text" type="button" :disabled="action.busy.value" @click="confirmDelete = true">Supprimer</button>
       <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="editing = null">Annuler</button>
       <button class="btn btn-primary" type="submit" form="model-form" :disabled="action.busy.value || !app.canReachServer">Enregistrer</button>
+    </template>
+  </SheetDialog>
+
+  <SheetDialog :open="confirmDelete" title="Supprimer ce modèle ?" description="Seul un modèle sans moto ni commande peut être supprimé. Sinon, désactivez-le : il quitte la vente et reste dans l’historique." :locked="action.busy.value" @close="confirmDelete = false">
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="action.busy.value" @click="confirmDelete = false">Annuler</button>
+      <button class="btn btn-danger" type="button" :disabled="action.busy.value || !app.canReachServer" @click="removeModel">Supprimer</button>
     </template>
   </SheetDialog>
 </template>
 
 <style scoped>
+.retired {
+  opacity: 0.7;
+}
+
+.btn-danger-text {
+  color: var(--danger);
+  margin-right: auto;
+}
+
 .with-thumb {
   grid-template-columns: 56px minmax(0, 1fr) auto;
 }

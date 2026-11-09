@@ -2,7 +2,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createMotoOrder, fetchMotoModels } from '../../../api/motos'
-import type { Currency, MotoModel } from '../../../api/types'
+import { fetchPartsCustomers } from '../../../api/parts'
+import type { Currency, MotoModel, PartsCustomer } from '../../../api/types'
 import { useRequest } from '../../../composables/useRequest'
 import { useSessionStore } from '../../../stores/session'
 import { useAppStore } from '../../../stores/app'
@@ -37,6 +38,7 @@ const form = reactive({
     ?? '',
   model_id: '',
   preferred_color: '',
+  customer_profile_id: null as string | null,
   customer_name: '',
   customer_phone: '',
   customer_email: '',
@@ -75,6 +77,28 @@ watch(model, (next) => {
   form.payment_currency = next.price_currency
   form.payment_amount = next.price
 }, { immediate: true })
+
+// Client connu : retrouvé par son téléphone pour reprendre sa fiche.
+const known = ref<PartsCustomer | null>(null)
+let lookup: number | undefined
+watch(() => form.customer_phone, (phone) => {
+  window.clearTimeout(lookup)
+  if (form.customer_profile_id && known.value?.phone?.replace(/\D/g, '') !== phone.replace(/\D/g, '')) form.customer_profile_id = null
+  known.value = null
+  if (phone.replace(/\D/g, '').length < 8 || !session.can('parts.customers.read')) return
+  lookup = window.setTimeout(async () => {
+    const result = await fetchPartsCustomers(phone).catch(() => null)
+    known.value = result?.data[0] ?? null
+  }, 350)
+})
+
+function useKnown(): void {
+  if (!known.value) return
+  form.customer_profile_id = known.value.id
+  form.customer_name = known.value.name
+  form.customer_email = known.value.email ?? form.customer_email
+  form.customer_address = known.value.address ?? form.customer_address
+}
 
 async function submit(): Promise<void> {
   const result = await request.run(() => createMotoOrder({
@@ -133,12 +157,20 @@ async function submit(): Promise<void> {
 
     <fieldset class="form-group" :disabled="request.busy.value">
       <legend>Client</legend>
+      <div v-if="known" class="known" role="status">
+        <span>
+          <strong>Client connu : {{ known.name }}</strong>
+          <span class="text-small text-secondary">{{ known.phone }}<template v-if="known.moto_order_count"> - {{ known.moto_order_count }} moto{{ known.moto_order_count > 1 ? 's' : '' }}</template><template v-if="known.address"> - {{ known.address }}</template></span>
+        </span>
+        <button v-if="form.customer_profile_id !== known.id" class="btn btn-secondary" type="button" @click="useKnown">Utiliser cette fiche</button>
+        <span v-else class="text-small text-success">Fiche reprise</span>
+      </div>
       <div class="grid-2">
+        <FormField label="Téléphone" required help="Un client déjà connu est retrouvé par son téléphone." :error="request.fieldErrors.value.customer_phone" v-slot="field">
+          <input v-model.trim="form.customer_phone" v-bind="field.attrs" class="input" type="tel" inputmode="tel" maxlength="40" placeholder="+509" autocomplete="off" @input="request.clearField('customer_phone')" />
+        </FormField>
         <FormField label="Nom complet" required :error="request.fieldErrors.value.customer_name" v-slot="field">
           <input v-model.trim="form.customer_name" v-bind="field.attrs" class="input" maxlength="160" autocomplete="off" @input="request.clearField('customer_name')" />
-        </FormField>
-        <FormField label="Téléphone" required help="Le client est appelé à l’arrivée de sa moto." :error="request.fieldErrors.value.customer_phone" v-slot="field">
-          <input v-model.trim="form.customer_phone" v-bind="field.attrs" class="input" type="tel" inputmode="tel" maxlength="40" placeholder="+509" autocomplete="off" @input="request.clearField('customer_phone')" />
         </FormField>
         <FormField label="Courriel" :error="request.fieldErrors.value.customer_email" v-slot="field">
           <input v-model.trim="form.customer_email" v-bind="field.attrs" class="input" type="email" inputmode="email" maxlength="254" autocomplete="off" />
@@ -198,6 +230,28 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
+.known {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+}
+
+.known > span {
+  display: grid;
+  gap: 2px;
+}
+
+.text-success {
+  color: var(--success);
+}
+
 .model-preview {
   display: flex;
   gap: 12px;

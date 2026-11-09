@@ -179,6 +179,15 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.parts.sales.receipt-prints');
 
             // Vente de motocyclettes : commandes payées d'avance, lots du fournisseur, remise.
+            Route::get('/customers', AutoParts\Customers\ListPartsCustomers::class)
+                ->middleware('company.permission:parts.customers.read')
+                ->name('api.v1.parts.customers.index');
+            Route::get('/customers/{customer}', AutoParts\Customers\ShowPartsCustomer::class)
+                ->middleware('company.permission:parts.customers.read')
+                ->name('api.v1.parts.customers.show');
+            Route::patch('/customers/{customer}', AutoParts\Customers\UpdatePartsCustomer::class)
+                ->middleware('company.permission:parts.customers.manage')
+                ->name('api.v1.parts.customers.update');
             Route::prefix('motos')->group(function (): void {
                 Route::get('/models', AutoParts\Motos\ListMotoModels::class)
                     ->middleware('company.permission:parts.motos.read')
@@ -192,6 +201,15 @@ Route::prefix('v1')->group(function (): void {
                 Route::patch('/models/{model}/photo', AutoParts\Motos\UpdateMotoModelPhoto::class)
                     ->middleware('company.permission:parts.motos.models.manage')
                     ->name('api.v1.parts.motos.models.photo');
+                Route::delete('/models/{model}', AutoParts\Motos\DeleteMotoModel::class)
+                    ->middleware('company.permission:parts.motos.models.manage')
+                    ->name('api.v1.parts.motos.models.delete');
+                Route::get('/stock', AutoParts\Motos\ShowMotoStock::class)
+                    ->middleware('company.permission:parts.motos.read')
+                    ->name('api.v1.parts.motos.stock');
+                Route::post('/receipts/check', AutoParts\Motos\CheckMotoReceipt::class)
+                    ->middleware('company.permission:parts.motos.read')
+                    ->name('api.v1.parts.motos.receipts.check');
                 Route::get('/units', AutoParts\Motos\ListMotoUnits::class)
                     ->middleware('company.permission:parts.motos.read')
                     ->name('api.v1.parts.motos.units.index');

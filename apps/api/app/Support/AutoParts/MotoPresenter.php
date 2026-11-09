@@ -155,6 +155,9 @@ final class MotoPresenter
             'receipt_number' => $order->receipt_number === null ? null : $this->receipts->display($order->receipt_number),
             'receipt_print_count' => $order->receipt_print_count,
             'certificate_print_count' => $order->certificate_print_count,
+            'receipt_security_code' => $order->receipt_number === null
+                ? null
+                : $this->receipts->securityCode($company->id, $order->receipt_number, (string) $order->price, $order->price_currency),
             'verification_url' => $order->receipt_number === null
                 ? null
                 : $this->receipts->verificationUrlFor($company, $order->receipt_number, (string) $order->price, $order->price_currency),

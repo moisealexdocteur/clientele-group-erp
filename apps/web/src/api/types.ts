@@ -830,8 +830,64 @@ export interface MotoOrderDetail extends MotoOrder {
   receipt_number: string | null
   receipt_print_count: number
   certificate_print_count: number
+  /** Code de vérification imprimé sur le reçu (« 1A2B-3C4D »). */
+  receipt_security_code?: string | null
   verification_url: string | null
   cancellation_reason: string | null
   cancelled_at: string | null
   company: { display_name: string; name: string; address: string | null; phone_numbers: string | null; tax_identification_number: string | null }
+}
+
+/** Stock de motos par modèle. */
+export interface MotoStockRow {
+  model: MotoModel
+  available: number
+  reserved: number
+  waiting: number
+  sites: Array<{ name: string | null; count: number }>
+  colors: Array<{ color: string; count: number }>
+}
+
+/** Résultat du contrôle d'un reçu de vente présenté au comptoir. */
+export interface MotoReceiptCheck {
+  valid: boolean
+  message?: string
+  order?: {
+    id: string
+    number: string
+    receipt_number: string
+    status: MotoOrderStatus
+    status_label: string
+    customer_name: string
+    customer_phone: string
+    model: string | null
+    model_year: number | null
+    color: string | null
+    frame_number: string | null
+    engine_number: string | null
+    price: string
+    price_currency: Currency
+    deposit_reference: string
+    delivered_at: string | null
+    customs_document_pending: boolean
+    site: string | null
+  }
+}
+
+/** Client d'Auto Parts. */
+export interface PartsCustomer {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  address: string | null
+  is_active: boolean
+  created_at: string | null
+  moto_order_count?: number
+  sale_count?: number
+}
+
+export interface PartsCustomerDetail extends PartsCustomer {
+  moto_orders: Array<{ id: string; number: string; status: MotoOrderStatus; status_label: string; model: string | null; color: string | null; price: string; price_currency: Currency; receipt_number: string | null; submitted_at: string | null; delivered_at: string | null }>
+  sales: Array<{ id: string; number: string; total: string; currency: Currency; item_count: number; price_list: PartsPriceList; sold_at: string | null }>
 }

@@ -9,6 +9,7 @@ use App\Models\StoredFile;
 use App\Rules\DecimalAmount;
 use App\Support\AuditLogger;
 use App\Support\AutoParts\MotoPresenter;
+use App\Support\AutoParts\PartsCustomerBook;
 use App\Support\AutoParts\PartsLookup;
 use App\Support\CompanySiteAuthorizer;
 use App\Support\DocumentNumberService;
@@ -40,6 +41,7 @@ final class StoreMotoOrder extends Controller
         private readonly ExchangeRateService $exchangeRates,
         private readonly FileVault $files,
         private readonly AuditLogger $audit,
+        private readonly PartsCustomerBook $customers,
     ) {
     }
 
@@ -53,6 +55,7 @@ final class StoreMotoOrder extends Controller
             'site_id' => ['required', 'uuid'],
             'model_id' => ['required', 'uuid'],
             'preferred_color' => ['nullable', 'string', 'max:60'],
+            'customer_profile_id' => ['nullable', 'uuid'],
             'customer_name' => ['required', 'string', 'max:160'],
             'customer_phone' => ['required', 'string', 'max:40', 'regex:/\A\+?[0-9 ()-]{7,40}\z/'],
             'customer_email' => ['nullable', 'email:rfc', 'max:254'],
@@ -107,9 +110,18 @@ final class StoreMotoOrder extends Controller
             : $this->files->find($company, $data['deposit_proof_file_id'], StoredFile::PURPOSE_MOTO_DEPOSIT_PROOF, 'deposit_proof_file_id');
 
         $order = DB::transaction(function () use ($company, $site, $model, $data, $amount, $rate, $converted, $proof, $actor): MotoOrder {
+            // Fiche client de la société : choisie, retrouvée par téléphone, ou créée.
+            $customer = $this->customers->resolve($company, [
+                'customer_profile_id' => $data['customer_profile_id'] ?? null,
+                'name' => $data['customer_name'],
+                'phone' => $data['customer_phone'],
+                'email' => $data['customer_email'] ?? null,
+                'address' => $data['customer_address'] ?? null,
+            ]);
             $order = MotoOrder::query()->create([
                 'company_id' => $company->id,
                 'site_id' => $site->id,
+                'customer_profile_id' => $customer?->id,
                 'number' => $this->numbers->next($company->id, 'moto_order'),
                 'status' => 'submitted',
                 'model_id' => $model->id,

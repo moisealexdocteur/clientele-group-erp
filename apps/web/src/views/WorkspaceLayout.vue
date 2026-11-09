@@ -32,6 +32,9 @@ const nav = computed<NavItem[]>(() => {
     if (session.can('parts.motos.read')) {
       items.push({ to: { name: 'parts.motos' }, label: 'Motos', icon: 'moto', match: 'parts.motos' })
     }
+    if (session.can('parts.customers.read')) {
+      items.push({ to: { name: 'parts.customers' }, label: 'Clients', icon: 'users', match: 'parts.customers' })
+    }
   } else {
     items.push({ to: { name: 'rental.today' }, label: 'Aujourd’hui', icon: 'today', match: 'rental.today' })
     if (session.can('rental.reservations.read')) {
