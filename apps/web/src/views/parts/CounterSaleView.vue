@@ -39,7 +39,7 @@ const results = ref<PartsProduct[]>([])
 const total = ref(0)
 const lines = ref<CartLine[]>([])
 const checkoutOpen = ref(false)
-const payment = reactive({ amount_received: '', customer_name: '' })
+const payment = reactive({ amount_received: '', customer_name: '', customer_phone: '' })
 // Identifiant de vente gardé jusqu'au succès : un nouvel essai ne crée pas de doublon.
 const saleId = ref(crypto.randomUUID())
 
@@ -129,6 +129,7 @@ async function confirm(): Promise<void> {
     cash_register_id: registerId.value,
     price_list: priceList.value,
     customer_name: payment.customer_name.trim() || null,
+    customer_phone: payment.customer_phone.trim() || null,
     amount_received: fromCents(receivedCents.value ?? 0),
     lines: lines.value.map((line) => ({ product_id: line.product.id, stock_site_id: line.stock_site_id, quantity: line.quantity })),
   }))
@@ -254,6 +255,9 @@ async function confirm(): Promise<void> {
       </dl>
       <FormField label="Nom du client" help="Facultatif. Imprimé sur le reçu, jamais dans les listes." :error="checkout.fieldErrors.value.customer_name" v-slot="field">
         <input v-model="payment.customer_name" v-bind="field.attrs" class="input" maxlength="120" autocomplete="off" />
+      </FormField>
+      <FormField label="Téléphone du client" help="Facultatif. Avec le nom, le client est enregistré dans Clients ; un client connu est retrouvé par son téléphone." :error="checkout.fieldErrors.value.customer_phone" v-slot="field">
+        <input v-model="payment.customer_phone" v-bind="field.attrs" class="input" type="tel" inputmode="tel" maxlength="40" placeholder="+509" autocomplete="off" />
       </FormField>
       <InlineAlert :message="checkout.error.value" />
     </form>

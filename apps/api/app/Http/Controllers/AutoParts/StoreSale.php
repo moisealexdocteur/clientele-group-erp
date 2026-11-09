@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\AutoParts;
 
+use App\Support\AutoParts\PartsCustomerBook;
 use App\Http\Controllers\CarRental\Concerns\ResolvesCompanyAccess;
 use App\Http\Controllers\Controller;
 use App\Models\CashMovement;
@@ -52,6 +53,7 @@ final class StoreSale extends Controller
         private readonly CashSessionService $cash,
         private readonly DocumentNumberService $numbers,
         private readonly AuditLogger $audit,
+        private readonly PartsCustomerBook $customers,
     ) {
     }
 
@@ -66,7 +68,9 @@ final class StoreSale extends Controller
             'site_id' => ['required', 'uuid'],
             'cash_register_id' => ['required', 'uuid'],
             'price_list' => ['required', Rule::in(PartsSale::PRICE_LISTS)],
+            'customer_profile_id' => ['nullable', 'uuid'],
             'customer_name' => ['nullable', 'string', 'max:120'],
+            'customer_phone' => ['nullable', 'string', 'max:40', 'regex:/\A\+?[0-9 ()-]{7,40}\z/'],
             'amount_received' => ['required', new DecimalAmount()],
             'lines' => ['required', 'array', 'min:1', 'max:100'],
             'lines.*.product_id' => ['required', 'uuid'],
@@ -81,6 +85,7 @@ final class StoreSale extends Controller
             'lines.max' => '100 lignes au plus par vente.',
             'lines.*.quantity.integer' => 'La quantité est un nombre entier.',
             'lines.*.quantity.min' => 'La quantité doit être d’au moins 1.',
+            'customer_phone.regex' => 'Saisissez un numéro de téléphone valide, par exemple +509 3700 0000.',
         ]);
 
         $existing = PartsSale::query()->where('company_id', $company->id)->whereKey($data['id'])->first();
@@ -138,6 +143,12 @@ final class StoreSale extends Controller
         return DB::transaction(function () use ($company, $store, $register, $data, $lines, $total, $received, $actor): PartsSale {
             $session = $this->cash->requireOpenSession($company, $register->id, 'cash_register_id');
             $now = now()->utc();
+            // Client identifié si une fiche est choisie ou si nom et téléphone sont saisis.
+            $customer = $this->customers->resolve($company, [
+                'customer_profile_id' => $data['customer_profile_id'] ?? null,
+                'name' => $data['customer_name'] ?? null,
+                'phone' => $data['customer_phone'] ?? null,
+            ]);
 
             $sale = PartsSale::query()->create([
                 'id' => $data['id'],
@@ -147,7 +158,8 @@ final class StoreSale extends Controller
                 'cash_session_id' => $session->id,
                 'number' => $this->numbers->next($company->id, ReceiptService::SEQUENCE_SCOPE),
                 'price_list' => $data['price_list'],
-                'customer_name' => Text::nullableTrimmed($data['customer_name'] ?? null),
+                'customer_profile_id' => $customer?->id,
+                'customer_name' => Text::nullableTrimmed($data['customer_name'] ?? null) ?? $customer?->display_name,
                 'status' => 'completed',
                 'currency' => 'HTG',
                 'item_count' => array_sum(array_column($lines, 'quantity')),

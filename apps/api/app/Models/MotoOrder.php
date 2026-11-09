@@ -16,6 +16,7 @@ final class MotoOrder extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
+        'customer_profile_id',
         'company_id',
         'site_id',
         'number',

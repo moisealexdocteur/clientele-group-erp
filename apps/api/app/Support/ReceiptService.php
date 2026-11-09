@@ -55,6 +55,23 @@ final class ReceiptService
         return hash_hmac('sha256', implode('|', [$companyId, $number, Money::normalize($amount), $currency]), $secret);
     }
 
+    /**
+     * Code de vérification imprimé sur le reçu (8 caractères de la signature,
+     * « 1A2B-3C4D ») : un reçu recopié ou inventé n'a pas le bon code.
+     */
+    public function securityCode(string $companyId, string $number, string $amount, string $currency): ?string
+    {
+        $signature = $this->signature($companyId, $number, $amount, $currency);
+
+        if ($signature === null) {
+            return null;
+        }
+
+        $code = strtoupper(substr($signature, 0, 8));
+
+        return substr($code, 0, 4) . '-' . substr($code, 4, 4);
+    }
+
     public function verificationUrl(Company $company, CarRentalPayment $payment): ?string
     {
         if ($payment->receipt_number === null) {

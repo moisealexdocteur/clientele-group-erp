@@ -312,6 +312,138 @@ final class MotoSalesTest extends TestCase
         self::assertTrue(AuditEvent::query()->where('event_type', 'parts.moto_model_photo_updated')->exists());
     }
 
+    public function test_stock_by_model_and_deleting_an_unused_model(): void
+    {
+        [$company, $store, $warehouse] = $this->company('STK');
+        $admin = $this->user($company, RoleProfiles::permissions('auto_parts_administrator'));
+        $seller = $this->user($company, RoleProfiles::permissions('auto_parts_seller'));
+        $used = $this->model($admin, $company, 'HJ-125A-D', '200000.00', 'HTG');
+        $spare = $this->model($admin, $company, 'HJ-ERREUR', '200000.00', 'HTG');
+
+        $this->requestFor($admin, $company)->postJson('/api/v1/parts/motos/batches', [
+            'site_id' => $warehouse->id,
+            'reference' => 'NOVAMAT BL-STK',
+            'units' => [
+                $this->unit($used, 'LZL12P1A2THG38820', 'HJ157FMI260738820', 'Bleu', true),
+                $this->unit($used, 'LZL12P1A5THG38830', 'HJ157FMI260738830', 'Bleu', true),
+                $this->unit($used, 'LZL12P1A1THG38811', 'HJ157FMI260738811', 'Rouge', true),
+            ],
+        ])->assertCreated();
+        $order = $this->order($seller, $company, $store, $used, ['payment_currency' => 'HTG', 'payment_amount' => '200000.00', 'preferred_color' => 'Rouge']);
+        $this->requestFor($admin, $company)->postJson("/api/v1/parts/motos/orders/{$order}/verify", ['confirmed' => true])->assertOk();
+
+        $stock = $this->requestFor($seller, $company)->getJson('/api/v1/parts/motos/stock')->assertOk();
+        $stock->assertJsonPath('meta.available', 2)->assertJsonPath('meta.reserved', 1)->assertJsonPath('meta.waiting', 0);
+        $row = collect($stock->json('data'))->firstWhere('model.id', $used);
+        self::assertSame(2, $row['available']);
+        self::assertSame('Bleu', $row['colors'][0]['color']);
+        self::assertSame('Pont Parois', $row['sites'][0]['name']);
+
+        // Un modèle avec des motos ne se supprime pas ; un modèle inutilisé, oui.
+        $this->requestFor($seller, $company)->deleteJson("/api/v1/parts/motos/models/{$spare}")->assertForbidden();
+        $this->requestFor($admin, $company)->deleteJson("/api/v1/parts/motos/models/{$used}")->assertUnprocessable();
+        $this->requestFor($admin, $company)->deleteJson("/api/v1/parts/motos/models/{$spare}")->assertOk();
+        $this->assertDatabaseMissing('moto_models', ['id' => $spare]);
+        self::assertTrue(AuditEvent::query()->where('event_type', 'parts.moto_model_deleted')->exists());
+    }
+
+    public function test_customers_are_identified_by_phone_across_orders(): void
+    {
+        [$company, $store] = $this->company('CLI');
+        $admin = $this->user($company, RoleProfiles::permissions('auto_parts_administrator'));
+        $seller = $this->user($company, RoleProfiles::permissions('auto_parts_seller'));
+        $keeper = $this->user($company, RoleProfiles::permissions('auto_parts_storekeeper'));
+        $model = $this->model($admin, $company, 'HJ-110-5', '200000.00', 'HTG');
+
+        $first = $this->order($seller, $company, $store, $model, ['customer_name' => 'Marie Joseph', 'customer_phone' => '+509 3700-1111', 'payment_currency' => 'HTG', 'payment_amount' => '200000.00']);
+        $second = $this->order($seller, $company, $store, $model, ['customer_name' => 'Marie Joseph', 'customer_phone' => '+50937001111', 'customer_address' => 'Rue 15, Cap-Haïtien', 'payment_currency' => 'HTG', 'payment_amount' => '200000.00']);
+
+        $profiles = DB::table('moto_orders')->whereIn('id', [$first, $second])->pluck('customer_profile_id')->unique();
+        self::assertCount(1, $profiles);
+        $customer = $profiles->first();
+        self::assertNotNull($customer);
+
+        $this->requestFor($seller, $company)->getJson('/api/v1/parts/customers?q=%2B509 3700 1111')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.moto_order_count', 2);
+        $this->requestFor($seller, $company)->getJson('/api/v1/parts/customers?q=marie')
+            ->assertOk()->assertJsonPath('data.0.id', $customer);
+        $this->requestFor($seller, $company)->getJson("/api/v1/parts/customers/{$customer}")
+            ->assertOk()
+            ->assertJsonPath('data.address', 'Rue 15, Cap-Haïtien')
+            ->assertJsonCount(2, 'data.moto_orders');
+        $this->requestFor($keeper, $company)->getJson('/api/v1/parts/customers')->assertForbidden();
+
+        // Un autre client ne peut pas prendre ce téléphone.
+        $other = $this->order($seller, $company, $store, $model, ['customer_name' => 'Paul Pierre', 'customer_phone' => '+509 3800 2222', 'payment_currency' => 'HTG', 'payment_amount' => '200000.00']);
+        $otherProfile = DB::table('moto_orders')->where('id', $other)->value('customer_profile_id');
+        $this->requestFor($seller, $company)->patchJson("/api/v1/parts/customers/{$otherProfile}", ['name' => 'Paul Pierre', 'phone' => '+509 3700 1111'])
+            ->assertUnprocessable()->assertJsonValidationErrors('phone');
+        $this->requestFor($seller, $company)->patchJson("/api/v1/parts/customers/{$otherProfile}", ['name' => 'Paul Pierre Jean', 'phone' => '+509 3800 2222', 'email' => 'paul@example.test'])
+            ->assertOk()->assertJsonPath('data.name', 'Paul Pierre Jean');
+
+        // Une autre société ne voit pas ce client.
+        [$otherCompany] = $this->company('CLI2');
+        $foreign = $this->user($otherCompany, RoleProfiles::permissions('auto_parts_administrator'));
+        $this->requestFor($foreign, $otherCompany)->getJson("/api/v1/parts/customers/{$customer}")->assertNotFound();
+    }
+
+    public function test_a_receipt_presented_at_the_counter_is_checked_against_the_sale(): void
+    {
+        [$company, $store, $warehouse] = $this->company('REC');
+        $admin = $this->user($company, RoleProfiles::permissions('auto_parts_administrator'));
+        $seller = $this->user($company, RoleProfiles::permissions('auto_parts_seller'));
+        $model = $this->model($admin, $company, 'HJ-125A-D', '200000.00', 'HTG');
+        $this->requestFor($admin, $company)->postJson('/api/v1/parts/motos/batches', [
+            'site_id' => $warehouse->id,
+            'reference' => 'NOVAMAT BL-REC',
+            'units' => [$this->unit($model, 'LZL12P1A9THG38846', 'HJ157FMI260738846', 'Bleu', true)],
+        ])->assertCreated();
+        $order = $this->order($seller, $company, $store, $model, ['payment_currency' => 'HTG', 'payment_amount' => '200000.00']);
+        $this->requestFor($admin, $company)->postJson("/api/v1/parts/motos/orders/{$order}/verify", ['confirmed' => true])->assertOk();
+        $delivered = $this->requestFor($seller, $company)->postJson("/api/v1/parts/motos/orders/{$order}/deliver", [
+            'deposit_slip_presented' => true,
+            'id_document_type' => 'cin',
+            'id_document_number' => '01-02-99-1990-01-00001',
+            'checklist' => collect(MotoRules::CHECKLIST)->map(static fn (): bool => true)->all(),
+            'accessories' => collect(MotoRules::ACCESSORIES)->map(static fn (): bool => true)->all(),
+            'customs_document_delivered' => true,
+            'final_sale_acknowledged' => true,
+        ])->assertOk()->json('data');
+
+        $code = $delivered['receipt_security_code'];
+        self::assertMatchesRegularExpression('/^[0-9A-F]{4}-[0-9A-F]{4}$/', $code);
+        $number = $delivered['receipt_number'];
+
+        // QR scanné.
+        $this->requestFor($seller, $company)->postJson('/api/v1/parts/motos/receipts/check', ['scanned' => $delivered['verification_url']])
+            ->assertOk()->assertJsonPath('valid', true)
+            ->assertJsonPath('order.frame_number', 'LZL12P1A9THG38846')
+            ->assertJsonPath('order.status', 'delivered');
+        // Numéro et code saisis.
+        $this->requestFor($seller, $company)->postJson('/api/v1/parts/motos/receipts/check', ['number' => $number, 'code' => strtolower($code)])
+            ->assertOk()->assertJsonPath('valid', true);
+        // Code inventé, numéro inconnu, QR modifié.
+        $forged = substr($code, 0, 8) === '0000-0000' ? '1111-1111' : '0000-0000';
+        $this->requestFor($seller, $company)->postJson('/api/v1/parts/motos/receipts/check', ['number' => $number, 'code' => $forged])
+            ->assertOk()->assertJsonPath('valid', false);
+        $this->requestFor($seller, $company)->postJson('/api/v1/parts/motos/receipts/check', ['number' => '9999 9999', 'code' => $code])
+            ->assertOk()->assertJsonPath('valid', false);
+        $tampered = preg_replace('/s=([0-9a-f])/', 's=' . (str_contains($delivered['verification_url'], 's=0') ? '1' : '0'), $delivered['verification_url']);
+        $this->requestFor($seller, $company)->postJson('/api/v1/parts/motos/receipts/check', ['scanned' => $tampered])
+            ->assertOk()->assertJsonPath('valid', false);
+        self::assertTrue(AuditEvent::query()->where('event_type', 'parts.moto_receipt_rejected')->exists());
+
+        // Vérification publique : la moto et l'état, sans l'identité complète.
+        parse_str((string) parse_url($delivered['verification_url'], PHP_URL_QUERY), $query);
+        $this->getJson('/api/v1/public/receipts/REC/' . str_replace(' ', '', $number) . '?s=' . $query['s'])
+            ->assertOk()
+            ->assertJsonPath('valid', true)
+            ->assertJsonPath('frame_number', 'LZL12P1A9THG38846')
+            ->assertJsonPath('holder', 'J. B.')
+            ->assertJsonPath('delivered', true)
+            ->assertJsonMissingPath('customer_name');
+    }
+
     /** @return array{0: Company, 1: Site, 2: Site} */
     private function company(string $code): array
     {

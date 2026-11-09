@@ -1,5 +1,7 @@
 import { api } from './client'
 import type {
+  PartsCustomer,
+  PartsCustomerDetail,
   PartsFitment,
   PartsMovement,
   PartsMovementKind,
@@ -70,6 +72,8 @@ export interface SalePayload {
   cash_register_id: string
   price_list: PartsPriceList
   customer_name?: string | null
+  customer_phone?: string | null
+  customer_profile_id?: string | null
   amount_received: string
   lines: Array<{ product_id: string; stock_site_id: string; quantity: number }>
 }
@@ -88,4 +92,16 @@ export function fetchSale(saleId: string) {
 
 export function recordSaleReceiptPrint(saleId: string, copy: 'client' | 'administration') {
   return api<{ data: PartsSale }>(`${base}/sales/${saleId}/receipt/prints`, { method: 'POST', body: { copy } })
+}
+
+export function fetchPartsCustomers(q = '') {
+  return api<{ data: PartsCustomer[] }>(`${base}/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`)
+}
+
+export function fetchPartsCustomer(customerId: string) {
+  return api<{ data: PartsCustomerDetail }>(`${base}/customers/${customerId}`)
+}
+
+export function updatePartsCustomer(customerId: string, payload: { name: string; phone: string; email: string | null; address: string | null }) {
+  return api<{ data: PartsCustomer }>(`${base}/customers/${customerId}`, { method: 'PATCH', body: payload })
 }

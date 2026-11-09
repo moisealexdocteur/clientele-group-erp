@@ -132,19 +132,69 @@ test('remise de la moto, reçu de vente et certificat', async ({ page }) => {
   expect(readFileSync(certificate).subarray(0, 4).toString()).toBe('%PDF')
   await capture(page, 'commande-livree')
 
+  // Contrôle d'un reçu présenté au comptoir : le vrai, puis un faux code.
+  const number = ((await page.getByText(/Reçu n° \d{4} \d{4}/).first().textContent()) ?? '').match(/\d{4} \d{4}/)?.[0] ?? ''
+  const code = ((await page.locator('.security-code').textContent()) ?? '').trim()
+  expect(code).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/)
+  await page.goto('/pieces/motos/verifier-recu')
+  await page.getByLabel('N° du reçu').fill(number)
+  await page.getByLabel('Code de vérification').fill(code)
+  await page.getByRole('button', { name: 'Vérifier', exact: true }).click()
+  await expect(page.getByText(/Reçu authentique/)).toBeVisible()
+  await expect(page.getByText('LZL12P1A8THE50741')).toBeVisible()
+  await capture(page, 'recu-authentique')
+  await page.getByLabel('Code de vérification').fill(code.startsWith('0') ? '1111-1111' : '0000-0000')
+  await page.getByRole('button', { name: 'Vérifier', exact: true }).click()
+  await expect(page.getByText('Reçu non authentique')).toBeVisible()
+  await capture(page, 'recu-faux')
+
   // Le document de dédouanement manquait : il reste à remettre.
   await page.goto('/pieces/motos?vue=dedouanement')
   await capture(page, 'dedouanement-a-remettre')
 })
 
+test('import du bon Novamat en PDF et stock par modèle', async ({ page }) => {
+  await signIn(page, companyId)
+  await page.goto('/pieces/motos/lots/nouveau')
+  await page.getByLabel('Emplacement').selectOption(warehouseId)
+  await page.locator('input[type=file][accept="application/pdf"]').setInputFiles('fixtures/bon-novamat-recette.pdf')
+  await expect(page.getByText(/4 motos lues/)).toBeVisible()
+  await expect(page.getByText('HJ-125A-D Bleu : 2')).toBeVisible()
+  await capture(page, 'import-bon-novamat')
+  await page.getByRole('button', { name: 'Enregistrer 4 motos' }).click()
+  await expect(page.getByText(/4 motos reçues/)).toBeVisible()
+
+  await page.goto('/pieces/motos')
+  await expect(page.getByText(/motos disponibles à la vente/)).toBeVisible()
+  await page.goto('/pieces/motos/stock')
+  await expect(page.getByText('Disponibles à la vente')).toBeVisible()
+  await capture(page, 'stock-par-modele')
+
+  // Un modèle inutilisé se supprime.
+  await page.goto('/pieces/motos/modeles')
+  await page.getByText('Haojin HJ-250ZH-10', { exact: true }).click()
+  await page.getByRole('button', { name: 'Supprimer', exact: true }).click()
+  await page.getByRole('button', { name: 'Supprimer', exact: true }).last().click()
+  await expect(page.getByText(/HJ-250ZH-10 supprimé/)).toBeVisible()
+})
+
+test('base clientèle', async ({ page }) => {
+  await signIn(page, companyId)
+  await page.goto('/pieces/clients')
+  await expect(page.getByText('Client Recette')).toBeVisible()
+  await page.getByText('Client Recette').click()
+  await expect(page.getByText('Rue 15, Cap-Haïtien')).toBeVisible()
+  await capture(page, 'fiche-client')
+})
+
 test('lubrifiants de test et réception de marchandises', async ({ page }) => {
   await signIn(page, companyId)
   await page.goto('/pieces/articles')
-  await page.getByRole('button', { name: /Lubrifiants de test/ }).click()
+  await page.getByRole('button', { name: /Lubrifiants de départ/ }).click()
   await page.getByLabel('Emplacement du stock').selectOption(storeId)
   await capture(page, 'lubrifiants-dialogue')
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click()
-  await expect(page.getByText(/10 lubrifiants ajoutés/)).toBeVisible()
+  await expect(page.getByText(/16 lubrifiants ajoutés/)).toBeVisible()
   await expect(page.getByText('Huile moteur Motex-T SAE 40')).toBeVisible()
   await capture(page, 'articles-lubrifiants')
 
@@ -181,9 +231,18 @@ test('caisse, vente au comptoir en gros et reçu de caisse', async ({ page }) =>
   await page.locator('.action-bar').getByRole('button', { name: 'Encaisser' }).click()
   await page.getByLabel('Montant reçu (HTG)').fill('50000')
   await page.getByLabel('Nom du client').fill('Garage Recette')
+  await page.getByLabel('Téléphone du client').fill('+509 3900 1234')
   await page.getByRole('button', { name: /Encaisser 50 000,00 HTG/ }).click()
   await expect(page).toHaveURL(/\/pieces\/recu\//)
   await capture(page, 'recu-caisse')
+})
+
+test('client du comptoir enregistré', async ({ page }) => {
+  await signIn(page, companyId)
+  await page.goto('/pieces/clients')
+  await page.getByLabel('Rechercher un client').fill('+509 3900 1234')
+  await expect(page.getByText('Garage Recette')).toBeVisible()
+  await capture(page, 'clients')
 })
 
 /* Illustration PNG de recette générée à la volée (silhouette, pas de photo réelle). */

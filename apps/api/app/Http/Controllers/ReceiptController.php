@@ -176,6 +176,10 @@ final class ReceiptController extends Controller
             return $invalid;
         }
 
+        $order->loadMissing(['motoModel', 'unit']);
+        $unit = $order->unit;
+
+        // De quoi comparer le papier et la moto, sans exposer l'identité complète du client.
         return response()->json([
             'valid' => true,
             'company' => $company->display_name,
@@ -184,6 +188,13 @@ final class ReceiptController extends Controller
             'amount' => (string) $order->price,
             'currency' => $order->price_currency,
             'status' => $order->status === 'delivered' ? 'approved' : $order->status,
+            'kind' => 'moto_sale',
+            'item' => trim(($order->motoModel?->label() ?? '') . ' ' . ($unit?->model_year ?? '') . ' - ' . ($unit?->color ?? '')),
+            'frame_number' => $unit?->frame_number,
+            'engine_number' => $unit?->engine_number,
+            'holder' => $this->initials((string) $order->customer_name),
+            'delivered' => $order->status === 'delivered',
+            'security_code' => $this->receipts->securityCode($company->id, $number, (string) $order->price, $order->price_currency),
         ]);
     }
 
@@ -259,5 +270,13 @@ final class ReceiptController extends Controller
         abort_unless($access instanceof CompanyUserAccess, 500, 'Contexte d’accès manquant.');
 
         return $access;
+    }
+
+    /** « Jean Baptiste » donne « J. B. » : reconnaître sans divulguer. */
+    private function initials(string $name): string
+    {
+        $parts = preg_split('/\s+/u', trim($name)) ?: [];
+
+        return implode(' ', array_map(static fn (string $part): string => mb_strtoupper(mb_substr($part, 0, 1)) . '.', array_filter($parts)));
     }
 }

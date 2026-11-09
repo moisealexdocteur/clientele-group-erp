@@ -2,6 +2,18 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche feat/stock-motos-clients-recus
+
+### Ajouté
+
+- Stock de motos par modèle, emplacement et couleur : disponibles à la vente, attribuées, clients payés en attente ; résumé dans la liste des motos.
+- Suppression d'un modèle sans moto ni commande ; modèles retirés rangés à part.
+- Réception d'un lot : import du PDF Novamat (lu dans le navigateur), lignes collées, ajout des modèles manquants, résumé du lot.
+- Base clientèle Auto Parts (téléphone unique), liée aux commandes de motos et aux ventes au comptoir.
+- Reçu de vente : code de vérification, ORIGINAL ou DUPLICATA, filigrane, QR en tête ; écran « Vérifier un reçu ».
+- Lubrifiants de départ d'après les photos du stock, avec catégories et quantités.
+- Recette : import PDF, stock, contrôle de reçu vrai et faux, clients.
+
 ## Non publié - branche feat/motos-photos-scan-lubrifiants
 
 ### Ajouté

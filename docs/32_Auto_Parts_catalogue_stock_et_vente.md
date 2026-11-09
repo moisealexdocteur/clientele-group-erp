@@ -60,3 +60,16 @@ Permissions : `parts.catalog.read`, `parts.catalog.manage`, `parts.stock.read`, 
 4. Motocyclettes Haojin : modèles, options, dépôt, solde, livraison différée et remise.
 5. Certificats d'immatriculation et de vente numérotés.
 6. Importation Excel du catalogue.
+
+## Base clientèle
+
+- Les clients d'Auto Parts sont des fiches de la société (`customer_profiles`, coordonnées chiffrées, isolées par société). Le téléphone identifie le client : le même numéro retrouve toujours la même fiche.
+- Une fiche est créée ou complétée à la commande d'une moto (nom et téléphone obligatoires) et à une vente au comptoir quand le nom et le téléphone sont saisis.
+- À la commande d'une moto, la saisie du téléphone propose la fiche du client connu.
+- Clients : recherche par nom, téléphone ou courriel ; fiche avec motos commandées et achats au comptoir ; correction des coordonnées (téléphone unique), journalisée sans coordonnées.
+- Permissions `parts.customers.read` et `parts.customers.manage` : administrateur et vendeur.
+- Aucune vente à crédit : comptoir en espèces HTG, motos payées intégralement d'avance.
+
+## Lubrifiants de départ
+
+Articles > « Lubrifiants de départ » crée les articles d'après les marques citées et les photos du stock du 9 novembre 2026, avec la catégorie (moteur essence, diesel, universelle, moto 2 temps, hydraulique, transmission, frein, refroidissement), l'usage (voiture, moto, camion) dans les notes, et le stock initial à l'emplacement choisi. Prix de test 25 000 HTG par caisse ou seau, au détail et en gros, à corriger. Les quantités vues sur photo sont des comptes partiels, à confirmer par inventaire. Liste : `apps/web/src/data/starterLubricants.ts`.

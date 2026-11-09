@@ -86,3 +86,37 @@ Les codes sont comparés sans tiret ni espace : « HJ125-A » et « HJ-125A » s
 
 - Couleur : liste de couleurs connues (Rouge, Rouge Sang, Noir, Blanc, Bleu…) et couleurs déjà utilisées, avec saisie libre.
 - Châssis et moteur : bouton de scan à côté de chaque champ (appareil photo, code-barres ou QR). Il utilise l'API BarcodeDetector de Chrome et Edge ; sinon la saisie au clavier reste possible. Le même bouton sert au code-barres des articles et à la recherche de la vente au comptoir.
+
+## Stock de motos
+
+Motos > Stock (ou le résumé en tête de la liste des commandes) montre, mis à jour à chaque réception et à chaque remise :
+
+- les motos disponibles à la vente (en stock, non attribuées), par modèle, par emplacement et par couleur ;
+- les motos attribuées à un client payé, en attente de remise ;
+- les clients payés qui attendent encore une moto.
+
+Un modèle saisi par erreur se supprime depuis sa fiche s'il n'a ni moto ni commande ; sinon il se désactive (« Retiré ») et reste dans l'historique. Les modèles retirés sont rangés à part.
+
+## Réception par lot et bon Novamat
+
+Motos > Réception d'un lot :
+
+1. emplacement et référence du bon ;
+2. « Importer le PDF » : le bon ou la facture Novamat Motors est lu dans le navigateur (aucun envoi du fichier). Chaque ligne donne le modèle (code produit sans le suffixe de couleur, par exemple `[HJ-125A-D-BL]` donne HJ-125A-D), la couleur (« (bleu) » ou suffixe BL), le châssis (17 caractères) et le moteur. Les doublons sont ignorés ;
+3. « Coller des lignes » fait la même lecture sur du texte copié (PDF, Excel, courriel) ;
+4. un modèle lu mais absent de la liste s'ajoute en un geste à 200 000 HTG ;
+5. le résumé par modèle et couleur, et le dédouanement pour tout le lot, se règlent avant d'enregistrer ; chaque ligne reste modifiable et la saisie manuelle ligne par ligne reste possible.
+
+Un PDF scanné (image) n'a pas de texte lisible : coller les lignes ou les saisir.
+
+## Reçu de vente infalsifiable
+
+- Numéro unique sur 8 chiffres dans la série des reçus de la société, attribué une seule fois à la remise.
+- Code de vérification imprimé (« 9F3A-07C2 ») : 8 caractères de la signature HMAC-SHA256 du reçu (`QR_SIGNING_SECRET`), impossible à calculer sans la clé du serveur.
+- QR signé (signature complète) en haut à droite.
+- Mention ORIGINAL à la première impression, DUPLICATA n ensuite ; filigrane diagonal avec la société, le numéro et l'exemplaire.
+- Motos > Vérifier un reçu : scanner le QR, ou saisir le numéro et le code. Le résultat affiche la vente enregistrée (client, moto, châssis, moteur, prix, dépôt, date de remise) à comparer au papier et à la moto. Un reçu inconnu, un code faux ou un QR modifié est signalé « Reçu non authentique ». Une moto déjà remise est signalée : un reçu ne permet jamais une seconde remise.
+- La vérification publique du QR montre la moto, le châssis, le moteur et les initiales du client, jamais son identité complète.
+- Chaque contrôle est journalisé (`parts.moto_receipt_checked`, `parts.moto_receipt_rejected`).
+
+Rappel : la remise exige toujours la commande payée et vérifiée par un administrateur, la fiche de dépôt originale et une pièce d'identité. Aucune vente à crédit.
