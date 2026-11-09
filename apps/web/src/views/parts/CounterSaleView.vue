@@ -140,7 +140,11 @@ async function confirm(): Promise<void> {
 </script>
 
 <template>
-  <PageHeader title="Vente au comptoir" :description="store ? `${store.name}${register ? ` - ${register.name}` : ''} - espèces HTG` : undefined" />
+  <PageHeader title="Vente au comptoir" :description="store ? `${store.name}${register ? ` - ${register.name}` : ''} - espèces HTG` : undefined">
+    <template v-if="session.can('parts.sales.read')" #actions>
+      <RouterLink class="btn btn-ghost" :to="{ name: 'parts.sales' }">Ventes du jour</RouterLink>
+    </template>
+  </PageHeader>
 
   <div v-if="!stores.length" class="empty">
     <p>Aucun magasin n’est accessible. Une adresse de type Magasin, avec une caisse, est nécessaire pour vendre.</p>

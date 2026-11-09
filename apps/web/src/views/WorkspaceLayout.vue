@@ -20,15 +20,17 @@ const nav = computed<NavItem[]>(() => {
   if (activity.value === 'auto_parts') {
     if (session.can('parts.sales.create')) {
       items.push({ to: { name: 'parts.sale' }, label: 'Vente', icon: 'cart', match: 'parts.sale' })
-    }
-    if (session.can('parts.sales.read')) {
-      items.push({ to: { name: 'parts.sales' }, label: 'Ventes', icon: 'receipt', match: 'parts.sales' })
+    } else if (session.can('parts.sales.read')) {
+      items.push({ to: { name: 'parts.sales' }, label: 'Ventes', icon: 'receipt', match: 'parts.sale' })
     }
     if (session.can('parts.catalog.read')) {
       items.push({ to: { name: 'parts.products' }, label: 'Articles', icon: 'tag', match: 'parts.products' })
     }
     if (session.can('parts.stock.read')) {
       items.push({ to: { name: 'parts.stock' }, label: 'Stock', icon: 'box', match: 'parts.stock' })
+    }
+    if (session.can('parts.motos.read')) {
+      items.push({ to: { name: 'parts.motos' }, label: 'Motos', icon: 'moto', match: 'parts.motos' })
     }
   } else {
     items.push({ to: { name: 'rental.today' }, label: 'Aujourd’hui', icon: 'today', match: 'rental.today' })

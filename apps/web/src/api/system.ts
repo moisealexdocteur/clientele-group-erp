@@ -33,6 +33,10 @@ export function updateCompanyActivity(companyId: string, activity: CompanyActivi
   return api<{ data: { id: string; activity: CompanyActivity; role_options: Array<{ key: string; label: string }> } }>(`${base}/${companyId}/activity`, { ...global, method: 'PATCH', body: { activity } })
 }
 
+export function updateMotoCertificateOffset(companyId: string, xMm: string, yMm: string) {
+  return api<{ data: { x_mm: string; y_mm: string } }>(`${base}/${companyId}/moto-certificate`, { ...global, method: 'PATCH', body: { x_mm: xMm, y_mm: yMm } })
+}
+
 export function updateSiteKind(companyId: string, siteId: string, kind: SiteKind) {
   return api<{ data: { id: string; kind: SiteKind } }>(`${base}/${companyId}/sites/${siteId}/kind`, { ...global, method: 'PATCH', body: { kind } })
 }

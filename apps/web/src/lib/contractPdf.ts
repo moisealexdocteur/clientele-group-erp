@@ -231,6 +231,15 @@ export class Writer {
     this.y -= 6
   }
 
+  /** Image (QR, logo) alignée à gauche ou centrée, de la largeur donnée en points. */
+  image(image: PDFImage, width: number, align: 'left' | 'center' = 'left'): void {
+    const height = (image.height / image.width) * width
+    this.ensure(height + 4)
+    const x = align === 'center' ? (PAGE.width - width) / 2 : MARGIN
+    this.page.drawImage(image, { x, y: this.y - height, width, height })
+    this.y -= height + 6
+  }
+
   footer(reference: string): void {
     const total = this.pages.length
     this.pages.forEach((page, index) => {

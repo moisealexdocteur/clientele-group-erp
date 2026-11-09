@@ -64,6 +64,11 @@ defineProps<{ name: IconName }>()
       <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z" />
       <path d="M9 8h6M9 12h6M9 16h3" />
     </template>
+    <template v-else-if="name === 'moto'">
+      <circle cx="5.5" cy="16.5" r="3" />
+      <circle cx="18.5" cy="16.5" r="3" />
+      <path d="M8.5 16.5h5l3-6h-4l-2 3H7M14 6h2.5l2 4.5" />
+    </template>
     <template v-else-if="name === 'search'">
       <circle cx="10.5" cy="10.5" r="6.5" />
       <path d="M15.5 15.5 20 20" />

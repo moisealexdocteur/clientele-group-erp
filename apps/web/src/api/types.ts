@@ -75,6 +75,8 @@ export interface CompanyContext {
     activity?: CompanyActivity
     /** Identité du loueur imprimée sur le contrat de location. */
     legal?: CompanyLegalIdentity
+    /** Alignement de l'impression du certificat de vente moto, en millimètres. */
+    moto_certificate_offset?: { x_mm: string; y_mm: string }
     /** Frais de service Car Rental en vigueur, réglés dans Configuration. */
     rental_fees?: { airport_usd: string; cleaning_usd: string }
   }
@@ -495,6 +497,7 @@ export interface SystemCompany {
   display_name: string
   base_currency: Currency
   activity?: CompanyActivity
+  moto_certificate_offset?: { x_mm: string; y_mm: string }
   /** Profils proposés pour cette activité. */
   role_options?: Array<{ key: string; label: string }>
   timezone: string
@@ -742,4 +745,91 @@ export interface PartsSale extends PartsSaleSummary {
 export interface PartsSalesDayResponse {
   data: PartsSaleSummary[]
   meta: { date: string; count: number; item_count: number; total: string; currency: 'HTG' }
+}
+
+/* Vente de motocyclettes */
+
+export type MotoOrderStatus = 'submitted' | 'paid' | 'assigned' | 'delivered' | 'cancelled'
+export type MotoOrderFilter = MotoOrderStatus | 'customs_pending'
+
+export interface MotoModel {
+  id: string
+  make: string
+  model: string
+  label: string
+  displacement_cc: number | null
+  cylinders: number
+  price: string
+  price_currency: Currency
+  is_active: boolean
+  /** Motos du modèle disponibles en stock. */
+  available?: number
+}
+
+export interface MotoUnit {
+  id: string
+  status: 'in_stock' | 'reserved' | 'delivered'
+  status_label: string
+  model: MotoModel | null
+  model_year: number
+  frame_number: string
+  engine_number: string
+  color: string
+  cylinders: number
+  displacement_cc: number | null
+  customs_document_available: boolean
+  site: { id: string; name: string | null }
+  order_id: string | null
+  batch_id: string
+}
+
+export interface MotoOrder {
+  id: string
+  number: string
+  status: MotoOrderStatus
+  status_label: string
+  site: { id: string; name: string | null }
+  model: MotoModel | null
+  preferred_color: string | null
+  customer_name: string
+  customer_phone: string
+  price: string
+  price_currency: Currency
+  deposit_date: string | null
+  submitted_at: string | null
+  /** Rang dans la liste d'attente du modèle, pour une commande payée sans moto. */
+  queue_position: number | null
+  unit: MotoUnit | null
+  called_at: string | null
+  delivered_at: string | null
+  customs_document_pending: boolean
+}
+
+export interface MotoOrderDetail extends MotoOrder {
+  customer_email: string | null
+  customer_address: string | null
+  payment_amount: string
+  payment_currency: Currency
+  exchange_rate_htg_per_usd: string | null
+  amount_in_price_currency: string
+  bank_name: string
+  deposit_reference: string
+  deposit_proof_url: string | null
+  verified_at: string | null
+  assigned_at: string | null
+  assignment_note: string | null
+  id_document_type: string | null
+  id_document_label: string | null
+  id_document_number: string | null
+  checklist: Array<{ key: string; label: string; ok: boolean | null }>
+  accessories: Array<{ key: string; label: string; quantity: number; delivered: boolean | null }>
+  customs_document_delivered: boolean | null
+  customs_document_delivered_at: string | null
+  receipt_number: string | null
+  receipt_print_count: number
+  certificate_print_count: number
+  verification_url: string | null
+  cancellation_reason: string | null
+  cancelled_at: string | null
+  company: { display_name: string; name: string; address: string | null; phone_numbers: string | null; tax_identification_number: string | null }
 }

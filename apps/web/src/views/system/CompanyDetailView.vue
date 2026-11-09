@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { createCashRegister, createSite, updateCompany, updateCompanyActivity, updateSiteKind } from '../../api/system'
+import { createCashRegister, createSite, updateCompany, updateCompanyActivity, updateMotoCertificateOffset, updateSiteKind } from '../../api/system'
 import type { CompanyActivity, SiteKind, SystemSite } from '../../api/types'
 import { companyActivityLabels, siteKindLabels } from '../../lib/labels'
 import { useSystemStore } from '../../stores/system'
@@ -64,6 +64,9 @@ const activityRequest = useRequest()
 const kindSite = ref<SystemSite | null>(null)
 const kindDraft = ref<SiteKind>('store')
 const kindRequest = useRequest()
+const offsetOpen = ref(false)
+const offsetForm = reactive({ x_mm: '0', y_mm: '0' })
+const offsetRequest = useRequest()
 const registerForm = reactive({ site_id: '', code: '', name: '' })
 
 onMounted(() => {
@@ -214,6 +217,24 @@ async function saveKind(): Promise<void> {
   ui.toast('Type d’adresse enregistré.')
 }
 
+function openOffset(): void {
+  Object.assign(offsetForm, {
+    x_mm: company.value?.moto_certificate_offset?.x_mm ?? '0',
+    y_mm: company.value?.moto_certificate_offset?.y_mm ?? '0',
+  })
+  offsetRequest.reset()
+  offsetOpen.value = true
+}
+
+async function saveOffset(): Promise<void> {
+  const result = await offsetRequest.run(() => updateMotoCertificateOffset(props.companyId, offsetForm.x_mm.replace(',', '.'), offsetForm.y_mm.replace(',', '.')))
+  if (!result) return
+  await system.load()
+  if (session.context?.company.id === props.companyId) await session.refreshContext().catch(() => undefined)
+  offsetOpen.value = false
+  ui.toast('Alignement du certificat enregistré.')
+}
+
 async function saveRegister(): Promise<void> {
   registerForm.code = normalizeCode(registerForm.code)
   const result = await registerRequest.run(() => createCashRegister(props.companyId, { ...registerForm }))
@@ -296,6 +317,20 @@ async function saveRegister(): Promise<void> {
           <dt>Assistance routière</dt>
           <dd>{{ company.roadside_assistance_phone || 'Non renseignée' }}</dd>
         </div>
+      </dl>
+    </section>
+
+    <section v-if="!isRental" class="panel" aria-labelledby="offset-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="offset-title" class="title-section">Certificat de vente des motos</h2>
+          <p class="text-secondary text-small">Alignement des valeurs imprimées sur le formulaire du fournisseur. Faites un essai d’alignement depuis une commande livrée, puis corrigez ici.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" :disabled="!app.canReachServer" @click="openOffset">Modifier</button>
+      </div>
+      <dl class="facts">
+        <div><dt>Décalage horizontal</dt><dd>{{ company.moto_certificate_offset?.x_mm ?? '0' }} mm</dd></div>
+        <div><dt>Décalage vertical</dt><dd>{{ company.moto_certificate_offset?.y_mm ?? '0' }} mm</dd></div>
       </dl>
     </section>
 
@@ -516,6 +551,24 @@ async function saveRegister(): Promise<void> {
       <button class="btn btn-primary" type="submit" form="kind-form" :disabled="kindRequest.busy.value || !app.canReachServer">
         {{ kindRequest.busy.value ? 'Enregistrement' : 'Enregistrer' }}
       </button>
+    </template>
+  </SheetDialog>
+
+  <SheetDialog :open="offsetOpen" title="Alignement du certificat" description="En millimètres : positif vers la droite et vers le bas, négatif vers la gauche et vers le haut." :locked="offsetRequest.busy.value" @close="offsetOpen = false">
+    <form id="offset-form" class="form" novalidate @submit.prevent="saveOffset">
+      <div class="grid-2">
+        <FormField label="Horizontal (mm)" :error="offsetRequest.fieldErrors.value.x_mm" v-slot="field">
+          <input v-model.trim="offsetForm.x_mm" v-bind="field.attrs" class="input" inputmode="decimal" />
+        </FormField>
+        <FormField label="Vertical (mm)" :error="offsetRequest.fieldErrors.value.y_mm" v-slot="field">
+          <input v-model.trim="offsetForm.y_mm" v-bind="field.attrs" class="input" inputmode="decimal" />
+        </FormField>
+      </div>
+      <InlineAlert :message="offsetRequest.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="offsetRequest.busy.value" @click="offsetOpen = false">Annuler</button>
+      <button class="btn btn-primary" type="submit" form="offset-form" :disabled="offsetRequest.busy.value || !app.canReachServer">Enregistrer</button>
     </template>
   </SheetDialog>
 </template>

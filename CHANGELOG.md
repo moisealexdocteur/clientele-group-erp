@@ -2,6 +2,19 @@
 
 Toutes les modifications notables de ce projet sont documentées ici.
 
+## Non publié - branche feat/auto-parts-motos
+
+Vente de motocyclettes Haojin payées d'avance. Détail : `docs/33_Auto_Parts_vente_de_motocyclettes.md`. La version reste `0.9.0-alpha.1`.
+
+### Ajouté
+
+- Modèles Haojin avec prix, réception des lots (châssis, moteur, couleur, dédouanement).
+- Commandes payées intégralement par dépôt bancaire HTG ou USD, vérification par un administrateur.
+- Attribution automatique dans l'ordre de paiement, liste « À appeler » avec appel au toucher.
+- Remise guidée : fiche de dépôt, pièce d'identité, contrôle avec le client, accessoires, vente finale sans garantie.
+- Reçu de vente Lettre avec QR, impression des valeurs sur le certificat Novamat avec réglage d'alignement.
+- Suivi du document de dédouanement à remettre.
+
 ## Non publié - branche feat/auto-parts-pieces
 
 Premier lot Auto Parts et motocyclettes. Détail : `docs/32_Auto_Parts_catalogue_stock_et_vente.md`. La version reste `0.9.0-alpha.1`.
