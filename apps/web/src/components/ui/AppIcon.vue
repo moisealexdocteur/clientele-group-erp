@@ -47,6 +47,23 @@ defineProps<{ name: IconName }>()
       <rect x="3" y="5.5" width="18" height="13" rx="2" />
       <path d="m3.5 7 8.5 6 8.5-6" />
     </template>
+    <template v-else-if="name === 'cart'">
+      <path d="M3 4h2.5l2.2 10.5h10.6L20.5 7.5H6.3" />
+      <circle cx="9" cy="19" r="1.5" />
+      <circle cx="17" cy="19" r="1.5" />
+    </template>
+    <template v-else-if="name === 'box'">
+      <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
+      <path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" />
+    </template>
+    <template v-else-if="name === 'tag'">
+      <path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9z" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+    </template>
+    <template v-else-if="name === 'receipt'">
+      <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z" />
+      <path d="M9 8h6M9 12h6M9 16h3" />
+    </template>
     <template v-else-if="name === 'search'">
       <circle cx="10.5" cy="10.5" r="6.5" />
       <path d="M15.5 15.5 20 20" />

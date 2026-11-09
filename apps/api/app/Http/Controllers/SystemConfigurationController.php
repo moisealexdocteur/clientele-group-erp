@@ -15,6 +15,7 @@ use App\Support\AuditLogger;
 use App\Support\CompanyContext;
 use App\Support\Money;
 use App\Support\PasswordPolicy;
+use App\Support\RoleProfiles;
 use App\Support\UserRecords;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,51 +35,6 @@ use Throwable;
  */
 final class SystemConfigurationController extends Controller
 {
-    /** @var array<string, array{permissions: array<int, string>}> */
-    private const CAR_RENTAL_ROLE_PROFILES = [
-        'car_rental_administrator' => [
-            'permissions' => [
-                'rental.availability.read',
-                'rental.reservations.create',
-                'rental.reservations.read',
-                'rental.reservations.manage',
-                'rental.vehicles.read',
-                'rental.vehicles.manage',
-                'rental.calendar.read',
-                'rental.payments.submit',
-                'rental.payments.approve',
-                'rental.reservations.override_rate',
-                'rental.payments.credit',
-                'rental.documents.sensitive',
-                'rental.deposits.settle',
-                'rental.invoices.issue',
-                'cash.sessions.operate',
-                'cash.sessions.approve',
-                'cash.reports.read',
-            ],
-        ],
-        'car_rental_agent' => [
-            'permissions' => [
-                'rental.availability.read',
-                'rental.reservations.create',
-                'rental.reservations.read',
-                'rental.reservations.manage',
-                'rental.vehicles.read',
-                'rental.calendar.read',
-                'rental.payments.submit',
-                'rental.invoices.issue',
-                'cash.sessions.operate',
-            ],
-        ],
-        'car_rental_fleet' => [
-            'permissions' => [
-                'rental.vehicles.read',
-                'rental.vehicles.manage',
-                'rental.calendar.read',
-            ],
-        ],
-    ];
-
     public function __construct(
         private readonly CompanyContext $companyContext,
         private readonly AuditLogger $audit,
@@ -133,6 +89,7 @@ final class SystemConfigurationController extends Controller
             'legal_name' => ['required', 'string', 'max:255'],
             'display_name' => ['required', 'string', 'max:255'],
             'base_currency' => ['required', Rule::in(['HTG', 'USD'])],
+            'activity' => ['nullable', Rule::in(Company::ACTIVITIES)],
         ], $this->companyValidationMessages());
 
         $owner = $this->owner($request);
@@ -143,6 +100,7 @@ final class SystemConfigurationController extends Controller
                 'legal_name' => trim($data['legal_name']),
                 'display_name' => trim($data['display_name']),
                 'base_currency' => $data['base_currency'],
+                'activity' => $data['activity'] ?? 'car_rental',
                 'timezone' => 'America/Port-au-Prince',
                 'timezone_display_name' => 'Cap-Haïtien, Haïti',
                 'locale' => 'fr-HT',
@@ -169,6 +127,7 @@ final class SystemConfigurationController extends Controller
                     metadata: [
                         'company_code' => $company->code,
                         'base_currency' => $company->base_currency,
+                        'activity' => $company->activity,
                     ],
                 );
             });
@@ -278,6 +237,7 @@ final class SystemConfigurationController extends Controller
                 ],
                 'name' => ['required', 'string', 'max:255'],
                 'address' => ['required', 'string', 'max:1000'],
+                'kind' => ['nullable', Rule::in(Site::KINDS)],
             ], $this->siteValidationMessages());
 
             $site = Site::query()->create([
@@ -285,6 +245,8 @@ final class SystemConfigurationController extends Controller
                 'code' => $data['code'],
                 'name' => trim($data['name']),
                 'address' => trim($data['address']),
+                // Auto Parts : magasin par défaut ; Car Rental : bureau.
+                'kind' => $data['kind'] ?? ($company->activity === 'auto_parts' ? 'store' : 'office'),
                 'is_active' => true,
             ]);
 
@@ -298,6 +260,7 @@ final class SystemConfigurationController extends Controller
                 subjectId: $site->id,
                 metadata: [
                     'site_code' => $site->code,
+                    'kind' => $site->kind,
                 ],
             );
 
@@ -410,7 +373,7 @@ final class SystemConfigurationController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email:rfc', 'max:254'],
             'password' => ['required', 'string', 'max:4096', 'confirmed'],
-            'role_key' => ['required', Rule::in(array_keys(self::CAR_RENTAL_ROLE_PROFILES))],
+            'role_key' => ['required', Rule::in(RoleProfiles::keysFor($company->activity))],
             'site_scope' => ['required', Rule::in(['all', 'selected'])],
             'site_ids' => ['nullable', 'array', 'max:100'],
             'site_ids.*' => ['uuid', 'distinct'],
@@ -439,7 +402,7 @@ final class SystemConfigurationController extends Controller
             ]);
         }
 
-        $profile = self::CAR_RENTAL_ROLE_PROFILES[$data['role_key']];
+        $profile = ['permissions' => RoleProfiles::permissions($data['role_key'])];
         $owner = $this->owner($request);
 
         $access = DB::transaction(function () use ($company, $data, $profile, $owner): CompanyUserAccess {
@@ -543,7 +506,7 @@ final class SystemConfigurationController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email:rfc', 'max:254'],
-            'role_key' => ['required', Rule::in(array_keys(self::CAR_RENTAL_ROLE_PROFILES))],
+            'role_key' => ['required', Rule::in(RoleProfiles::keysFor($company->activity))],
             'site_scope' => ['required', Rule::in(['all', 'selected'])],
             'site_ids' => ['nullable', 'array', 'max:100'],
             'site_ids.*' => ['uuid', 'distinct'],
@@ -569,7 +532,7 @@ final class SystemConfigurationController extends Controller
                 ]);
             }
 
-            $profile = self::CAR_RENTAL_ROLE_PROFILES[$data['role_key']];
+            $profile = ['permissions' => RoleProfiles::permissions($data['role_key'])];
             $name = trim($data['name']);
             $personalDataChanged = $targetUser->name !== $name || $targetUser->email !== $data['email'];
 
@@ -937,12 +900,7 @@ final class SystemConfigurationController extends Controller
 
     private function companyUserRoleLabel(string $roleKey): string
     {
-        return match ($roleKey) {
-            'car_rental_administrator' => 'Administrateur Car Rental',
-            'car_rental_agent' => 'Agent de location',
-            'car_rental_fleet' => 'Gestionnaire de flotte',
-            default => 'Utilisateur Clientèle Group ERP',
-        };
+        return RoleProfiles::label($roleKey);
     }
 
     /** @param array<int, string> $siteIds */
@@ -1032,6 +990,7 @@ final class SystemConfigurationController extends Controller
             'display_name.max' => 'Le nom affiché ne peut pas dépasser 255 caractères.',
             'base_currency.required' => 'Sélectionnez la devise de base.',
             'base_currency.in' => 'Sélectionnez HTG ou USD comme devise de base.',
+            'activity.in' => 'Sélectionnez Car Rental ou Auto Parts et motocyclettes.',
         ];
     }
 
@@ -1047,6 +1006,7 @@ final class SystemConfigurationController extends Controller
             'name.max' => 'Le nom de l’adresse ne peut pas dépasser 255 caractères.',
             'address.required' => 'Saisissez l’adresse complète.',
             'address.max' => 'L’adresse complète ne peut pas dépasser 1 000 caractères.',
+            'kind.in' => 'Sélectionnez Bureau, Magasin ou Entrepôt.',
         ];
     }
 
@@ -1097,6 +1057,8 @@ final class SystemConfigurationController extends Controller
             'legal_name' => $company->legal_name,
             'display_name' => $company->display_name,
             'base_currency' => $company->base_currency,
+            'activity' => $company->activity,
+            'role_options' => RoleProfiles::optionsFor($company->activity),
             'timezone' => $company->timezone,
             'timezone_label' => $company->timezone_display_name,
             'is_active' => $company->is_active,
@@ -1122,6 +1084,7 @@ final class SystemConfigurationController extends Controller
             'code' => $site->code,
             'name' => $site->name,
             'address' => $site->address,
+            'kind' => $site->kind,
             'is_active' => $site->is_active,
             'cash_registers' => $site->relationLoaded('cashRegisters')
                 ? $site->cashRegisters

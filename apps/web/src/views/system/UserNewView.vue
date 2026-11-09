@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createCompanyUser } from '../../api/system'
-import type { CarRentalUserRole } from '../../api/types'
+import type { UserRoleKey } from '../../api/types'
 import { useSystemStore } from '../../stores/system'
 import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
@@ -22,11 +22,12 @@ const ui = useUiStore()
 const request = useRequest()
 
 const company = computed(() => system.company(props.companyId))
+const roleOptions = computed(() => company.value?.role_options ?? [{ key: 'car_rental_agent', label: 'Agent de location' }])
 
 const form = reactive({
   name: '',
   email: '',
-  role_key: 'car_rental_agent' as CarRentalUserRole,
+  role_key: 'car_rental_agent' as UserRoleKey,
   site_scope: 'all' as 'all' | 'selected',
   site_ids: [] as string[],
   password: '',
@@ -36,6 +37,12 @@ const form = reactive({
 onMounted(() => {
   void system.ensureLoaded().catch(() => undefined)
 })
+
+// Profil proposé : agent ou vendeur selon l'activité de la société.
+watch(roleOptions, (options) => {
+  if (options.some((option) => option.key === form.role_key)) return
+  form.role_key = (company.value?.activity === 'auto_parts' ? 'auto_parts_seller' : 'car_rental_agent')
+}, { immediate: true })
 
 async function submit(): Promise<void> {
   if (!isStrongPassword(form.password)) {
@@ -90,6 +97,7 @@ async function submit(): Promise<void> {
       v-model:scope="form.site_scope"
       v-model:site-ids="form.site_ids"
       :sites="company?.sites ?? []"
+      :role-options="roleOptions"
       :errors="request.fieldErrors.value"
       :disabled="request.busy.value"
     />

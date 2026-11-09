@@ -45,7 +45,7 @@ final class CompanyContextController extends Controller
                 ->where('is_active', true)
                 ->orderBy('name')])
             ->orderBy('name')
-            ->get(['id', 'company_id', 'code', 'name', 'address']);
+            ->get(['id', 'company_id', 'code', 'name', 'address', 'kind']);
 
         // Caisses ouvertes : le formulaire de paiement en espèces le signale avant l'envoi.
         $openRegisters = CashSession::query()
@@ -62,6 +62,8 @@ final class CompanyContextController extends Controller
                 'timezone' => $company->timezone,
                 'timezone_label' => $company->timezone_display_name,
                 'base_currency' => $company->base_currency,
+                // Activité : choisit les écrans de l'application (car_rental ou auto_parts).
+                'activity' => $company->activity,
                 // Identité du loueur imprimée sur le contrat de location.
                 'legal' => [
                     'name' => $company->legal_name,
@@ -89,6 +91,7 @@ final class CompanyContextController extends Controller
                 'code' => $site->code,
                 'name' => $site->name,
                 'address' => $site->address,
+                'kind' => $site->kind,
                 'cash_registers' => $site->cashRegisters
                     ->map(static fn ($register): array => [
                         'id' => $register->id,

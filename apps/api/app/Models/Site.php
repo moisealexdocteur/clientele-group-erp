@@ -11,6 +11,13 @@ final class Site extends Model
 {
     use HasUuids;
 
+    /** office : bureau ; store : magasin qui vend ; warehouse : entrepôt. */
+    public const KINDS = ['office', 'store', 'warehouse'];
+
+    protected $attributes = [
+        'kind' => 'office',
+    ];
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -20,6 +27,7 @@ final class Site extends Model
         'code',
         'name',
         'address',
+        'kind',
         'is_active',
     ];
 

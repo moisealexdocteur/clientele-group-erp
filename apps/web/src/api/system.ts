@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { CarRentalUserRole, Currency, SystemCashRegister, SystemCompany, SystemCompanyUser, SystemSite } from './types'
+import type { CompanyActivity, Currency, SiteKind, SystemCashRegister, SystemCompany, SystemCompanyUser, SystemSite, UserRoleKey } from './types'
 
 /* Configuration système, réservée au propriétaire. Ces routes n'utilisent pas de société active. */
 
@@ -10,7 +10,7 @@ export function fetchCompanies() {
   return api<{ data: SystemCompany[] }>(base, global)
 }
 
-export function createCompany(payload: { code: string; legal_name: string; display_name: string; base_currency: Currency }) {
+export function createCompany(payload: { code: string; legal_name: string; display_name: string; base_currency: Currency; activity: CompanyActivity }) {
   return api<{ data: SystemCompany }>(base, { ...global, method: 'POST', body: payload })
 }
 
@@ -29,7 +29,15 @@ export function updateCompany(companyId: string, payload: {
   return api<{ data: SystemCompany }>(`${base}/${companyId}`, { ...global, method: 'PATCH', body: payload })
 }
 
-export function createSite(companyId: string, payload: { code: string; name: string; address: string }) {
+export function updateCompanyActivity(companyId: string, activity: CompanyActivity) {
+  return api<{ data: { id: string; activity: CompanyActivity; role_options: Array<{ key: string; label: string }> } }>(`${base}/${companyId}/activity`, { ...global, method: 'PATCH', body: { activity } })
+}
+
+export function updateSiteKind(companyId: string, siteId: string, kind: SiteKind) {
+  return api<{ data: { id: string; kind: SiteKind } }>(`${base}/${companyId}/sites/${siteId}/kind`, { ...global, method: 'PATCH', body: { kind } })
+}
+
+export function createSite(companyId: string, payload: { code: string; name: string; address: string; kind?: SiteKind }) {
   return api<{ data: SystemSite }>(`${base}/${companyId}/sites`, { ...global, method: 'POST', body: payload })
 }
 
@@ -44,7 +52,7 @@ export function fetchCompanyUsers(companyId: string) {
 export interface CompanyUserPayload {
   name: string
   email: string
-  role_key: CarRentalUserRole
+  role_key: UserRoleKey
   site_scope: 'all' | 'selected'
   site_ids: string[]
 }

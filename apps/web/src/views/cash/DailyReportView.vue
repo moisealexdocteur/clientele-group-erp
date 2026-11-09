@@ -12,6 +12,7 @@ import {
   CURRENCIES,
   buildDailyReportPdf,
   buildDailyReportXlsx,
+  isPartsReport,
   paymentMethodLabels,
   reportFilename,
   sessionStateLabel,
@@ -189,7 +190,19 @@ async function print(): Promise<void> {
         </dl>
       </section>
 
-      <section class="panel">
+      <section v-if="isPartsReport(report)" class="panel">
+        <h2 class="title-section">Ventes de pièces</h2>
+        <p v-if="!report.parts_sales?.length" class="text-secondary">Aucune vente ce jour.</p>
+        <dl v-else class="facts">
+          <div v-for="row in report.parts_sales" :key="row.price_list">
+            <dt>{{ row.label }} ({{ row.count }} vente{{ row.count > 1 ? 's' : '' }}, {{ row.item_count }} article{{ row.item_count > 1 ? 's' : '' }})</dt>
+            <dd>{{ formatMoney(row.amount, row.currency) }}</dd>
+          </div>
+        </dl>
+        <p class="text-small text-muted">Réimpressions de reçus ce jour : {{ report.reprints }}.</p>
+      </section>
+
+      <section v-else class="panel">
         <h2 class="title-section">Encaissements Car Rental approuvés</h2>
         <p v-if="!report.rental_payments.length" class="text-secondary">Aucun encaissement approuvé ce jour.</p>
         <dl v-else class="facts">

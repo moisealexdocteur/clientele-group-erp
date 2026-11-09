@@ -25,6 +25,7 @@ final class CashPresenter
         'rental_payment' => 'Paiement de location',
         'deposit_payment' => 'Dépôt de garantie reçu',
         'deposit_refund' => 'Dépôt de garantie rendu',
+        'parts_sale' => 'Vente de pièces',
     ];
 
     public function __construct(
@@ -68,7 +69,7 @@ final class CashPresenter
             $payload['movements'] = CashMovement::query()
                 ->where('company_id', $session->company_id)
                 ->where('cash_session_id', $session->id)
-                ->with(['payment', 'reservation', 'recorder'])
+                ->with(['payment', 'reservation', 'recorder', 'sale'])
                 ->orderBy('occurred_at')
                 ->get()
                 ->map(fn (CashMovement $movement): array => [
@@ -79,8 +80,9 @@ final class CashPresenter
                     'currency' => $movement->currency,
                     'amount' => (string) $movement->amount,
                     'occurred_at' => $movement->occurred_at?->toIso8601String(),
-                    'receipt_number' => $movement->payment?->receipt_number === null ? null : $this->receipts->display((string) $movement->payment->receipt_number),
+                    'receipt_number' => $this->movementReceiptNumber($movement),
                     'payment_id' => $movement->payment_id,
+                    'sale_id' => $movement->sale_id,
                     'reservation_id' => $movement->reservation_id,
                     'reservation_number' => $movement->reservation?->formattedNumber(),
                     'recorded_by' => $movement->recorder?->name,
@@ -89,6 +91,13 @@ final class CashPresenter
         }
 
         return $payload;
+    }
+
+    private function movementReceiptNumber(CashMovement $movement): ?string
+    {
+        $number = $movement->sale?->number ?? $movement->payment?->receipt_number;
+
+        return $number === null ? null : $this->receipts->display((string) $number);
     }
 
     public function canClose(CashSession $session, CompanyUserAccess $access, ?User $actor): bool

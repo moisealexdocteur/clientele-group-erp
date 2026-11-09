@@ -8,7 +8,8 @@ import { useAppStore } from '../../stores/app'
 import { useUiStore } from '../../stores/ui'
 import { useRequest } from '../../composables/useRequest'
 import { normalizeCode } from '../../lib/text'
-import type { Currency } from '../../api/types'
+import type { CompanyActivity, Currency } from '../../api/types'
+import { companyActivityLabels } from '../../lib/labels'
 import PageHeader from '../../components/ui/PageHeader.vue'
 import FormField from '../../components/ui/FormField.vue'
 import InlineAlert from '../../components/ui/InlineAlert.vue'
@@ -25,6 +26,7 @@ const form = reactive({
   legal_name: '',
   display_name: '',
   base_currency: 'HTG' as Currency,
+  activity: 'car_rental' as CompanyActivity,
 })
 
 async function submit(): Promise<void> {
@@ -49,6 +51,11 @@ async function submit(): Promise<void> {
     </FormField>
     <FormField label="Nom affiché" :error="request.fieldErrors.value.display_name" v-slot="field">
       <input v-model.trim="form.display_name" v-bind="field.attrs" class="input" maxlength="255" required :disabled="request.busy.value" @input="request.clearField('display_name')" />
+    </FormField>
+    <FormField label="Activité" help="Elle choisit les écrans et les profils d’utilisateurs de la société." :error="request.fieldErrors.value.activity" v-slot="field">
+      <select v-model="form.activity" v-bind="field.attrs" class="select" :disabled="request.busy.value">
+        <option v-for="(label, key) in companyActivityLabels" :key="key" :value="key">{{ label }}</option>
+      </select>
     </FormField>
     <FormField label="Devise de base" :error="request.fieldErrors.value.base_currency" v-slot="field">
       <select v-model="form.base_currency" v-bind="field.attrs" class="select" :disabled="request.busy.value">

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BootstrapController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AutoParts;
 use App\Http\Controllers\CarRental;
 use App\Http\Controllers\Configuration;
 use App\Http\Controllers\CarRentalFileController;
@@ -61,6 +62,10 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.system.configuration.companies.update');
             Route::post('/companies/{company}/sites', [SystemConfigurationController::class, 'storeSite'])
                 ->name('api.v1.system.configuration.sites.store');
+            Route::patch('/companies/{company}/sites/{site}/kind', Configuration\UpdateSiteKind::class)
+                ->name('api.v1.system.configuration.sites.kind');
+            Route::patch('/companies/{company}/activity', Configuration\UpdateCompanyActivity::class)
+                ->name('api.v1.system.configuration.companies.activity');
             Route::post('/companies/{company}/cash-registers', [SystemConfigurationController::class, 'storeCashRegister'])
                 ->name('api.v1.system.configuration.cash-registers.store');
             Route::get('/companies/{company}/users', [SystemConfigurationController::class, 'companyUsers'])
@@ -114,6 +119,59 @@ Route::prefix('v1')->group(function (): void {
                 ->name('api.v1.cash.reports.daily.exports');
         });
 
+
+        /*
+         * Auto Parts et motocyclettes : catalogue de pièces, stock par magasin
+         * et entrepôt, vente au comptoir en espèces HTG. Réservé aux sociétés
+         * dont l'activité est Auto Parts.
+         */
+        Route::prefix('parts')->middleware('company.activity:auto_parts')->group(function (): void {
+            Route::get('/products', AutoParts\ListProducts::class)
+                ->middleware('company.permission:parts.catalog.read')
+                ->name('api.v1.parts.products.index');
+            Route::post('/products', AutoParts\StoreProduct::class)
+                ->middleware('company.permission:parts.catalog.manage')
+                ->name('api.v1.parts.products.store');
+            Route::get('/products/{product}', AutoParts\ShowProduct::class)
+                ->middleware('company.permission:parts.catalog.read')
+                ->name('api.v1.parts.products.show');
+            Route::patch('/products/{product}', AutoParts\UpdateProduct::class)
+                ->middleware('company.permission:parts.catalog.manage')
+                ->name('api.v1.parts.products.update');
+            Route::patch('/products/{product}/active', AutoParts\UpdateProductActive::class)
+                ->middleware('company.permission:parts.catalog.manage')
+                ->name('api.v1.parts.products.active');
+            Route::put('/products/{product}/photo', AutoParts\UpdateProductPhoto::class)
+                ->middleware('company.permission:parts.catalog.manage')
+                ->name('api.v1.parts.products.photo');
+            Route::put('/products/{product}/fitments', AutoParts\SaveProductFitments::class)
+                ->middleware('company.permission:parts.catalog.manage')
+                ->name('api.v1.parts.products.fitments');
+            Route::get('/stock/movements', AutoParts\ListStockMovements::class)
+                ->middleware('company.permission:parts.stock.read')
+                ->name('api.v1.parts.stock.movements');
+            Route::post('/stock/receipts', AutoParts\ReceiveStock::class)
+                ->middleware('company.permission:parts.stock.manage')
+                ->name('api.v1.parts.stock.receipts');
+            Route::post('/stock/adjustments', AutoParts\AdjustStock::class)
+                ->middleware('company.permission:parts.stock.manage')
+                ->name('api.v1.parts.stock.adjustments');
+            Route::post('/stock/transfers', AutoParts\TransferStock::class)
+                ->middleware('company.permission:parts.stock.manage')
+                ->name('api.v1.parts.stock.transfers');
+            Route::get('/sales', AutoParts\ListSales::class)
+                ->middleware('company.permission:parts.sales.read')
+                ->name('api.v1.parts.sales.index');
+            Route::post('/sales', AutoParts\StoreSale::class)
+                ->middleware('company.permission:parts.sales.create')
+                ->name('api.v1.parts.sales.store');
+            Route::get('/sales/{sale}', AutoParts\ShowSale::class)
+                ->middleware('company.permission:parts.sales.read')
+                ->name('api.v1.parts.sales.show');
+            Route::post('/sales/{sale}/receipt/prints', AutoParts\RecordSaleReceiptPrint::class)
+                ->middleware('company.permission:parts.sales.read')
+                ->name('api.v1.parts.sales.receipt-prints');
+        });
 
         Route::prefix('car-rental')->group(function (): void {
             Route::get('/customers', CarRental\SearchCustomers::class)

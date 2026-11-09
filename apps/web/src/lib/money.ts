@@ -40,3 +40,22 @@ export function formatRate(value: string | number | null | undefined): string {
   const text = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(amount)
   return `1 USD = ${text} HTG`
 }
+
+/**
+ * Centimes entiers d'une saisie décimale (« 1500 », « 1250,5 », « 1 250.50 »).
+ * Retourne null si la saisie n'est pas un montant à deux décimales au plus.
+ */
+export function toCents(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null
+  const text = String(value).replace(/[\s  ]/g, '').replace(',', '.')
+  const match = /^(\d{1,9})(?:\.(\d{1,2}))?$/.exec(text)
+  if (!match) return null
+  return Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'))
+}
+
+/** Chaîne décimale canonique « 1250.50 » à partir de centimes entiers. */
+export function fromCents(cents: number): string {
+  const sign = cents < 0 ? '-' : ''
+  const absolute = Math.abs(Math.round(cents))
+  return `${sign}${Math.floor(absolute / 100)}.${String(absolute % 100).padStart(2, '0')}`
+}

@@ -11,7 +11,7 @@ final class CashMovement extends Model
 {
     use HasUuids;
 
-    public const KINDS = ['rental_payment', 'deposit_payment', 'deposit_refund'];
+    public const KINDS = ['rental_payment', 'deposit_payment', 'deposit_refund', 'parts_sale'];
 
     public $incrementing = false;
 
@@ -27,6 +27,7 @@ final class CashMovement extends Model
         'payment_id',
         'deposit_id',
         'reservation_id',
+        'sale_id',
         'recorded_by',
         'occurred_at',
     ];
@@ -52,6 +53,11 @@ final class CashMovement extends Model
     public function reservation(): BelongsTo
     {
         return $this->belongsTo(CarRentalReservation::class, 'reservation_id');
+    }
+
+    public function sale(): BelongsTo
+    {
+        return $this->belongsTo(PartsSale::class, 'sale_id');
     }
 
     public function recorder(): BelongsTo
