@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchProducts } from '../../api/parts'
+import { createProduct, fetchProducts } from '../../api/parts'
 import type { PartsProduct } from '../../api/types'
 import { useSessionStore } from '../../stores/session'
 import { useRequest } from '../../composables/useRequest'
@@ -10,6 +10,11 @@ import PageHeader from '../../components/ui/PageHeader.vue'
 import InlineAlert from '../../components/ui/InlineAlert.vue'
 import AppIcon from '../../components/ui/AppIcon.vue'
 import ProductRow from '../../components/parts/ProductRow.vue'
+import SheetDialog from '../../components/ui/SheetDialog.vue'
+import FormField from '../../components/ui/FormField.vue'
+import { useUiStore } from '../../stores/ui'
+import { STARTER_LUBRICANTS, STARTER_LUBRICANT_QUANTITY, starterProductInput } from '../../data/starterLubricants'
+import { formatMoney } from '../../lib/money'
 
 /*
  * Catalogue : les articles actifs sont listés tout de suite ; la recherche
@@ -56,13 +61,52 @@ function setFilter(value: Filter): void {
   void load()
 }
 
-onMounted(load)
+// Lubrifiants de test demandés pour la recette : proposés tant qu'il en manque.
+const ui = useUiStore()
+const starter = useRequest()
+const existingSkus = ref<string[]>([])
+const starterOpen = ref(false)
+const stockSites = computed(() => session.sites.filter((site) => site.kind === 'store' || site.kind === 'warehouse'))
+const starterSite = ref('')
+const missingStarter = computed(() => STARTER_LUBRICANTS.filter((product) => !existingSkus.value.includes(product.sku)))
+const canSeed = computed(() => canManage.value && session.can('parts.stock.manage') && stockSites.value.length > 0)
+
+async function loadStarter(): Promise<void> {
+  if (!canSeed.value) return
+  const result = await fetchProducts({ q: 'LUB-', include_inactive: true }).catch(() => null)
+  existingSkus.value = (result?.data ?? []).map((product) => product.sku)
+}
+
+function openStarter(): void {
+  starter.reset()
+  starterSite.value = stockSites.value.find((site) => site.id === officeId.value)?.id ?? stockSites.value[0]?.id ?? ''
+  starterOpen.value = true
+}
+
+async function addStarter(): Promise<void> {
+  let created = 0
+  for (const product of missingStarter.value) {
+    const result = await starter.run(() => createProduct({ ...starterProductInput(product), initial_site_id: starterSite.value, initial_quantity: STARTER_LUBRICANT_QUANTITY }))
+    if (!result) break
+    created += 1
+    existingSkus.value.push(product.sku)
+  }
+  if (created) ui.toast(`${plural(created, 'lubrifiant ajouté', 'lubrifiants ajoutés')}, ${STARTER_LUBRICANT_QUANTITY} caisses chacun.`)
+  if (!starter.error.value) starterOpen.value = false
+  await load()
+}
+
+onMounted(() => {
+  void load()
+  void loadStarter()
+})
 onBeforeUnmount(() => window.clearTimeout(timer))
 </script>
 
 <template>
   <PageHeader title="Articles">
     <template #actions>
+      <button v-if="canSeed && missingStarter.length" class="btn btn-secondary" type="button" @click="openStarter">Lubrifiants de test ({{ missingStarter.length }})</button>
       <RouterLink v-if="canManage" class="btn btn-primary" :to="{ name: 'parts.product.new' }">
         <AppIcon name="plus" />Ajouter un article
       </RouterLink>
@@ -92,4 +136,31 @@ onBeforeUnmount(() => window.clearTimeout(timer))
       <RouterLink v-if="canManage && !query && filter === 'active'" class="btn btn-primary" :to="{ name: 'parts.product.new' }">Ajouter un article</RouterLink>
     </div>
   </div>
+
+  <SheetDialog :open="starterOpen" title="Lubrifiants de test" :description="`${missingStarter.length} articles en caisse, ${STARTER_LUBRICANT_QUANTITY} caisses chacun, à ${formatMoney('25000.00', 'HTG')} la caisse (prix de détail et de gros). Prix, grade et contenance à corriger ensuite.`" :locked="starter.busy.value" @close="starterOpen = false">
+    <form id="starter-form" class="form" novalidate @submit.prevent="addStarter">
+      <FormField label="Emplacement du stock" required v-slot="field">
+        <select v-model="starterSite" v-bind="field.attrs" class="select">
+          <option v-for="site in stockSites" :key="site.id" :value="site.id">{{ site.name }}</option>
+        </select>
+      </FormField>
+      <ul class="starter-list text-small">
+        <li v-for="product in missingStarter" :key="product.sku">{{ product.name }}</li>
+      </ul>
+      <InlineAlert :message="starter.error.value" />
+    </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="starter.busy.value" @click="starterOpen = false">Annuler</button>
+      <button class="btn btn-primary" type="submit" form="starter-form" :disabled="starter.busy.value || !starterSite">{{ starter.busy.value ? 'Ajout' : 'Ajouter' }}</button>
+    </template>
+  </SheetDialog>
 </template>
+
+<style scoped>
+.starter-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
+</style>

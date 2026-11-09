@@ -863,3 +863,15 @@ ol {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* Champ suivi d'un bouton d'action (scan), sur une ligne. */
+.input-action {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.input-action > .input {
+  flex: 1;
+  min-width: 0;
+}

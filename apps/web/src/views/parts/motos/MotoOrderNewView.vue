@@ -13,6 +13,8 @@ import PageHeader from '../../../components/ui/PageHeader.vue'
 import FormField from '../../../components/ui/FormField.vue'
 import InlineAlert from '../../../components/ui/InlineAlert.vue'
 import FileCapture from '../../../components/ui/FileCapture.vue'
+import ProductThumb from '../../../components/parts/ProductThumb.vue'
+import { colorSuggestions } from '../../../data/motoColors'
 
 /*
  * Commande d'une moto payée intégralement d'avance par dépôt bancaire.
@@ -58,6 +60,7 @@ const equivalent = computed(() => {
   if (!value) return null
   return form.payment_currency === 'HTG' ? Math.floor(amount / value) : Math.round(amount * value)
 })
+const colors = colorSuggestions()
 const shortfall = computed(() => (model.value && equivalent.value !== null ? (toCents(model.value.price) ?? 0) - equivalent.value : null))
 
 onMounted(async () => {
@@ -99,6 +102,13 @@ async function submit(): Promise<void> {
   <form v-else class="panel form" novalidate @submit.prevent="submit">
     <fieldset class="form-group" :disabled="request.busy.value">
       <legend>Moto</legend>
+      <div v-if="model" class="model-preview">
+        <ProductThumb :path="model.photo_url ?? null" :alt="model.label" icon="moto" fit="contain" />
+        <span>
+          <strong>{{ model.label }}</strong>
+          <span class="text-small text-secondary">{{ formatMoney(model.price, model.price_currency) }} - {{ model.available ?? 0 }} en stock</span>
+        </span>
+      </div>
       <div class="grid-2">
         <FormField label="Modèle" required :error="request.fieldErrors.value.model_id" v-slot="field">
           <select v-model="form.model_id" v-bind="field.attrs" class="select">
@@ -108,7 +118,10 @@ async function submit(): Promise<void> {
           </select>
         </FormField>
         <FormField label="Couleur souhaitée" help="Vide : la première moto du modèle, quelle que soit sa couleur." :error="request.fieldErrors.value.preferred_color" v-slot="field">
-          <input v-model.trim="form.preferred_color" v-bind="field.attrs" class="input" maxlength="60" autocomplete="off" />
+          <input v-model.trim="form.preferred_color" v-bind="field.attrs" class="input" maxlength="60" autocomplete="off" list="order-colors" placeholder="Choisir ou saisir" />
+          <datalist id="order-colors">
+            <option v-for="color in colors" :key="color" :value="color" />
+          </datalist>
         </FormField>
         <FormField label="Retrait au magasin" required :error="request.fieldErrors.value.site_id" v-slot="field">
           <select v-model="form.site_id" v-bind="field.attrs" class="select">
@@ -183,3 +196,22 @@ async function submit(): Promise<void> {
     </button>
   </form>
 </template>
+
+<style scoped>
+.model-preview {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.model-preview :deep(.thumb) {
+  width: 88px;
+  height: 88px;
+}
+
+.model-preview > span {
+  display: grid;
+  gap: 2px;
+}
+</style>

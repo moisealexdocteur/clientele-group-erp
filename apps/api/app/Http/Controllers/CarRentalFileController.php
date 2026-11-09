@@ -35,6 +35,7 @@ final class CarRentalFileController extends Controller
         StoredFile::PURPOSE_RENTAL_INVOICE => 'rental.invoices.issue',
         StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO => 'parts.catalog.manage',
         StoredFile::PURPOSE_MOTO_DEPOSIT_PROOF => 'parts.motos.orders.create',
+        StoredFile::PURPOSE_MOTO_MODEL_PHOTO => 'parts.motos.models.manage',
     ];
 
     public function __construct(
@@ -65,8 +66,8 @@ final class CarRentalFileController extends Controller
         }
 
         $site = $this->siteAuthorizer->siteFor($company, $access, $data['site_id']);
-        // Photo d'article : le catalogue est commun aux adresses de la société.
-        $siteId = $data['purpose'] === StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO ? null : $site->id;
+        // Photo d'article ou de modèle : le catalogue est commun aux adresses de la société.
+        $siteId = in_array($data['purpose'], [StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO, StoredFile::PURPOSE_MOTO_MODEL_PHOTO], true) ? null : $site->id;
         $file = $this->vault->store($request->file('file'), $company, $data['purpose'], $siteId, $request->user());
 
         return response()->json(['data' => $this->payload($file)], 201);
@@ -132,6 +133,7 @@ final class CarRentalFileController extends Controller
                 || $access->allows('rental.documents.sensitive'),
             StoredFile::PURPOSE_RENTAL_INVOICE => $access->allows('rental.reservations.read'),
             StoredFile::PURPOSE_PARTS_PRODUCT_PHOTO => $access->allows('parts.catalog.read'),
+            StoredFile::PURPOSE_MOTO_MODEL_PHOTO => $access->allows('parts.motos.read'),
             // Fiche de dépôt bancaire : vérification du paiement et remise de la moto.
             StoredFile::PURPOSE_MOTO_DEPOSIT_PROOF => $access->allows('parts.motos.payments.verify')
                 || $access->allows('parts.motos.deliver'),

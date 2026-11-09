@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { fetchMotoModels, fetchMotoUnits, saveMotoModel } from '../../../api/motos'
+import { fetchMotoModels, fetchMotoUnits, saveMotoModel, updateMotoModelPhoto } from '../../../api/motos'
 import type { Currency, MotoModel, MotoUnit } from '../../../api/types'
 import { useRequest } from '../../../composables/useRequest'
 import { useSessionStore } from '../../../stores/session'
@@ -13,7 +13,9 @@ import InlineAlert from '../../../components/ui/InlineAlert.vue'
 import SheetDialog from '../../../components/ui/SheetDialog.vue'
 import FormField from '../../../components/ui/FormField.vue'
 import StatusPill from '../../../components/ui/StatusPill.vue'
-import { HAOJIN_DEFAULT_PRICE, HAOJIN_HAITI_MODELS } from '../../../data/haojinCatalog'
+import { HAOJIN_DEFAULT_PRICE, missingHaojinModels } from '../../../data/haojinCatalog'
+import ProductThumb from '../../../components/parts/ProductThumb.vue'
+import FileCapture from '../../../components/ui/FileCapture.vue'
 
 /* Modèles vendus avec leur prix, et motos disponibles en stock. */
 const session = useSessionStore()
@@ -46,7 +48,7 @@ function open(model: MotoModel | 'new'): void {
 }
 
 // Modèles Haojin vendus en Haïti qui ne sont pas encore dans la liste.
-const missing = computed(() => HAOJIN_HAITI_MODELS.filter((ref) => !models.value.some((model) => model.make.toLowerCase() === 'haojin' && model.model.toUpperCase() === ref.model)))
+const missing = computed(() => missingHaojinModels(models.value))
 const importing = ref(false)
 
 async function importHaojin(): Promise<void> {
@@ -59,6 +61,22 @@ async function importHaojin(): Promise<void> {
   }
   importing.value = false
   if (created) ui.toast(`${plural(created, 'modèle ajouté', 'modèles ajoutés')} à 200 000 HTG.`)
+  await load()
+}
+
+// Photo générique : enregistrée dès l'envoi du fichier, sur un modèle existant.
+const photoSite = computed(() => session.sites[0]?.id ?? '')
+const photoBusy = ref(false)
+
+async function savePhoto(fileId: string | null): Promise<void> {
+  const target = editing.value
+  if (!target || target === 'new') return
+  photoBusy.value = true
+  const result = await action.run(() => updateMotoModelPhoto(target.id, fileId))
+  photoBusy.value = false
+  if (!result) return
+  editing.value = result.data
+  ui.toast(fileId ? 'Photo du modèle enregistrée.' : 'Photo retirée.')
   await load()
 }
 
@@ -97,6 +115,7 @@ async function save(): Promise<void> {
       <h2 id="models-title" class="title-section">Modèles</h2>
       <div v-if="models.length" class="list">
         <component :is="canManage ? 'button' : 'div'" v-for="model in models" :key="model.id" class="list-row" type="button" @click="canManage && open(model)">
+          <ProductThumb :path="model.photo_url ?? null" :alt="model.label" icon="moto" fit="contain" />
           <span class="row-main">
             <strong>{{ model.label }}</strong>
             <span class="text-small text-muted">{{ model.displacement_cc ? `${model.displacement_cc} cm³ - ` : '' }}{{ model.cylinders }} cyl. - {{ plural(model.available ?? 0, 'disponible') }}</span>
@@ -114,12 +133,14 @@ async function save(): Promise<void> {
       <h2 id="units-title" class="title-section">Motos disponibles</h2>
       <div v-if="units.length" class="list">
         <div v-for="unit in units" :key="unit.id" class="list-row">
+          <ProductThumb :path="unit.model?.photo_url ?? null" :alt="unit.model?.label ?? 'Moto'" icon="moto" fit="contain" />
           <span class="row-main">
             <strong>{{ unit.model?.label }} {{ unit.model_year }} - {{ unit.color }}</strong>
-            <span class="text-small text-muted">Châssis {{ unit.frame_number }} - moteur {{ unit.engine_number }}</span>
+            <span class="text-small">Stock : {{ unit.site.name }}</span>
+            <span class="text-small text-muted code">Châssis {{ unit.frame_number }} - moteur {{ unit.engine_number }}</span>
           </span>
           <span class="row-side">
-            <span class="text-small">{{ unit.site.name }}</span>
+            <strong v-if="unit.model">{{ formatMoney(unit.model.price, unit.model.price_currency) }}</strong>
             <StatusPill v-if="!unit.customs_document_available" tone="warning" label="Dédouanement attendu" />
           </span>
         </div>
@@ -153,6 +174,21 @@ async function save(): Promise<void> {
           </select>
         </FormField>
       </div>
+      <section v-if="editing && editing !== 'new'" class="model-photo">
+        <ProductThumb :path="editing.photo_url ?? null" :alt="editing.label" icon="moto" fit="contain" />
+        <div class="model-photo-actions">
+          <FileCapture
+            purpose="moto_model_photo"
+            :site-id="photoSite"
+            label="Photo générique du modèle"
+            help="Photo du fabricant ou du magasin, sans plaque. Vue par les vendeurs."
+            :disabled="photoBusy || !photoSite"
+            @uploaded="(file) => savePhoto(file.id)"
+          />
+          <button v-if="editing.photo_url" class="btn btn-ghost" type="button" :disabled="photoBusy" @click="savePhoto(null)">Retirer la photo</button>
+        </div>
+      </section>
+      <p v-else class="field-help">La photo s’ajoute après l’enregistrement du modèle.</p>
       <label v-if="editing !== 'new'" class="check">
         <input v-model="form.is_active" type="checkbox" />
         <span>En vente : proposé aux nouvelles commandes</span>
@@ -167,6 +203,28 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
+.model-photo {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.model-photo :deep(.thumb) {
+  width: 96px;
+  height: 96px;
+}
+
+.model-photo-actions {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.code {
+  overflow-wrap: anywhere;
+}
+
 .row-main {
   display: grid;
   gap: 2px;

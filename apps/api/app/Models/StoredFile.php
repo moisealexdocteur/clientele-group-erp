@@ -24,6 +24,7 @@ final class StoredFile extends Model
     public const PURPOSE_RENTAL_INVOICE = 'rental_invoice';
     public const PURPOSE_PARTS_PRODUCT_PHOTO = 'parts_product_photo';
     public const PURPOSE_MOTO_DEPOSIT_PROOF = 'moto_deposit_proof';
+    public const PURPOSE_MOTO_MODEL_PHOTO = 'moto_model_photo';
 
     public const PURPOSES = [
         self::PURPOSE_PAYMENT_PROOF,
@@ -36,6 +37,7 @@ final class StoredFile extends Model
         self::PURPOSE_RENTAL_INVOICE,
         self::PURPOSE_PARTS_PRODUCT_PHOTO,
         self::PURPOSE_MOTO_DEPOSIT_PROOF,
+        self::PURPOSE_MOTO_MODEL_PHOTO,
     ];
 
     /** Fichiers qui contiennent des données d'identité ou bancaires. */

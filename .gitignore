@@ -16,3 +16,7 @@ coverage/
 *.pfx
 infra/traefik/letsencrypt/
 .DS_Store
+
+# Recette de bout en bout
+e2e/node_modules/
+e2e/output/

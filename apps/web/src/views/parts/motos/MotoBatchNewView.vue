@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchMotoModels, receiveMotoBatch } from '../../../api/motos'
+import { fetchMotoModels, fetchMotoUnits, receiveMotoBatch } from '../../../api/motos'
 import type { MotoModel } from '../../../api/types'
 import { useRequest } from '../../../composables/useRequest'
 import { useSessionStore } from '../../../stores/session'
@@ -11,6 +11,8 @@ import { plural } from '../../../lib/text'
 import PageHeader from '../../../components/ui/PageHeader.vue'
 import FormField from '../../../components/ui/FormField.vue'
 import InlineAlert from '../../../components/ui/InlineAlert.vue'
+import ScanButton from '../../../components/ui/ScanButton.vue'
+import { colorSuggestions } from '../../../data/motoColors'
 
 /*
  * Réception d'un lot du fournisseur. Chaque moto est saisie avec ses numéros
@@ -47,10 +49,16 @@ function addUnit(): void {
   })
 }
 
+// Couleurs proposées : couleurs connues, couleurs du stock et du lot en cours.
+const stockColors = ref<string[]>([])
+const colors = computed(() => colorSuggestions([...stockColors.value, ...units.value.map((unit) => unit.color)]))
+
 onMounted(async () => {
   const result = await loading.run(() => fetchMotoModels())
   models.value = (result?.data ?? []).filter((item) => item.is_active)
   addUnit()
+  const stock = await fetchMotoUnits().catch(() => null)
+  stockColors.value = (stock?.data ?? []).map((unit) => unit.color)
 })
 
 function error(index: number, field: string): string | undefined {
@@ -104,13 +112,19 @@ async function submit(): Promise<void> {
           <input v-model.number="unit.model_year" v-bind="field.attrs" class="input" type="number" inputmode="numeric" min="2000" max="2100" />
         </FormField>
         <FormField label="N° de châssis (Frame No)" required :error="error(index, 'frame_number')" v-slot="field">
-          <input v-model="unit.frame_number" v-bind="field.attrs" class="input input-code" maxlength="64" autocapitalize="characters" autocomplete="off" />
+          <div class="input-action">
+            <input v-model="unit.frame_number" v-bind="field.attrs" class="input input-code" maxlength="64" autocapitalize="characters" autocomplete="off" />
+            <ScanButton label="n° de châssis" @scanned="(value) => (unit.frame_number = value)" />
+          </div>
         </FormField>
         <FormField label="N° de moteur (Engine No)" required :error="error(index, 'engine_number')" v-slot="field">
-          <input v-model="unit.engine_number" v-bind="field.attrs" class="input input-code" maxlength="64" autocapitalize="characters" autocomplete="off" />
+          <div class="input-action">
+            <input v-model="unit.engine_number" v-bind="field.attrs" class="input input-code" maxlength="64" autocapitalize="characters" autocomplete="off" />
+            <ScanButton label="n° de moteur" @scanned="(value) => (unit.engine_number = value)" />
+          </div>
         </FormField>
         <FormField label="Couleur" required :error="error(index, 'color')" v-slot="field">
-          <input v-model.trim="unit.color" v-bind="field.attrs" class="input" maxlength="60" autocomplete="off" />
+          <input v-model.trim="unit.color" v-bind="field.attrs" class="input" maxlength="60" autocomplete="off" list="moto-colors" placeholder="Choisir ou saisir" />
         </FormField>
         <label class="check customs">
           <input v-model="unit.customs_document_available" type="checkbox" />
@@ -120,6 +134,9 @@ async function submit(): Promise<void> {
       <button v-if="units.length > 1" class="btn btn-ghost" type="button" @click="units.splice(index, 1)">Retirer cette moto</button>
     </fieldset>
 
+    <datalist id="moto-colors">
+      <option v-for="color in colors" :key="color" :value="color" />
+    </datalist>
     <button class="btn btn-secondary" type="button" :disabled="units.length >= 200" @click="addUnit">Ajouter une moto</button>
     <InlineAlert :message="request.error.value" />
     <button class="btn btn-primary btn-block" type="submit" :disabled="request.busy.value || !units.length || !app.canReachServer">

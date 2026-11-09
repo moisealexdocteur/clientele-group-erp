@@ -37,6 +37,7 @@ final class MotoPresenter
             'price' => (string) $model->price,
             'price_currency' => $model->price_currency,
             'is_active' => $model->is_active,
+            'photo_url' => $model->photo_file_id === null ? null : '/api/v1/car-rental/files/' . $model->photo_file_id,
         ];
     }
 
